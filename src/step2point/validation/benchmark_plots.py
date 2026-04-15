@@ -112,15 +112,45 @@ def generate_benchmark_plots(pairs, outdir: str | Path) -> PlotArtifacts:
     plot_hist(energy_ratios, outdir / "energy_ratio.png", "Energy ratio", "E_post / E_pre")
     plot_hist(cell_ratios, outdir / "cell_count_ratio.png", "Cell count ratio", "N_cells_post / N_cells_pre")
     plot_hist(point_ratios, outdir / "point_count_ratio.png", "Point count ratio", "N_points_post / N_points_pre")
-    plot_overlay_hist(pre_cell_logs, post_cell_logs, outdir / "log_cell_energy.png", "Cell energy spectrum", "log10(cell energy)", logy=True)
-    plot_overlay_hist(pre_point_logs, post_point_logs, outdir / "log_point_energy.png", "Point energy spectrum", "log10(point energy)", logy=True)
+    plot_overlay_hist(
+        pre_cell_logs, post_cell_logs, outdir / "log_cell_energy.png", "Cell energy spectrum", "log10(cell energy)", logy=True
+    )
+    plot_overlay_hist(
+        pre_point_logs,
+        post_point_logs,
+        outdir / "log_point_energy.png",
+        "Point energy spectrum",
+        "log10(point energy)",
+        logy=True,
+    )
 
     long_centers = 0.5 * (long_bins[:-1] + long_bins[1:])
     radial_centers = 0.5 * (radial_bins[:-1] + radial_bins[1:])
     phi_centers = 0.5 * (phi_bins[:-1] + phi_bins[1:])
-    plot_overlay_line(long_centers, np.mean(long_profiles_pre, axis=0), np.mean(long_profiles_post, axis=0), outdir / "longitudinal_profile_overlay.png", "Longitudinal profile", "longitudinal coordinate")
-    plot_overlay_line(radial_centers, np.mean(radial_profiles_pre, axis=0), np.mean(radial_profiles_post, axis=0), outdir / "radial_profile_overlay.png", "Radial profile", "radial coordinate")
-    plot_overlay_line(phi_centers, np.mean(phi_profiles_pre, axis=0), np.mean(phi_profiles_post, axis=0), outdir / "phi_profile_overlay.png", "Phi profile", "phi")
+    plot_overlay_line(
+        long_centers,
+        np.mean(long_profiles_pre, axis=0),
+        np.mean(long_profiles_post, axis=0),
+        outdir / "longitudinal_profile_overlay.png",
+        "Longitudinal profile",
+        "longitudinal coordinate",
+    )
+    plot_overlay_line(
+        radial_centers,
+        np.mean(radial_profiles_pre, axis=0),
+        np.mean(radial_profiles_post, axis=0),
+        outdir / "radial_profile_overlay.png",
+        "Radial profile",
+        "radial coordinate",
+    )
+    plot_overlay_line(
+        phi_centers,
+        np.mean(phi_profiles_pre, axis=0),
+        np.mean(phi_profiles_post, axis=0),
+        outdir / "phi_profile_overlay.png",
+        "Phi profile",
+        "phi",
+    )
 
     plot_overlay_hist(long_m1_pre, long_m1_post, outdir / "longitudinal_moment_1.png", "Longitudinal first moment", "m1")
     plot_overlay_hist(long_m2_pre, long_m2_post, outdir / "longitudinal_moment_2.png", "Longitudinal second moment", "m2")

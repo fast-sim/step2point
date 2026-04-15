@@ -11,7 +11,7 @@ def weighted_moment(values, weights, order: int) -> float:
     norm = np.sum(weights)
     if norm <= 0:
         return float("nan")
-    return float(np.sum((values ** order) * weights) / norm)
+    return float(np.sum((values**order) * weights) / norm)
 
 
 def shower_moments(shower):

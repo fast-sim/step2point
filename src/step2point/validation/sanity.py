@@ -7,8 +7,7 @@ from step2point.validation.base import Validator
 
 
 class ShowerSanityValidator(Validator):
-    """Basic structural sanity checks for a shower-like object.
-    """
+    """Basic structural sanity checks for a shower-like object."""
 
     name = "shower_sanity"
 

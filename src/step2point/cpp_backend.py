@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from step2point.core.results import CompressionResult
 from step2point.core.shower import Shower
 

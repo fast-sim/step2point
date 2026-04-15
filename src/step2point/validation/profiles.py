@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import numpy as np
-
 from step2point.core.results import ValidationResult
 from step2point.metrics.shower_shapes import shower_moments
 from step2point.validation.base import Validator

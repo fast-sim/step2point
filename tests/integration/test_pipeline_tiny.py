@@ -6,7 +6,6 @@ from step2point.core.pipeline import Pipeline
 from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
 from step2point.validation.conservation import CellCountRatioValidator, EnergyConservationValidator
 
-
 DATA = Path(__file__).resolve().parents[1] / "data" / "tiny_showers.h5"
 
 

@@ -5,7 +5,8 @@ import numpy as np
 from step2point.algorithms.base import CompressionAlgorithm
 from step2point.core.results import CompressionResult
 from step2point.core.shower import Shower
-from step2point.cpp_backend import cpp_available, merge_within_cell as cpp_merge_within_cell
+from step2point.cpp_backend import cpp_available
+from step2point.cpp_backend import merge_within_cell as cpp_merge_within_cell
 
 
 class MergeWithinCell(CompressionAlgorithm):
@@ -16,6 +17,7 @@ class MergeWithinCell(CompressionAlgorithm):
 
     TODO Implement a time window to merge only steps within, and ignore the rest.
     """
+
     name = "merge_within_cell"
 
     def __init__(self, backend: str = "auto") -> None:

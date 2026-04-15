@@ -6,7 +6,6 @@ import pytest
 
 from step2point.core.edm4hep_root import EDM4hepRootReader
 
-
 DATA = Path(__file__).resolve().parents[1] / "data" / "tiny_showers.root"
 
 

@@ -21,7 +21,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    reader = Step2PointHDF5Reader(args.input) # TODO deduce format from extension and execute appropriate file reader
+    reader = Step2PointHDF5Reader(args.input)  # TODO deduce format from extension and execute appropriate file reader
     algorithm = IdentityCompression() if args.algorithm == "identity" else MergeWithinCell()
     validators = [EnergyConservationValidator(), CellCountRatioValidator(), ShowerMomentsValidator()]
     report = Pipeline(reader, algorithm, validators).run()

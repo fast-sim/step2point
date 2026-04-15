@@ -14,12 +14,11 @@ This reader is optional because it requires the Key4hep/PODIO Python stack
 """
 
 from dataclasses import dataclass, field
-from typing import Iterable, Iterator
+from typing import Iterator
 
 import numpy as np
 
 from step2point.core.shower import Shower
-
 
 DEFAULT_COLLECTIONS = (
     "ECalBarrelCollection",
@@ -42,9 +41,7 @@ class EDM4hepRootReader:
         try:
             from podio import root_io  # type: ignore
         except ImportError as exc:  # pragma: no cover - optional dependency
-            raise ImportError(
-                "EDM4hepRootReader requires podio.root_io. Use a Key4hep/PODIO environment."
-            ) from exc
+            raise ImportError("EDM4hepRootReader requires podio.root_io. Use a Key4hep/PODIO environment.") from exc
         return root_io
 
     def iter_showers(self) -> Iterator[Shower]:

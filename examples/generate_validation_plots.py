@@ -9,7 +9,6 @@ from step2point.core.edm4hep_root import EDM4hepRootReader
 from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
 from step2point.validation.benchmark_plots import generate_benchmark_plots
 
-
 ALGORITHMS = {
     "identity": IdentityCompression,
     "merge_within_cell": MergeWithinCell,
@@ -27,7 +26,7 @@ def build_reader(input_path: str, input_format: str):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
-    parser.add_argument("--input-format", choices=["hdf5", "edm4hep_root"], default="hdf5") # TODO deduce format from extension
+    parser.add_argument("--input-format", choices=["hdf5", "edm4hep_root"], default="hdf5")  # TODO deduce format from extension
     parser.add_argument("--algorithm", choices=sorted(ALGORITHMS), default="merge_within_cell")
     parser.add_argument("--outdir", default="outputs/plots")
     args = parser.parse_args()
