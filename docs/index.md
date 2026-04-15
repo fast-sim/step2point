@@ -59,10 +59,6 @@ Analyse the shower as a **point cloud**, reducing it to a smaller set of points 
 
 </div>
 
-## The core workflow
-
-![step2point workflow](assets/images/workflow_graph.png){ .hero-figure }
-
 ## Compression quality
 
 In `step2point`, a good representation is **not** just one with fewer points.
@@ -79,6 +75,8 @@ It should reduce complexity while preserving the observables that matter for cal
 At the same time, some quantities are expected to change by construction, especially the number of points and the individual point-energy spectrum.
 
 ![benchmark panel](assets/images/benchmark_panel.svg){ .benchmark-figure }
+
+Picture above is just a synthetic visualisation. For results on showers see **Validation**.
 
 ## Quickstart
 

@@ -59,3 +59,21 @@ N_points_post / N_points_pre
 ```
 
 is one of the central performance indicators of a compression algorithm.
+
+# Validation results
+
+## EM showers
+
+Animation below shows an example of a single electromagnetic shower:
+
+![gamma](assets/images/animation_gamma.gif){ .animation-gamma }
+
+TODO place shower observables
+
+## hadronic showers
+
+Animation below shows an example of a single hadronic shower:
+
+![pion](assets/images/animation_pion.gif){ .animation-pion }
+
+TODO place shower observables
