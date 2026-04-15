@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Direct EDM4hep ROOT reader aligned with the current step2point repository.
 
 The uploaded step2point repository reads EDM4hep ROOT files through
@@ -12,6 +10,8 @@ without converting to HDF5 first.
 This reader is optional because it requires the Key4hep/PODIO Python stack
 (`podio`, usually also `edm4hep`).
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Iterator

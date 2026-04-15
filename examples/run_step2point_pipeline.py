@@ -27,7 +27,7 @@ def main():
     report = Pipeline(reader, algorithm, validators).run()
     outdir = Path(args.output)
     outdir.mkdir(parents=True, exist_ok=True)
-    (outdir / f"compression_summary_{arg.algorithm}.txt").write_text(
+    (outdir / f"compression_summary_{args.algorithm}.txt").write_text(
         f"compression_stats={len(report.compression_stats)}validation_results={len(report.validation_results)}"
     )
 
