@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
+  <title id="title">Benchmark panel mockup</title>
+  <desc id="desc">Mockup showing stable and intentionally changing observables for shower compression.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f7f9fc"/>
+      <stop offset="100%" stop-color="#eef3ff"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#5c6bc0" flood-opacity="0.14"/>
+    </filter>
+    <style>
+      .title{font:700 34px Inter,Arial,sans-serif;fill:#1f2a44}
+      .subtitle{font:500 18px Inter,Arial,sans-serif;fill:#4d5b7c}
+      .card{fill:#fff;stroke:#d9e1f2;stroke-width:1.5;rx:22}
+      .heading{font:700 22px Inter,Arial,sans-serif;fill:#21304f}
+      .label{font:600 16px Inter,Arial,sans-serif;fill:#364867}
+      .small{font:500 13px Inter,Arial,sans-serif;fill:#6a7b99}
+      .ok{fill:#1b8f5a}
+      .warn{fill:#b45f06}
+      .grid{stroke:#edf1f7;stroke-width:1}
+      .axis{stroke:#9fb0d0;stroke-width:1.8}
+      .line1{fill:none;stroke:#4f6bed;stroke-width:3.5}
+      .line2{fill:none;stroke:#ef6c57;stroke-width:3.5;stroke-dasharray:8 7}
+      .hist1{fill:#90caf9;opacity:.85}
+      .hist2{fill:#ffab91;opacity:.75}
+      .badge{font:700 12px Inter,Arial,sans-serif;letter-spacing:.08em}
+    </style>
+  </defs>
+  <rect x="0" y="0" width="1200" height="700" fill="url(#bg)"/>
+  <text x="70" y="70" class="title">Physics benchmark panel</text>
+  <text x="70" y="102" class="subtitle">Compare what should stay stable against what is intentionally changed by compression</text>
+
+  <g filter="url(#shadow)">
+    <rect class="card" x="60" y="140" width="520" height="500"/>
+    <rect class="card" x="620" y="140" width="520" height="500"/>
+  </g>
+
+  <rect x="82" y="164" width="132" height="30" rx="15" fill="#e8f5ee"/>
+  <text x="101" y="184" class="badge ok">SHOULD STAY STABLE</text>
+  <text x="82" y="224" class="heading">Energy and shower shape</text>
+
+  <g transform="translate(82,255)">
+    <text x="0" y="0" class="label">Energy ratio E<tspan baseline-shift="sub">post</tspan> / E<tspan baseline-shift="sub">pre</tspan></text>
+    <text x="0" y="20" class="small">Tight around 1.0</text>
+    <g transform="translate(0,40)">
+      <line x1="0" y1="130" x2="190" y2="130" class="axis"/>
+      <line x1="0" y1="130" x2="0" y2="20" class="axis"/>
+      <path d="M18 124 C55 48, 86 18, 95 16 C104 18, 135 50, 172 124" class="line1"/>
+      <line x1="95" y1="10" x2="95" y2="130" stroke="#7bbf92" stroke-width="2.5" stroke-dasharray="6 5"/>
+      <text x="84" y="150" class="small">1.0</text>
+    </g>
+  </g>
+
+  <g transform="translate(320,255)">
+    <text x="0" y="0" class="label">Longitudinal profile</text>
+    <text x="0" y="20" class="small">Pre and post should overlap</text>
+    <g transform="translate(0,40)">
+      <line x1="0" y1="130" x2="190" y2="130" class="axis"/>
+      <line x1="0" y1="130" x2="0" y2="20" class="axis"/>
+      <path d="M0 125 C20 120, 30 70, 55 45 C80 25, 110 28, 145 90 C160 115, 175 126, 190 128" class="line1"/>
+      <path d="M0 126 C22 122, 34 73, 59 49 C83 30, 112 31, 147 91 C162 113, 176 125, 190 127" class="line2"/>
+    </g>
+  </g>
+
+  <g transform="translate(82,455)">
+    <text x="0" y="0" class="label">Cell-energy spectrum</text>
+    <text x="0" y="20" class="small">Compared in log scale, aggregated by cell ID</text>
+    <g transform="translate(0,40)">
+      <line x1="0" y1="130" x2="190" y2="130" class="axis"/>
+      <line x1="0" y1="130" x2="0" y2="20" class="axis"/>
+      <rect x="12" y="82" width="20" height="48" class="hist1"/>
+      <rect x="38" y="58" width="20" height="72" class="hist1"/>
+      <rect x="64" y="37" width="20" height="93" class="hist1"/>
+      <rect x="90" y="49" width="20" height="81" class="hist1"/>
+      <rect x="116" y="72" width="20" height="58" class="hist1"/>
+      <rect x="142" y="92" width="20" height="38" class="hist1"/>
+      <rect x="16" y="86" width="20" height="44" class="hist2"/>
+      <rect x="42" y="60" width="20" height="70" class="hist2"/>
+      <rect x="68" y="39" width="20" height="91" class="hist2"/>
+      <rect x="94" y="51" width="20" height="79" class="hist2"/>
+      <rect x="120" y="74" width="20" height="56" class="hist2"/>
+      <rect x="146" y="95" width="20" height="35" class="hist2"/>
+    </g>
+  </g>
+
+  <g transform="translate(320,455)">
+    <text x="0" y="0" class="label">Shower moments</text>
+    <text x="0" y="20" class="small">Centroid and widths should remain close</text>
+    <g transform="translate(0,40)">
+      <line x1="0" y1="130" x2="190" y2="130" class="axis"/>
+      <line x1="0" y1="130" x2="0" y2="20" class="axis"/>
+      <circle cx="55" cy="75" r="7" fill="#4f6bed"/>
+      <circle cx="95" cy="68" r="7" fill="#4f6bed"/>
+      <circle cx="135" cy="60" r="7" fill="#4f6bed"/>
+      <circle cx="60" cy="78" r="7" fill="#ef6c57"/>
+      <circle cx="98" cy="70" r="7" fill="#ef6c57"/>
+      <circle cx="138" cy="63" r="7" fill="#ef6c57"/>
+      <line x1="55" y1="75" x2="60" y2="78" class="line2"/>
+      <line x1="95" y1="68" x2="98" y2="70" class="line2"/>
+      <line x1="135" y1="60" x2="138" y2="63" class="line2"/>
+    </g>
+  </g>
+
+  <rect x="642" y="164" width="145" height="30" rx="15" fill="#fff1e8"/>
+  <text x="662" y="184" class="badge warn">EXPECTED TO CHANGE</text>
+  <text x="642" y="224" class="heading">Compression strength</text>
+
+  <g transform="translate(642,255)">
+    <text x="0" y="0" class="label">Point-count ratio N<tspan baseline-shift="sub">post</tspan> / N<tspan baseline-shift="sub">pre</tspan></text>
+    <text x="0" y="20" class="small">Lower is better, but only if physics stays stable</text>
+    <g transform="translate(0,40)">
+      <line x1="0" y1="130" x2="190" y2="130" class="axis"/>
+      <line x1="0" y1="130" x2="0" y2="20" class="axis"/>
+      <rect x="18" y="96" width="20" height="34" class="hist2"/>
+      <rect x="44" y="72" width="20" height="58" class="hist2"/>
+      <rect x="70" y="46" width="20" height="84" class="hist2"/>
+      <rect x="96" y="30" width="20" height="100" class="hist2"/>
+      <rect x="122" y="67" width="20" height="63" class="hist2"/>
+      <rect x="148" y="100" width="20" height="30" class="hist2"/>
+    </g>
+  </g>
+
+  <g transform="translate(880,255)">
+    <text x="0" y="0" class="label">Point-energy spectrum</text>
+    <text x="0" y="20" class="small">Granularity changes after merging / clustering</text>
+    <g transform="translate(0,40)">
+      <line x1="0" y1="130" x2="190" y2="130" class="axis"/>
+      <line x1="0" y1="130" x2="0" y2="20" class="axis"/>
+      <path d="M5 110 C25 98, 48 82, 70 62 C90 47, 110 46, 135 58 C155 69, 175 90, 190 112" class="line1"/>
+      <path d="M5 118 C25 110, 48 94, 70 75 C90 58, 112 48, 136 51 C156 55, 176 72, 190 96" class="line2"/>
+    </g>
+  </g>
+
+  <g transform="translate(642,455)">
+    <text x="0" y="0" class="label">Algorithm scorecard</text>
+    <text x="0" y="20" class="small">Compact summary without hiding trade-offs</text>
+    <g transform="translate(0,40)">
+      <rect x="0" y="0" width="430" height="140" rx="18" fill="#f9fbff" stroke="#dbe4f5"/>
+      <text x="22" y="34" class="label">identity</text>
+      <text x="160" y="34" class="label">merge_within_cell</text>
+      <text x="340" y="34" class="label">voxel_grid</text>
+      <text x="22" y="68" class="small">Energy ratio</text><text x="22" y="90" class="small">Profiles</text><text x="22" y="112" class="small">Cell spectrum</text><text x="22" y="134" class="small">Point ratio</text>
+      <text x="170" y="68" class="small">1.000</text><text x="170" y="90" class="small">excellent</text><text x="170" y="112" class="small">excellent</text><text x="170" y="134" class="small">0.42</text>
+      <text x="350" y="68" class="small">0.998</text><text x="350" y="90" class="small">good</text><text x="350" y="112" class="small">fair</text><text x="350" y="134" class="small">0.18</text>
+      <text x="92" y="68" class="small">1.000</text><text x="92" y="90" class="small">excellent</text><text x="92" y="112" class="small">excellent</text><text x="92" y="134" class="small">1.00</text>
+    </g>
+  </g>
+</svg>

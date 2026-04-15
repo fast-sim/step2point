@@ -1,0 +1,60 @@
+site_name: step2point
+site_description: Calorimeter shower compression for ML-ready point clouds
+site_url: https://fast-sim.github.io/step2point/
+repo_name: step2point
+repo_url: https://github.com/fast-sim/step2point
+copyright: CERN EP-SFT ML4EP group
+
+theme:
+  name: material
+  language: en
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.instant
+    - navigation.tabs
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - content.tabs.link
+    - toc.follow
+
+nav:
+  - Home: index.md
+  - Getting started: getting_started.md
+  - Algorithms: algorithms.md
+  - Validation: validation.md
+  - Architecture: architecture.md
+  - Future C++ backend: cpp_future.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+
+plugins:
+  - search
+
+extra_css:
+  - assets/stylesheets/extra.css

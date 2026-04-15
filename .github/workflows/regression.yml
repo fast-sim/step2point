@@ -1,0 +1,85 @@
+name: Regression
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  hdf5-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+      - name: Run integration tests
+        run: pytest -q tests/integration/test_pipeline_tiny.py
+      - name: Run physics sanity suite
+        run: pytest -q tests/physics
+      - name: Generate validation plots
+        run: |
+          python examples/generate_validation_plots.py \
+            --input tests/data/tiny_showers.h5 \
+            --input-format hdf5 \
+            --algorithm merge_within_cell \
+            --outdir outputs/ci_validation_plots
+      - name: Upload validation plots
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-plots
+          path: outputs/ci_validation_plots/
+
+  edm4hep-root-regression:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+      - name: Check for tiny ROOT sample
+        id: sample
+        shell: bash
+        run: |
+          if [ -f tests/data/tiny_showers.root ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install Key4hep Python stack
+        if: steps.sample.outputs.present == 'true'
+        run: |
+          echo "Provide your site-specific setup here, e.g. source /cvmfs/.../setup.sh"
+          python - <<'PY'
+          try:
+              from podio import root_io  # noqa: F401
+              print('podio available')
+          except Exception as exc:
+              raise SystemExit(f'podio/root_io not available: {exc}')
+          PY
+      - name: Run tiny ROOT integration test
+        if: steps.sample.outputs.present == 'true'
+        run: pytest -q tests/integration/test_root_reader_optional.py
+      - name: Generate ROOT validation plots
+        if: steps.sample.outputs.present == 'true'
+        run: |
+          python examples/generate_validation_plots.py \
+            --input tests/data/tiny_showers.root \
+            --input-format edm4hep_root \
+            --algorithm merge_within_cell \
+            --outdir outputs/ci_root_validation_plots
+      - name: Upload ROOT validation plots
+        if: steps.sample.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: root-validation-plots
+          path: outputs/ci_root_validation_plots/

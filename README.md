@@ -1,0 +1,176 @@
+# step2point
+
+Library for converting simulated calorimeter showers into compressed point-cloud representations that can be used as input to ML-based fast simulation.
+
+## Why step2point was created
+
+Detailed Geant4 calorimeter simulations produce either cell-level (merged) deposits which can be too coarse and too detector-specific, or granular step-level deposits that are too large for efficient ML training. step2point is designed to turn those detailed step-level deposits into a compact point-cloud shower representation while preserving the calorimeter observables that matter for later physics analysis and ML training.
+
+The core task is:
+
+**reduce the number of points without distorting the relevant shower physics.**
+
+## Physics goal
+
+Typical observables to preserve:
+- total shower energy
+- longitudinal profile
+- radial profile
+- phi profile
+- first and second shower moments
+- cell-energy spectrum
+- number of active detector cells
+
+Quantities expected to change by construction:
+- point-energy spectrum
+- number of points
+
+## Core design
+
+### Per-shower processing
+
+The primitive operation is a single-shower transformation:
+
+```text
+read one shower -> compress one shower -> validate one shower
+```
+
+This keeps the library suitable for:
+- offline dataset preparation
+- streaming/event-wise workflows
+- future on-the-fly clustering inside a C++ event-processing framework
+
+### Minimal canonical data model
+
+The core object is a flat `Shower` container of arrays:
+- `x, y, z, E`
+- optional `t`
+- optional `cell_id`
+- optional provenance arrays such as `pdg` or `track_id`
+- `shower_id`
+
+The internal representation avoids nested object graphs so it can be mapped cleanly to a future C++ implementation.
+
+### Stateless algorithms
+
+Compression algorithms take one `Shower` and return a new `Shower`.
+They do not mutate the input and do not depend on file-format details.
+
+### Strict separation of sub-directories
+
+```text
+core/        data model, interfaces, pipeline
+algorithms/  compression kernels
+metrics/     numerical computations
+validation/  physics comparisons and reports
+vis/         plotting only
+io/          file-format adapters
+cpp/         future C++ core and Python bindings
+```
+
+## Current features
+
+- canonical `Shower` object
+- [WIP] direct `edm4hep.root` reader
+- HDF5 reader compatible with the step2point dataset layout
+- baseline algorithms:
+    - `identity`
+    - `merge_within_cell`
+- metrics / validation / plotting
+- small HDF5 regression sample and GitHub Actions CI
+- MkDocs documentation site
+- C++ core skeleton with a `merge_within_cell` implementation
+
+## Repository layout
+
+```text
+step2point/
+├── pyproject.toml
+├── README.md
+├── mkdocs.yml
+├── docs/
+├── src/step2point/
+│   ├── core/
+│   ├── io/
+│   ├── algorithms/
+│   ├── metrics/
+│   ├── validation/
+│   └── vis/
+├── cpp/
+│   ├── include/step2point/
+│   ├── src/
+│   ├── tests/
+│   └── bindings/
+├── tests/
+├── examples/
+└── .github/workflows/
+```
+
+## Quick start
+
+Install:
+
+```bash
+pip install -e .[dev]
+```
+
+Run tests:
+
+```bash
+pytest -q
+```
+
+Minimal usage:
+
+```python
+from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
+from step2point.algorithms.merge_within_cell import MergeWithinCell
+
+reader = Step2PointHDF5Reader("tests/data/test_showers.h5")
+algorithm = MergeWithinCell()
+
+for shower in reader.iter_showers():
+    compressed = algorithm.compress(shower).shower
+```
+
+## [WIP] C++ backend
+
+`merge_within_cell` is structured so it can later run from a shared C++ kernel. The Python algorithm already supports backend selection:
+
+```python
+MergeWithinCell(backend="python")
+MergeWithinCell(backend="cpp")
+MergeWithinCell(backend="auto")
+```
+
+Today, `auto` falls back to the Python implementation unless the optional `_step2point_cpp` extension has been built.
+
+## Documentation site
+
+A MkDocs Material site is included. Local preview:
+
+```bash
+pip install -e .[docs]
+mkdocs serve
+```
+
+Build static docs:
+
+```bash
+mkdocs build
+```
+
+## Notes on ROOT input
+
+`src/step2point/core/edm4hep_root.py` follows the same direct EDM4hep access direction as the current repository. The exact collection names and detector-specific extraction still need to be adapted to your production layout once a representative ROOT test sample is added.
+
+## CI
+
+GitHub Actions includes:
+- `ci.yml` for lint + tests on the tiny HDF5 sample
+- `regression.yml` for generating validation plots as workflow artifacts
+- `docs.yml` for documentation deployment to GitHub Pages
+
+## CI
+
+Every pull request runs install/import checks, unit and integration tests, a small physics sanity suite, docs build, and the C++/CMake test target.
