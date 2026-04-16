@@ -192,13 +192,21 @@ def generate_observables_matrix(showers, outpath: str | Path, *, selected_index:
     plot_avg(axes[0, 2], all_data, "log_energy", "log10(energy)", logy=True)
 
     for i, (key, label) in enumerate(
-        zip(["mean_long", "mean_r", "total_energy"], ["first longitudinal moment", "first radial moment", "total energy"], strict=True)
+        zip(
+            ["mean_long", "mean_r", "total_energy"],
+            ["first longitudinal moment", "first radial moment", "total energy"],
+            strict=True,
+        )
     ):
         axes[1, i].hist(average_data[key], color=avg_color, bins=20, alpha=0.45, label=f"average over {event_count} showers")
         axes[1, i].set_xlabel(label)
 
     for i, (key, label) in enumerate(
-        zip(["var_long", "var_r", "num_steps"], ["second longitudinal moment", "second radial moment", "number of steps"], strict=True)
+        zip(
+            ["var_long", "var_r", "num_steps"],
+            ["second longitudinal moment", "second radial moment", "number of steps"],
+            strict=True,
+        )
     ):
         axes[2, i].hist(average_data[key], color=avg_color, bins=20, alpha=0.45, label=f"average over {event_count} showers")
         axes[2, i].set_xlabel(label)
@@ -220,10 +228,14 @@ def generate_observables_matrix(showers, outpath: str | Path, *, selected_index:
             )
             axes[0, i].legend()
         for i, key in enumerate(["mean_long", "mean_r", "total_energy"]):
-            axes[1, i].axvline(float(selected[key]), color=selected_color, linewidth=2.0, linestyle="--", label=f"shower {selected_index}")
+            axes[1, i].axvline(
+                float(selected[key]), color=selected_color, linewidth=2.0, linestyle="--", label=f"shower {selected_index}"
+            )
             axes[1, i].legend()
         for i, key in enumerate(["var_long", "var_r", "num_steps"]):
-            axes[2, i].axvline(float(selected[key]), color=selected_color, linewidth=2.0, linestyle="--", label=f"shower {selected_index}")
+            axes[2, i].axvline(
+                float(selected[key]), color=selected_color, linewidth=2.0, linestyle="--", label=f"shower {selected_index}"
+            )
             axes[2, i].legend()
     else:
         for ax in axes[0]:
