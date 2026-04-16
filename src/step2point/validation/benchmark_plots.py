@@ -3,10 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from step2point.metrics.energy import aggregate_cell_energy, energy_ratio
-from step2point.metrics.spatial import estimate_shower_axis
+from step2point.metrics.spatial import estimate_shower_axis, longitudinal_radial_phi
+from step2point.validation.observables import aggregate_observables, compute_shower_observables
 from step2point.validation.plotting import plot_hist, plot_overlay_hist, plot_overlay_line
 
 
@@ -26,24 +28,6 @@ def _profile(values: np.ndarray, weights: np.ndarray, bins: np.ndarray) -> np.nd
     with np.errstate(divide="ignore", invalid="ignore"):
         prof = np.divide(sums, np.maximum(counts, 1), dtype=np.float64)
     return prof
-
-
-def shower_coordinates(shower):
-    centroid, axis = estimate_shower_axis(shower)
-    coords = np.stack([shower.x, shower.y, shower.z], axis=1)
-    rel = coords - centroid
-    long = rel @ axis
-    radial_vec = rel - np.outer(long, axis)
-    radial = np.linalg.norm(radial_vec, axis=1)
-
-    ref = np.array([1.0, 0.0, 0.0])
-    if abs(np.dot(ref, axis)) > 0.9:
-        ref = np.array([0.0, 1.0, 0.0])
-    e1 = ref - np.dot(ref, axis) * axis
-    e1 = e1 / np.linalg.norm(e1)
-    e2 = np.cross(axis, e1)
-    phi = np.arctan2(radial_vec @ e2, radial_vec @ e1)
-    return long, radial, phi
 
 
 def _moment(coord: np.ndarray, weights: np.ndarray, order: int) -> float:
@@ -90,8 +74,19 @@ def generate_benchmark_plots(pairs, outdir: str | Path) -> PlotArtifacts:
         pre_point_logs.extend(_safe_log10(pre.E))
         post_point_logs.extend(_safe_log10(post.E))
 
-        long_pre, radial_pre, phi_pre = shower_coordinates(pre)
-        long_post, radial_post, phi_post = shower_coordinates(post)
+        centroid, axis = estimate_shower_axis(pre)
+        long_pre, radial_pre, phi_pre = longitudinal_radial_phi(
+            pre,
+            centroid=centroid,
+            axis=axis,
+            longitudinal_origin="first_deposit",
+        )
+        long_post, radial_post, phi_post = longitudinal_radial_phi(
+            post,
+            centroid=centroid,
+            axis=axis,
+            longitudinal_origin="first_deposit",
+        )
 
         long_m1_pre.append(_moment(long_pre, pre.E, 1))
         long_m1_post.append(_moment(long_post, post.E, 1))
@@ -158,3 +153,86 @@ def generate_benchmark_plots(pairs, outdir: str | Path) -> PlotArtifacts:
     plot_overlay_hist(rad_m2_pre, rad_m2_post, outdir / "radial_moment_2.png", "Radial second moment", "m2")
 
     return PlotArtifacts(outdir=outdir)
+
+
+def generate_observables_matrix(showers, outpath: str | Path, *, selected_index: int | None = None, axis_override=None):
+    outpath = Path(outpath)
+    outpath.parent.mkdir(parents=True, exist_ok=True)
+    all_data = [compute_shower_observables(shower, axis_override=axis_override) for shower in showers]
+    average_data = aggregate_observables(all_data)
+    fig, axes = plt.subplots(3, 3, figsize=(15, 12))
+    event_count = len(all_data)
+    avg_color = "#0057D9"
+    selected_color = "#FF7A00"
+
+    def plot_avg(ax, data_list, key, xlabel, logy: bool = False):
+        bins = data_list[0][key][1]
+        values = np.array([row[key][0] for row in data_list], dtype=np.float64)
+        centers = 0.5 * (bins[:-1] + bins[1:])
+        mean_values = np.mean(values, axis=0)
+        ax.plot(centers, mean_values, color=avg_color, linewidth=2.2, alpha=0.22, linestyle="--", zorder=3)
+        ax.scatter(
+            centers,
+            mean_values,
+            color=avg_color,
+            s=32,
+            marker="o",
+            linewidths=0.0,
+            label=f"average over {event_count} showers",
+            zorder=4,
+        )
+        ax.set_xlabel(xlabel)
+        if logy:
+            ax.set_yscale("log")
+        if key == "long_profile":
+            ax.set_xlim(left=0.0)
+
+    plot_avg(axes[0, 0], all_data, "long_profile", "longitudinal (from first deposit)")
+    plot_avg(axes[0, 1], all_data, "r_profile", "radial", logy=True)
+    plot_avg(axes[0, 2], all_data, "log_energy", "log10(energy)", logy=True)
+
+    for i, (key, label) in enumerate(
+        zip(["mean_long", "mean_r", "total_energy"], ["first longitudinal moment", "first radial moment", "total energy"], strict=True)
+    ):
+        axes[1, i].hist(average_data[key], color=avg_color, bins=20, alpha=0.45, label=f"average over {event_count} showers")
+        axes[1, i].set_xlabel(label)
+
+    for i, (key, label) in enumerate(
+        zip(["var_long", "var_r", "num_steps"], ["second longitudinal moment", "second radial moment", "number of steps"], strict=True)
+    ):
+        axes[2, i].hist(average_data[key], color=avg_color, bins=20, alpha=0.45, label=f"average over {event_count} showers")
+        axes[2, i].set_xlabel(label)
+
+    if selected_index is not None:
+        selected = all_data[selected_index]
+        for i, key in enumerate(["long_profile", "r_profile", "log_energy"]):
+            centers = 0.5 * (selected[key][1][:-1] + selected[key][1][1:])
+            axes[0, i].plot(centers, selected[key][0], color=selected_color, linewidth=1.3, alpha=0.22, linestyle="--", zorder=1)
+            axes[0, i].scatter(
+                centers,
+                selected[key][0],
+                color=selected_color,
+                s=26,
+                marker="s",
+                linewidths=0.0,
+                label=f"shower {selected_index}",
+                zorder=2,
+            )
+            axes[0, i].legend()
+        for i, key in enumerate(["mean_long", "mean_r", "total_energy"]):
+            axes[1, i].axvline(float(selected[key]), color=selected_color, linewidth=2.0, linestyle="--", label=f"shower {selected_index}")
+            axes[1, i].legend()
+        for i, key in enumerate(["var_long", "var_r", "num_steps"]):
+            axes[2, i].axvline(float(selected[key]), color=selected_color, linewidth=2.0, linestyle="--", label=f"shower {selected_index}")
+            axes[2, i].legend()
+    else:
+        for ax in axes[0]:
+            ax.legend()
+        for ax in axes[1]:
+            ax.legend()
+        for ax in axes[2]:
+            ax.legend()
+
+    fig.tight_layout()
+    fig.savefig(outpath)
+    plt.close(fig)

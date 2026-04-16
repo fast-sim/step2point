@@ -16,7 +16,7 @@ The simplest pipeline is deliberately organized around one shower at a time.
 from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
 from step2point.algorithms.merge_within_cell import MergeWithinCell
 
-reader = Step2PointHDF5Reader("tests/data/tiny_showers.h5")
+reader = Step2PointHDF5Reader("tests/data/CLD_gamma_10GeV_posY2150mm_dirY1_10ev_sim_detailed_tchandler.h5")
 algorithm = MergeWithinCell()
 
 for shower in reader.iter_showers():

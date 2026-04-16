@@ -17,12 +17,13 @@ class Step2PointHDF5Reader(ShowerReader):
 
     def iter_showers(self) -> Iterator[Shower]:
         with h5py.File(self.input_path, "r") as h5:
-            event_ids = np.asarray(h5["steps"]["event_id"], dtype=np.int32)
-            energy = np.asarray(h5["steps"]["energy"], dtype=np.float32)
-            position = np.asarray(h5["steps"]["position"], dtype=np.float32)
-            time = np.asarray(h5["steps"]["time"], dtype=np.float32)
-            cell_id = np.asarray(h5["steps"]["cell_id"], dtype=np.uint64)
-            pdg = np.asarray(h5["steps"]["pdg"], dtype=np.int32)
+            steps = h5["steps"]
+            event_ids = np.asarray(steps["event_id"], dtype=np.int32)
+            energy = np.asarray(steps["energy"], dtype=np.float32)
+            position = np.asarray(steps["position"], dtype=np.float32)
+            time = np.asarray(steps["time"], dtype=np.float32) if "time" in steps else None
+            cell_id = np.asarray(steps["cell_id"], dtype=np.uint64) if "cell_id" in steps else None
+            pdg = np.asarray(steps["pdg"], dtype=np.int32) if "pdg" in steps else None
             unique_ids = np.unique(event_ids)
             if self.shower_limit is not None:
                 unique_ids = unique_ids[: self.shower_limit]
@@ -48,9 +49,9 @@ class Step2PointHDF5Reader(ShowerReader):
                     y=position[mask, 1],
                     z=position[mask, 2],
                     E=energy[mask],
-                    t=time[mask],
-                    cell_id=cell_id[mask],
-                    pdg=pdg[mask],
+                    t=None if time is None else time[mask],
+                    cell_id=None if cell_id is None else cell_id[mask],
+                    pdg=None if pdg is None else pdg[mask],
                     primary=primary_map.get(int(shower_id), {}),
                     metadata={"source": "hdf5"},
                 )

@@ -1,4 +1,4 @@
-# Validation philosophy
+# Validation
 
 Compression is only useful if we can say clearly what it preserves and what it changes.
 
@@ -60,6 +60,49 @@ N_points_post / N_points_pre
 
 is one of the central performance indicators of a compression algorithm.
 
+## Example inspection workflow
+
+For shower inspection, use `examples/inspect_showers.py`. The script always produces a dataset-level observables, and it also produces single-shower plots if `--shower-index` is given.
+
+Dataset-level only:
+
+```bash
+PYTHONPATH=src python examples/inspect_showers.py \
+  --input tests/data/CLD_gamma_10GeV_posY2150mm_dirY1_10ev_sim_detailed_tchandler.h5 \
+  --input-format hdf5 \
+  --axis 0 1 0 \
+  --outdir outputs/inspect_gamma
+```
+
+Dataset plus single-shower plots:
+
+```bash
+PYTHONPATH=src python examples/inspect_showers.py \
+  --input tests/data/CLD_gamma_10GeV_posY2150mm_dirY1_10ev_sim_detailed_tchandler.h5 \
+  --input-format hdf5 \
+  --shower-index 0 \
+  --axis 0 1 0 \
+  --outdir outputs/inspect_gamma
+```
+
+Recommended axis override for the CLD front-face samples:
+
+```bash
+PYTHONPATH=src python examples/inspect_showers.py \
+  --input tests/data/CLD_gamma_10GeV_posY2150mm_dirY1_10ev_sim_detailed_tchandler.h5 \
+  --input-format hdf5 \
+  --shower-index 0 \
+  --axis 0 1 0 \
+  --outdir outputs/inspect_gamma
+```
+
+Expected outputs:
+
+- `dataset_observables.png`
+- `shower_<id>_projections.png`
+- `shower_<id>_distributions.png`
+- `shower_<id>_overview.png`
+
 # Validation results
 
 ## EM showers
@@ -68,7 +111,23 @@ Animation below shows an example of a single electromagnetic shower:
 
 ![gamma](assets/images/animation_gamma.gif){ .animation-gamma }
 
-TODO place shower observables
+Single-shower inspection outputs produced with `--shower-index 0` on the gamma sample:
+
+### Projections
+
+![gamma projections](assets/images/inspect_gamma/shower_0_projections.png)
+
+### Distributions
+
+![gamma distributions](assets/images/inspect_gamma/shower_0_distributions.png)
+
+### Overview
+
+![gamma overview](assets/images/inspect_gamma/shower_0_overview.png)
+
+### Dataset observables matrix
+
+![gamma matrix](assets/images/inspect_gamma/dataset_observables.png)
 
 ## hadronic showers
 
@@ -76,4 +135,20 @@ Animation below shows an example of a single hadronic shower:
 
 ![pion](assets/images/animation_pion.gif){ .animation-pion }
 
-TODO place shower observables
+Single-shower inspection outputs produced with `--shower-index 0 --axis 0 1 0` on the pion sample:
+
+### Projections
+
+![pion projections](assets/images/inspect_pion/shower_0_projections.png)
+
+### Distributions
+
+![pion distributions](assets/images/inspect_pion/shower_0_distributions.png)
+
+### Overview
+
+![pion overview](assets/images/inspect_pion/shower_0_overview.png)
+
+### Dataset observables
+
+![pion matrix](assets/images/inspect_pion/dataset_observables.png)

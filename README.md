@@ -126,12 +126,52 @@ Minimal usage:
 from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
 from step2point.algorithms.merge_within_cell import MergeWithinCell
 
-reader = Step2PointHDF5Reader("tests/data/test_showers.h5")
+reader = Step2PointHDF5Reader("tests/data/CLD_gamma_10GeV_posY2150mm_dirY1_10ev_sim_detailed_tchandler.h5")
 algorithm = MergeWithinCell()
 
 for shower in reader.iter_showers():
     compressed = algorithm.compress(shower).shower
 ```
+
+## Inspection and visualization
+
+An example basic inspection of shower observables can be done with [examples/inspect_showers.py](/home/anna/Workspace/step2point/examples/inspect_showers.py:1) which produces plots for manual validation.
+
+Dataset-level only:
+
+```bash
+PYTHONPATH=src python examples/inspect_showers.py \
+  --input tests/data/CLD_gamma_10GeV_posY2150mm_dirY1_10ev_sim_detailed_tchandler.h5 \
+  --input-format hdf5 \
+  --outdir outputs/inspect_gamma
+```
+
+Dataset plus single-shower plots:
+
+```bash
+PYTHONPATH=src python examples/inspect_showers.py \
+  --input tests/data/CLD_gamma_10GeV_posY2150mm_dirY1_10ev_sim_detailed_tchandler.h5 \
+  --input-format hdf5 \
+  --shower-index 0 \
+  --outdir outputs/inspect_gamma
+```
+
+Optional override of shower direction (so axis is not calculated from principal component analysis):
+
+```bash
+PYTHONPATH=src python examples/inspect_showers.py \
+  --input tests/data/CLD_gamma_10GeV_posY2150mm_dirY1_10ev_sim_detailed_tchandler.h5 \
+  --input-format hdf5 \
+  --shower-index 0 \
+  --axis 0 1 0 \
+  --outdir outputs/inspect_gamma_axis
+```
+
+Typical outputs are:
+- `dataset_observables.png`
+- `shower_<id>_projections.png`
+- `shower_<id>_distributions.png`
+- `shower_<id>_overview.png`
 
 ## [WIP] C++ backend
 
