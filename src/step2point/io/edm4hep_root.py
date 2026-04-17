@@ -17,6 +17,7 @@ import numpy as np
 
 from step2point.core.shower import Shower
 
+
 @dataclass(slots=True)
 class EDM4hepRootReader:
     input_path: str

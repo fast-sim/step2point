@@ -178,7 +178,9 @@ def generate_observables_matrix(showers, outpath: str | Path, *, selected_index:
     avg_color = "#0057D9"
     selected_color = "#FF7A00"
 
-    all_long_values = np.concatenate([np.asarray(row["long_values"], dtype=np.float64) for row in all_data if np.size(row["long_values"]) > 0])
+    all_long_values = np.concatenate(
+        [np.asarray(row["long_values"], dtype=np.float64) for row in all_data if np.size(row["long_values"]) > 0]
+    )
     long_bins = np.linspace(0.0, _upper_percentile_limit(all_long_values), 16)
     radial_bins = np.linspace(
         0.0,

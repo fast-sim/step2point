@@ -6,11 +6,7 @@ import pytest
 
 from step2point.io import EDM4hepRootReader
 
-DATA = (
-    Path(__file__).resolve().parents[1]
-    / "data"
-    / "ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_edm4hep.root"
-)
+DATA = Path(__file__).resolve().parents[1] / "data" / "ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_edm4hep.root"
 
 
 def _has_podio_root_io() -> bool:
