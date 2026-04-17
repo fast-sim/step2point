@@ -1,37 +1,26 @@
-"""Direct EDM4hep ROOT reader aligned with the current step2point repository.
+"""Direct EDM4hep ROOT reader.
 
-The uploaded step2point repository reads EDM4hep ROOT files through
-`podio.root_io.Reader` and iterates over the `events` collection, extracting
-MCParticles plus calorimeter-hit contributions from the configured
-SimCalorimeterHit collections. This module follows that same approach and
+This module reads EDM4hep ROOT files through ``podio.root_io.Reader`` and
 returns canonical :class:`~step2point.core.shower.Shower` objects directly,
 without converting to HDF5 first.
 
-This reader is optional because it requires the Key4hep/PODIO Python stack
-(`podio`, usually also `edm4hep`).
+The reader is optional because it requires the Key4hep/PODIO+EDM4hep stack
+(``podio``, ``edm4hep``).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Iterator
 
 import numpy as np
 
 from step2point.core.shower import Shower
 
-DEFAULT_COLLECTIONS = (
-    "ECalBarrelCollection",
-    "ECalEndcapCollection",
-    "HCalBarrelCollection",
-    "HCalEndcapCollection",
-)
-
-
 @dataclass(slots=True)
 class EDM4hepRootReader:
     input_path: str
-    collections: tuple[str, ...] = field(default_factory=lambda: tuple(DEFAULT_COLLECTIONS))
+    collections: tuple[str, ...] | None = None
     shower_limit: int | None = None
     include_primary: bool = True
     include_pdg: bool = True
@@ -48,6 +37,7 @@ class EDM4hepRootReader:
         root_io = self._import_podio()
         reader = root_io.Reader(self.input_path)
         events = reader.get("events")
+        collections = tuple(self.collections or ())
 
         for iev, event in enumerate(events):
             if self.shower_limit is not None and iev >= self.shower_limit:
@@ -80,7 +70,7 @@ class EDM4hepRootReader:
                         }
                         break
 
-            for icol, col_name in enumerate(self.collections):
+            for icol, col_name in enumerate(collections):
                 hits = event.get(col_name)
                 if not hits:
                     continue
@@ -113,7 +103,7 @@ class EDM4hepRootReader:
                 primary=primary,
                 metadata={
                     "source": "edm4hep.root",
-                    "collections": list(self.collections),
+                    "collections": list(collections),
                     "subdetector": np.asarray(subdetector, dtype=np.uint8),
                 },
             )

@@ -71,15 +71,15 @@ cpp/         future C++ core and Python bindings
 ## Current features
 
 - canonical `Shower` object
-- [WIP] direct `edm4hep.root` reader
 - HDF5 reader compatible with the step2point dataset layout
+- direct `edm4hep.root` reader
 - baseline algorithms:
     - `identity`
     - `merge_within_cell`
 - metrics / validation / plotting
 - small HDF5 regression sample and GitHub Actions CI
 - MkDocs documentation site
-- C++ core skeleton with a `merge_within_cell` implementation
+- C++ core skeleton with an example of the `merge_within_cell` implementation
 
 ## Repository layout
 
@@ -164,6 +164,18 @@ PYTHONPATH=src python examples/inspect_showers.py \
   --outdir outputs/inspect_gamma_axis
 ```
 
+Library supports reading from HDF5 files (with structure as defined in [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17199427.svg)](https://doi.org/10.5281/zenodo.17199427)) as well as from the EDM4hep ROOT files:
+
+```bash
+python examples/inspect_showers.py \
+  --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_edm4hep.root \
+  --collections ECalBarrelCollection ECalEndcapCollection HCalBarrelCollection HCalEndcapCollection \
+  --shower-index 5 \
+  --axis 0 1 0 \
+  --outdir outputs/inspect_root
+```
+
+
 Typical outputs are:
 - `dataset_observables.png`
 - `shower_<id>_projections.png`
@@ -197,17 +209,11 @@ Build static docs:
 mkdocs build
 ```
 
-## Notes on ROOT input
-
-`src/step2point/core/edm4hep_root.py` follows the same direct EDM4hep access direction as the current repository. The exact collection names and detector-specific extraction still need to be adapted to your production layout once a representative ROOT test sample is added.
-
 ## CI
 
 GitHub Actions includes:
 - `ci.yml` for lint + tests on the tiny HDF5 sample
 - `regression.yml` for generating validation plots as workflow artifacts
 - `docs.yml` for documentation deployment to GitHub Pages
-
-## CI
 
 Every pull request runs install/import checks, unit and integration tests, a small physics sanity suite, docs build, and the C++/CMake test target.

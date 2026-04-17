@@ -3,14 +3,20 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from step2point.core.edm4hep_root import EDM4hepRootReader
-from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
+from step2point.io import EDM4hepRootReader, Step2PointHDF5Reader
 from step2point.metrics.spatial import estimate_shower_axis, longitudinal_radial_phi
 from step2point.validation.benchmark_plots import generate_observables_matrix
 from step2point.vis import (
     plot_shower_distributions,
     plot_shower_overview,
     plot_shower_projections,
+)
+
+DEFAULT_ROOT_COLLECTIONS = (
+    "ECalBarrelCollection",
+    "ECalEndcapCollection",
+    "HCalBarrelCollection",
+    "HCalEndcapCollection",
 )
 
 
@@ -23,11 +29,23 @@ def build_reader(input_path: str):
     raise ValueError(f"Unsupported input file type for '{input_path}'. Expected .root, .h5, or .hdf5.")
 
 
+def parse_collections(collections: list[str] | None) -> tuple[str, ...] | None:
+    if not collections:
+        return None
+    return tuple(collections)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate shower inspection plots. PCA is the default axis unless --axis is given."
     )
     parser.add_argument("--input", required=True)
+    parser.add_argument(
+        "--collections",
+        nargs="+",
+        default=list(DEFAULT_ROOT_COLLECTIONS),
+        help="EDM4hep SimCalorimeterHit collection names for ROOT input.",
+    )
     parser.add_argument("--shower-index", type=int, help="Optional shower index for single-shower plots.")
     parser.add_argument("--outdir", default="outputs/inspect")
     parser.add_argument(
@@ -42,6 +60,8 @@ def main():
     outdir.mkdir(parents=True, exist_ok=True)
 
     reader = build_reader(args.input)
+    if isinstance(reader, EDM4hepRootReader):
+        reader.collections = parse_collections(args.collections)
     showers = list(reader.iter_showers())
 
     if args.shower_index is not None:

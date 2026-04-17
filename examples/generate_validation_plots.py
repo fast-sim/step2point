@@ -5,11 +5,16 @@ from pathlib import Path
 
 from step2point.algorithms.identity import IdentityCompression
 from step2point.algorithms.merge_within_cell import MergeWithinCell
-from step2point.core.edm4hep_root import EDM4hepRootReader
-from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
+from step2point.io import EDM4hepRootReader, Step2PointHDF5Reader
 from step2point.validation.benchmark_plots import generate_benchmark_plots
 
 ALGORITHMS = {"identity": IdentityCompression, "merge_within_cell": MergeWithinCell}
+DEFAULT_ROOT_COLLECTIONS = (
+    "ECalBarrelCollection",
+    "ECalEndcapCollection",
+    "HCalBarrelCollection",
+    "HCalEndcapCollection",
+)
 
 
 def build_reader(input_path: str):
@@ -21,14 +26,28 @@ def build_reader(input_path: str):
     raise ValueError(f"Unsupported input file type for '{input_path}'. Expected .root, .h5, or .hdf5.")
 
 
+def parse_collections(collections: list[str] | None) -> tuple[str, ...] | None:
+    if not collections:
+        return None
+    return tuple(collections)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
+    parser.add_argument(
+        "--collections",
+        nargs="+",
+        default=list(DEFAULT_ROOT_COLLECTIONS),
+        help="EDM4hep SimCalorimeterHit collection names for ROOT input.",
+    )
     parser.add_argument("--algorithm", choices=sorted(ALGORITHMS), default="merge_within_cell")
     parser.add_argument("--outdir", default="outputs/plots")
     args = parser.parse_args()
 
     reader = build_reader(args.input)
+    if isinstance(reader, EDM4hepRootReader):
+        reader.collections = parse_collections(args.collections)
     algorithm = ALGORITHMS[args.algorithm]()
     pairs = []
     for shower in reader.iter_showers():

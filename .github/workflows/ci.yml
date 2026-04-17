@@ -42,6 +42,44 @@ jobs:
       - name: Physics sanity tests
         run: pytest -q tests/physics
 
+  edm4hep-root-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cvmfs-contrib/github-action-cvmfs@v4
+        with:
+          cvmfs_repositories: "sw.hsf.org"
+      - name: Select Key4hep setup
+        id: key4hep
+        shell: bash
+        run: |
+          if [ -f /cvmfs/sw.hsf.org/key4hep/setup.sh ]; then
+            echo "script=/cvmfs/sw.hsf.org/key4hep/setup.sh" >> "$GITHUB_OUTPUT"
+          else
+            echo "No Key4hep setup found under /cvmfs" >&2
+            exit 1
+          fi
+      - name: Install package in Key4hep environment
+        shell: bash -l {0}
+        run: |
+          source "${{ steps.key4hep.outputs.script }}"
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+      - name: Smoke import podio and edm4hep
+        shell: bash -l {0}
+        run: |
+          source "${{ steps.key4hep.outputs.script }}"
+          python - <<'PY'
+          from podio import root_io  # noqa: F401
+          import edm4hep  # noqa: F401
+          print("podio and edm4hep available")
+          PY
+      - name: EDM4hep ROOT integration tests
+        shell: bash -l {0}
+        run: |
+          source "${{ steps.key4hep.outputs.script }}"
+          pytest -q tests/integration/test_root_reader_optional.py
+
   docs-build:
     runs-on: ubuntu-latest
     steps:
