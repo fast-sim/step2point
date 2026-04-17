@@ -77,11 +77,7 @@ jobs:
             cd /workspace
             source /cvmfs/sw.hsf.org/key4hep/setup.sh
             source .venv-key4hep/bin/activate
-            python - <<'"'"'PY'"'"'
-            from podio import root_io  # noqa: F401
-            import edm4hep  # noqa: F401
-            print("podio and edm4hep available")
-            PY
+            python -c "from podio import root_io; import edm4hep; print(\"podio and edm4hep available\")"
           '
       - name: EDM4hep ROOT integration tests
         run: |
