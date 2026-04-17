@@ -114,6 +114,47 @@ Install:
 pip install -e .[dev]
 ```
 
+### How to use Key4hep + step2point
+
+For the EDM4hep ROOT reader, create the virtual environment from the Key4hep Python, not from the system Python:
+
+```bash
+source /cvmfs/sw.hsf.org/key4hep/setup.sh
+bash scripts/setup_key4hep_venv.sh
+source /cvmfs/sw.hsf.org/key4hep/setup.sh
+source .venv-key4hep/bin/activate
+```
+
+The helper script installs `step2point` in editable mode with the `dev` extras into `.venv-key4hep`.
+
+Run the ROOT integration test:
+
+```bash
+pytest -q tests/integration/test_root_reader_optional.py
+```
+
+Minimal ROOT-reader smoke test:
+
+```bash
+python - <<'PY'
+from step2point.io import EDM4hepRootReader
+
+reader = EDM4hepRootReader(
+    "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_edm4hep.root",
+    collections=(
+        "ECalBarrelCollection",
+        "ECalEndcapCollection",
+        "HCalBarrelCollection",
+        "HCalEndcapCollection",
+    ),
+    shower_limit=1,
+)
+
+shower = next(reader.iter_showers())
+print(shower.n_points, shower.cell_id is not None, shower.t is not None)
+PY
+```
+
 Run tests:
 
 ```bash
