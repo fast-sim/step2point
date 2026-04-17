@@ -178,6 +178,9 @@ for shower in reader.iter_showers():
 
 An example basic inspection of shower observables can be done with [examples/inspect_showers.py](/home/anna/Workspace/step2point/examples/inspect_showers.py:1) which produces plots for manual validation.
 
+Note:
+`PYTHONPATH=src` is only needed when running directly from a source checkout without installing the package first. If you already ran `pip install -e .[dev]`, you can drop that prefix and use `python ...` directly.
+
 Dataset-level only:
 
 ```bash

@@ -64,6 +64,9 @@ is one of the central performance indicators of a compression algorithm.
 
 For shower inspection, use `examples/inspect_showers.py`. The script always produces a dataset-level observables, and it also produces single-shower plots if `--shower-index` is given.
 
+Note:
+`PYTHONPATH=src` is only needed when running directly from a source checkout without installing the package first. If you already ran `pip install -e .[dev]`, you can drop that prefix and use `python ...` directly.
+
 Dataset-level only:
 
 ```bash
