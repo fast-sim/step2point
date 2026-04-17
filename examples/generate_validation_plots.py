@@ -9,29 +9,26 @@ from step2point.core.edm4hep_root import EDM4hepRootReader
 from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
 from step2point.validation.benchmark_plots import generate_benchmark_plots
 
-ALGORITHMS = {
-    "identity": IdentityCompression,
-    "merge_within_cell": MergeWithinCell,
-}
+ALGORITHMS = {"identity": IdentityCompression, "merge_within_cell": MergeWithinCell}
 
 
-def build_reader(input_path: str, input_format: str):
-    if input_format == "hdf5":
-        return Step2PointHDF5Reader(input_path)
-    if input_format == "edm4hep_root":
+def build_reader(input_path: str):
+    suffixes = Path(input_path).suffixes
+    if suffixes[-1:] == [".root"]:
         return EDM4hepRootReader(input_path)
-    raise ValueError(f"Unsupported input format: {input_format}")
+    if suffixes[-1:] in ([".h5"], [".hdf5"]):
+        return Step2PointHDF5Reader(input_path)
+    raise ValueError(f"Unsupported input file type for '{input_path}'. Expected .root, .h5, or .hdf5.")
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
-    parser.add_argument("--input-format", choices=["hdf5", "edm4hep_root"], default="hdf5")  # TODO deduce format from extension
     parser.add_argument("--algorithm", choices=sorted(ALGORITHMS), default="merge_within_cell")
     parser.add_argument("--outdir", default="outputs/plots")
     args = parser.parse_args()
 
-    reader = build_reader(args.input, args.input_format)
+    reader = build_reader(args.input)
     algorithm = ALGORITHMS[args.algorithm]()
     pairs = []
     for shower in reader.iter_showers():

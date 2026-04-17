@@ -69,7 +69,6 @@ Dataset-level only:
 ```bash
 PYTHONPATH=src python examples/inspect_showers.py \
   --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
-  --input-format hdf5 \
   --axis 0 1 0 \
   --outdir outputs/inspect_gamma
 ```
@@ -79,18 +78,16 @@ Dataset plus single-shower plots:
 ```bash
 PYTHONPATH=src python examples/inspect_showers.py \
   --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
-  --input-format hdf5 \
   --shower-index 0 \
   --axis 0 1 0 \
   --outdir outputs/inspect_gamma
 ```
 
-Recommended axis override for the CLD front-face samples:
+Recommended axis override for these front-face ODD samples:
 
 ```bash
 PYTHONPATH=src python examples/inspect_showers.py \
   --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
-  --input-format hdf5 \
   --shower-index 0 \
   --axis 0 1 0 \
   --outdir outputs/inspect_gamma

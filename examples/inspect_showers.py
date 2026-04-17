@@ -14,12 +14,13 @@ from step2point.vis import (
 )
 
 
-def build_reader(input_path: str, input_format: str):
-    if input_format == "hdf5":
-        return Step2PointHDF5Reader(input_path)
-    if input_format == "edm4hep_root":
+def build_reader(input_path: str):
+    suffixes = Path(input_path).suffixes
+    if suffixes[-1:] == [".root"]:
         return EDM4hepRootReader(input_path)
-    raise ValueError(f"Unsupported input format: {input_format}")
+    if suffixes[-1:] in ([".h5"], [".hdf5"]):
+        return Step2PointHDF5Reader(input_path)
+    raise ValueError(f"Unsupported input file type for '{input_path}'. Expected .root, .h5, or .hdf5.")
 
 
 def main():
@@ -27,7 +28,6 @@ def main():
         description="Generate shower inspection plots. PCA is the default axis unless --axis is given."
     )
     parser.add_argument("--input", required=True)
-    parser.add_argument("--input-format", choices=["hdf5", "edm4hep_root"], default="hdf5")
     parser.add_argument("--shower-index", type=int, help="Optional shower index for single-shower plots.")
     parser.add_argument("--outdir", default="outputs/inspect")
     parser.add_argument(
@@ -41,7 +41,7 @@ def main():
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
-    reader = build_reader(args.input, args.input_format)
+    reader = build_reader(args.input)
     showers = list(reader.iter_showers())
 
     if args.shower_index is not None:
