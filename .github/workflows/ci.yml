@@ -64,13 +64,15 @@ jobs:
         run: |
           set -eo pipefail
           source "${{ steps.key4hep.outputs.script }}"
-          python -m pip install --upgrade pip
+          python -m venv --system-site-packages .venv-key4hep
+          source .venv-key4hep/bin/activate
           python -m pip install -e .[dev]
       - name: Smoke import podio and edm4hep
         shell: bash -l {0}
         run: |
           set -eo pipefail
           source "${{ steps.key4hep.outputs.script }}"
+          source .venv-key4hep/bin/activate
           python - <<'PY'
           from podio import root_io  # noqa: F401
           import edm4hep  # noqa: F401
@@ -81,6 +83,7 @@ jobs:
         run: |
           set -eo pipefail
           source "${{ steps.key4hep.outputs.script }}"
+          source .venv-key4hep/bin/activate
           pytest -q tests/integration/test_root_reader_optional.py
 
   docs-build:
