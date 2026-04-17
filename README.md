@@ -126,7 +126,7 @@ Minimal usage:
 from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
 from step2point.algorithms.merge_within_cell import MergeWithinCell
 
-reader = Step2PointHDF5Reader("tests/data/CLD_gamma_10GeV_posY2150mm_dirY1_10ev_sim_detailed_tchandler.h5")
+reader = Step2PointHDF5Reader("tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5")
 algorithm = MergeWithinCell()
 
 for shower in reader.iter_showers():
@@ -141,7 +141,7 @@ Dataset-level only:
 
 ```bash
 PYTHONPATH=src python examples/inspect_showers.py \
-  --input tests/data/CLD_gamma_10GeV_posY2150mm_dirY1_10ev_sim_detailed_tchandler.h5 \
+  --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
   --input-format hdf5 \
   --outdir outputs/inspect_gamma
 ```
@@ -150,7 +150,7 @@ Dataset plus single-shower plots:
 
 ```bash
 PYTHONPATH=src python examples/inspect_showers.py \
-  --input tests/data/CLD_gamma_10GeV_posY2150mm_dirY1_10ev_sim_detailed_tchandler.h5 \
+  --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
   --input-format hdf5 \
   --shower-index 0 \
   --outdir outputs/inspect_gamma
@@ -160,7 +160,7 @@ Optional override of shower direction (so axis is not calculated from principal 
 
 ```bash
 PYTHONPATH=src python examples/inspect_showers.py \
-  --input tests/data/CLD_gamma_10GeV_posY2150mm_dirY1_10ev_sim_detailed_tchandler.h5 \
+  --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
   --input-format hdf5 \
   --shower-index 0 \
   --axis 0 1 0 \
