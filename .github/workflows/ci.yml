@@ -43,7 +43,7 @@ jobs:
         run: pytest -q tests/physics
 
   edm4hep-root-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: cvmfs-contrib/github-action-cvmfs@v4
@@ -62,12 +62,14 @@ jobs:
       - name: Install package in Key4hep environment
         shell: bash -l {0}
         run: |
+          set -euo pipefail
           source "${{ steps.key4hep.outputs.script }}"
           python -m pip install --upgrade pip
           python -m pip install -e .[dev]
       - name: Smoke import podio and edm4hep
         shell: bash -l {0}
         run: |
+          set -euo pipefail
           source "${{ steps.key4hep.outputs.script }}"
           python - <<'PY'
           from podio import root_io  # noqa: F401
@@ -77,6 +79,7 @@ jobs:
       - name: EDM4hep ROOT integration tests
         shell: bash -l {0}
         run: |
+          set -euo pipefail
           source "${{ steps.key4hep.outputs.script }}"
           pytest -q tests/integration/test_root_reader_optional.py
 

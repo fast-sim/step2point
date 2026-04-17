@@ -34,7 +34,7 @@ jobs:
           path: outputs/ci_validation_plots/
 
   edm4hep-root-regression:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: cvmfs-contrib/github-action-cvmfs@v4
@@ -53,12 +53,14 @@ jobs:
       - name: Install package in Key4hep environment
         shell: bash -l {0}
         run: |
+          set -euo pipefail
           source "${{ steps.key4hep.outputs.script }}"
           python -m pip install --upgrade pip
           python -m pip install -e .[dev]
       - name: Check podio and edm4hep imports
         shell: bash -l {0}
         run: |
+          set -euo pipefail
           source "${{ steps.key4hep.outputs.script }}"
           python - <<'PY'
           from podio import root_io  # noqa: F401
@@ -68,11 +70,13 @@ jobs:
       - name: Run ROOT integration test
         shell: bash -l {0}
         run: |
+          set -euo pipefail
           source "${{ steps.key4hep.outputs.script }}"
           pytest -q tests/integration/test_root_reader_optional.py
       - name: Generate ROOT validation plots
         shell: bash -l {0}
         run: |
+          set -euo pipefail
           source "${{ steps.key4hep.outputs.script }}"
           python examples/generate_validation_plots.py \
             --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_edm4hep.root \
