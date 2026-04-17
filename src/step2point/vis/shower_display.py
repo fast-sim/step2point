@@ -18,7 +18,12 @@ def _prepare_outpath(outpath: str | Path) -> Path:
 def _get_color_data(shower, color_by: str):
     if color_by == "energy":
         values = np.log10(np.clip(np.asarray(shower.E, dtype=np.float64), 1e-12, None))
-        return values, "inferno", Normalize(vmin=np.percentile(values, 1), vmax=np.percentile(values, 99)), "log10(E)"
+        return (
+            values,
+            "inferno",
+            Normalize(vmin=np.percentile(values, 1), vmax=np.percentile(values, 99)),
+            "log10(E [GeV])",
+        )
     if color_by == "pdg":
         if shower.pdg is None:
             raise ValueError("PDG colouring requires shower.pdg.")
@@ -45,6 +50,19 @@ def _auto_limits(values: np.ndarray, pad: float = 0.1) -> tuple[float, float]:
     q1, q2 = np.percentile(values, [1, 99])
     span = max(q2 - q1, 1.0)
     return float(q1 - pad * span), float(q2 + pad * span)
+
+
+def _upper_percentile_limit(values: np.ndarray, percentile: float = 99.0, pad: float = 0.05) -> float:
+    values = np.asarray(values, dtype=np.float64)
+    if values.size == 0:
+        return 1.0
+    upper = float(np.percentile(values, percentile))
+    return max(upper * (1.0 + pad), 1.0)
+
+
+def _zoomed_bins(values: np.ndarray, nbins: int = 20, percentile: float = 99.0, pad: float = 0.05) -> np.ndarray:
+    upper = _upper_percentile_limit(values, percentile=percentile, pad=pad)
+    return np.linspace(0.0, upper, nbins + 1)
 
 
 def scatter_xz(shower, outpath):
@@ -97,25 +115,27 @@ def plot_shower_distributions(shower, outpath):
     )
     log_energy = np.log10(np.clip(np.asarray(shower.E, dtype=np.float64), 1e-12, None))
     axes[0, 0].hist(log_energy, bins=50, color=fill_color, alpha=fill_alpha, log=True)
-    axes[0, 0].set_xlabel("log10(energy)")
+    axes[0, 0].set_xlabel("log10(energy [GeV])")
     axes[0, 0].set_ylabel("Count")
     axes[0, 0].set_title("Energy distribution")
     if shower.t is not None:
         axes[0, 1].hist(shower.t, bins=50, color=fill_color, alpha=fill_alpha, log=True)
-        axes[0, 1].set_xlabel("time")
+        axes[0, 1].set_xlabel("time [ns]")
         axes[0, 1].set_ylabel("Count")
         axes[0, 1].set_title("Time distribution")
+        axes[0, 1].set_xlim(left=0.0, right=float(np.percentile(shower.t, 95)))
     else:
         axes[0, 1].text(0.5, 0.5, "No time information", ha="center", va="center", transform=axes[0, 1].transAxes)
         axes[0, 1].set_axis_off()
-    axes[1, 0].hist(long, bins=40, weights=shower.E, color=fill_color, alpha=fill_alpha)
-    axes[1, 0].set_xlabel("longitudinal (from first deposit)")
-    axes[1, 0].set_ylabel("Weighted count")
+    long_bins = _zoomed_bins(long, nbins=20)
+    axes[1, 0].hist(long, bins=long_bins, weights=shower.E, color=fill_color, alpha=fill_alpha)
+    axes[1, 0].set_xlabel("longitudinal (from first deposit) [mm]")
+    axes[1, 0].set_ylabel("Deposited energy per bin [GeV]")
     axes[1, 0].set_title("Longitudinal profile")
-    axes[1, 0].set_xlim(left=0.0)
+    axes[1, 0].set_xlim(0.0, long_bins[-1])
     axes[1, 1].hist(radial, bins=40, weights=shower.E, color=fill_color, alpha=fill_alpha)
-    axes[1, 1].set_xlabel("radial")
-    axes[1, 1].set_ylabel("Weighted count")
+    axes[1, 1].set_xlabel("radial [mm]")
+    axes[1, 1].set_ylabel("Deposited energy per bin [GeV]")
     axes[1, 1].set_title("Radial profile")
     fig.tight_layout()
     fig.savefig(outpath)
@@ -137,6 +157,7 @@ def plot_shower_overview(shower, outpath, *, axis_override=None):
         axis=axis,
         longitudinal_origin="first_deposit",
     )
+    long_bins = _zoomed_bins(long, nbins=20)
     axis_line = np.vstack([-100.0 * axis, 100.0 * axis])
     xlim = _auto_limits(coords[:, 0])
     ylim = _auto_limits(coords[:, 1])
@@ -172,10 +193,10 @@ def plot_shower_overview(shower, outpath, *, axis_override=None):
     ax_yz.set_xlabel("y (mm)")
     ax_yz.set_ylabel("z (mm)")
     ax_lr.scatter(long, radial, c=colours, cmap="plasma", s=8)
-    ax_lr.set_xlabel("Longitudinal (from first deposit)")
-    ax_lr.set_ylabel("Radius")
+    ax_lr.set_xlabel("Longitudinal (from first deposit) [mm]")
+    ax_lr.set_ylabel("Radius [mm]")
     ax_lr.set_title("Cylindrical: long vs r")
-    ax_lr.set_xlim(left=0.0)
+    ax_lr.set_xlim(0.0, long_bins[-1])
     ax_polar.scatter(phi, radial, c=colours, cmap="plasma", s=8)
     ax_polar.set_title("Polar: r vs phi")
     fig.colorbar(scatter3d, ax=[ax_3d, ax_xy, ax_xz, ax_yz], shrink=0.7, label="Energy")

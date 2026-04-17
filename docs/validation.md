@@ -103,6 +103,17 @@ Expected outputs:
 - `shower_<id>_distributions.png`
 - `shower_<id>_overview.png`
 
+## Units used in the plots
+
+The example HDF5 files in this repository are produced by [https://gitlab.cern.ch/fastsim/step2point/-/tree/v1.1.0?ref_type=tags](step2point dataset repository), which preserves the EDM4hep values directly:
+
+- deposited energy is plotted as `GeV`
+- time is plotted as `ns`
+- positions and shower-shape coordinates are plotted as `mm`
+
+NOTE:
+This matters only for axis labels and interpretation of the plots. The reclustering/compression code itself does not assume a special unit system: it preserves the units present in the input arrays. If an input dataset used different but internally consistent units, the compressed output would remain in the same units.
+
 # Validation results
 
 ## EM showers
@@ -115,15 +126,15 @@ Single-shower inspection outputs produced with `--shower-index 0` on the gamma s
 
 ### Projections
 
-![gamma projections](assets/images/inspect_gamma/shower_0_projections.png)
+![gamma projections](assets/images/inspect_gamma/shower_5_projections.png)
 
 ### Distributions
 
-![gamma distributions](assets/images/inspect_gamma/shower_0_distributions.png)
+![gamma distributions](assets/images/inspect_gamma/shower_5_distributions.png)
 
 ### Overview
 
-![gamma overview](assets/images/inspect_gamma/shower_0_overview.png)
+![gamma overview](assets/images/inspect_gamma/shower_5_overview.png)
 
 ### Dataset observables matrix
 

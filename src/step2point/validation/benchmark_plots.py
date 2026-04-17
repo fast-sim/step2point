@@ -17,6 +17,14 @@ class PlotArtifacts:
     outdir: Path
 
 
+def _upper_percentile_limit(values: np.ndarray, percentile: float = 99.0, pad: float = 0.05) -> float:
+    values = np.asarray(values, dtype=np.float64)
+    if values.size == 0:
+        return 1.0
+    upper = float(np.percentile(values, percentile))
+    return max(upper * (1.0 + pad), 1.0)
+
+
 def _safe_log10(values: np.ndarray, eps: float = 1e-12) -> np.ndarray:
     values = np.asarray(values, dtype=np.float64)
     return np.log10(np.clip(values, eps, None))
@@ -108,14 +116,19 @@ def generate_benchmark_plots(pairs, outdir: str | Path) -> PlotArtifacts:
     plot_hist(cell_ratios, outdir / "cell_count_ratio.png", "Cell count ratio", "N_cells_post / N_cells_pre")
     plot_hist(point_ratios, outdir / "point_count_ratio.png", "Point count ratio", "N_points_post / N_points_pre")
     plot_overlay_hist(
-        pre_cell_logs, post_cell_logs, outdir / "log_cell_energy.png", "Cell energy spectrum", "log10(cell energy)", logy=True
+        pre_cell_logs,
+        post_cell_logs,
+        outdir / "log_cell_energy.png",
+        "Cell energy spectrum",
+        "log10(cell energy [GeV])",
+        logy=True,
     )
     plot_overlay_hist(
         pre_point_logs,
         post_point_logs,
         outdir / "log_point_energy.png",
         "Point energy spectrum",
-        "log10(point energy)",
+        "log10(point energy [GeV])",
         logy=True,
     )
 
@@ -128,7 +141,7 @@ def generate_benchmark_plots(pairs, outdir: str | Path) -> PlotArtifacts:
         np.mean(long_profiles_post, axis=0),
         outdir / "longitudinal_profile_overlay.png",
         "Longitudinal profile",
-        "longitudinal coordinate",
+        "longitudinal coordinate [mm]",
     )
     plot_overlay_line(
         radial_centers,
@@ -136,7 +149,7 @@ def generate_benchmark_plots(pairs, outdir: str | Path) -> PlotArtifacts:
         np.mean(radial_profiles_post, axis=0),
         outdir / "radial_profile_overlay.png",
         "Radial profile",
-        "radial coordinate",
+        "radial coordinate [mm]",
     )
     plot_overlay_line(
         phi_centers,
@@ -165,9 +178,36 @@ def generate_observables_matrix(showers, outpath: str | Path, *, selected_index:
     avg_color = "#0057D9"
     selected_color = "#FF7A00"
 
+    all_long_values = np.concatenate([np.asarray(row["long_values"], dtype=np.float64) for row in all_data if np.size(row["long_values"]) > 0])
+    long_bins = np.linspace(0.0, _upper_percentile_limit(all_long_values), 16)
+    radial_bins = np.linspace(
+        0.0,
+        max(float(np.max(row["radial_values"])) for row in all_data if np.size(row["radial_values"]) > 0),
+        51,
+    )
+    log_energy_min = min(float(np.min(row["log_energy_values"])) for row in all_data if np.size(row["log_energy_values"]) > 0)
+    log_energy_max = max(float(np.max(row["log_energy_values"])) for row in all_data if np.size(row["log_energy_values"]) > 0)
+    log_energy_bins = np.linspace(log_energy_min, log_energy_max, 51)
+
+    def histogram_values(row, key):
+        if key == "long_profile":
+            return np.histogram(row["long_values"], bins=long_bins, weights=row["weights"])[0]
+        if key == "r_profile":
+            return np.histogram(row["radial_values"], bins=radial_bins, weights=row["weights"])[0]
+        if key == "log_energy":
+            return np.histogram(row["log_energy_values"], bins=log_energy_bins)[0]
+        raise ValueError(f"Unsupported profile key: {key}")
+
     def plot_avg(ax, data_list, key, xlabel, logy: bool = False):
-        bins = data_list[0][key][1]
-        values = np.array([row[key][0] for row in data_list], dtype=np.float64)
+        if key == "long_profile":
+            bins = long_bins
+        elif key == "r_profile":
+            bins = radial_bins
+        elif key == "log_energy":
+            bins = log_energy_bins
+        else:
+            raise ValueError(f"Unsupported profile key: {key}")
+        values = np.array([histogram_values(row, key) for row in data_list], dtype=np.float64)
         centers = 0.5 * (bins[:-1] + bins[1:])
         mean_values = np.mean(values, axis=0)
         ax.plot(centers, mean_values, color=avg_color, linewidth=2.2, alpha=0.22, linestyle="--", zorder=3)
@@ -185,16 +225,16 @@ def generate_observables_matrix(showers, outpath: str | Path, *, selected_index:
         if logy:
             ax.set_yscale("log")
         if key == "long_profile":
-            ax.set_xlim(left=0.0)
+            ax.set_xlim(0.0, long_bins[-1])
 
-    plot_avg(axes[0, 0], all_data, "long_profile", "longitudinal (from first deposit)")
-    plot_avg(axes[0, 1], all_data, "r_profile", "radial", logy=True)
-    plot_avg(axes[0, 2], all_data, "log_energy", "log10(energy)", logy=True)
+    plot_avg(axes[0, 0], all_data, "long_profile", "longitudinal (from first deposit) [mm]")
+    plot_avg(axes[0, 1], all_data, "r_profile", "radial [mm]", logy=True)
+    plot_avg(axes[0, 2], all_data, "log_energy", "log10(energy [GeV])", logy=True)
 
     for i, (key, label) in enumerate(
         zip(
             ["mean_long", "mean_r", "total_energy"],
-            ["first longitudinal moment", "first radial moment", "total energy"],
+            ["first longitudinal moment [mm]", "first radial moment [mm]", "total deposited energy [GeV]"],
             strict=True,
         )
     ):
@@ -204,7 +244,7 @@ def generate_observables_matrix(showers, outpath: str | Path, *, selected_index:
     for i, (key, label) in enumerate(
         zip(
             ["var_long", "var_r", "num_steps"],
-            ["second longitudinal moment", "second radial moment", "number of steps"],
+            ["second longitudinal moment [mm²]", "second radial moment [mm²]", "number of steps"],
             strict=True,
         )
     ):
@@ -214,11 +254,18 @@ def generate_observables_matrix(showers, outpath: str | Path, *, selected_index:
     if selected_index is not None:
         selected = all_data[selected_index]
         for i, key in enumerate(["long_profile", "r_profile", "log_energy"]):
-            centers = 0.5 * (selected[key][1][:-1] + selected[key][1][1:])
-            axes[0, i].plot(centers, selected[key][0], color=selected_color, linewidth=1.3, alpha=0.22, linestyle="--", zorder=1)
+            if key == "long_profile":
+                bins = long_bins
+            elif key == "r_profile":
+                bins = radial_bins
+            else:
+                bins = log_energy_bins
+            centers = 0.5 * (bins[:-1] + bins[1:])
+            values = histogram_values(selected, key)
+            axes[0, i].plot(centers, values, color=selected_color, linewidth=1.3, alpha=0.22, linestyle="--", zorder=1)
             axes[0, i].scatter(
                 centers,
-                selected[key][0],
+                values,
                 color=selected_color,
                 s=26,
                 marker="s",

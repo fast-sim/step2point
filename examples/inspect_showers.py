@@ -55,8 +55,15 @@ def main():
             axis=axis,
             longitudinal_origin="centroid",
         )
+        long_first, _, _ = longitudinal_radial_phi(
+            shower,
+            centroid=centroid,
+            axis=axis,
+            longitudinal_origin="first_deposit",
+        )
         print(
-            f"shower_id={shower.shower_id} first_deposit_longitudinal={float(long_centroid[0]):.3f} mm "
+            f"shower_id={shower.shower_id} first_point_longitudinal_centroid_origin={float(long_centroid[0]):.3f} mm "
+            f"first_point_longitudinal_first_deposit_origin={float(long_first[0]):.3f} mm "
             f"first_point_xyz=({float(shower.x[0]):.3f}, {float(shower.y[0]):.3f}, {float(shower.z[0]):.3f}) mm"
         )
         plot_shower_projections(shower, outdir / f"shower_{shower.shower_id}_projections.png")

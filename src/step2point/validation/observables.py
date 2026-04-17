@@ -39,6 +39,11 @@ def compute_shower_observables(shower, *, axis_override=None) -> dict[str, objec
     var_long = float(np.average((long - mean_long) ** 2, weights=weights)) if long.size else float("nan")
     var_r = float(np.average((radial - mean_r) ** 2, weights=weights)) if radial.size else float("nan")
     return {
+        "long_values": long,
+        "radial_values": radial,
+        "phi_values": phi,
+        "log_energy_values": _safe_log10(weights),
+        "weights": weights,
         "long_profile": np.histogram(long, bins=30, weights=weights),
         "r_profile": np.histogram(radial, bins=50, weights=weights),
         "phi_profile": np.histogram(phi, bins=np.linspace(-np.pi, np.pi, 51), weights=weights),
