@@ -35,7 +35,9 @@ theme:
 
 nav:
   - Home: index.md
-  - Getting started: getting_started.md
+  - Getting started:
+      - Overview: getting_started.md
+      - EDM4hep ROOT input: getting_started_edm4hep.md
   - Algorithms: algorithms.md
   - Validation: validation.md
   - Architecture: architecture.md

@@ -102,7 +102,7 @@ Expected outputs:
 
 ## Units used in the plots
 
-The example HDF5 files in this repository are produced by [https://gitlab.cern.ch/fastsim/step2point/-/tree/v1.1.0?ref_type=tags](step2point dataset repository), which preserves the EDM4hep values directly:
+The example HDF5 files in this repository are produced by [step2point dataset repository](https://gitlab.cern.ch/fastsim/step2point/-/tree/v1.1.0?ref_type=tags), which preserves the EDM4hep values directly:
 
 - deposited energy is plotted as `GeV`
 - time is plotted as `ns`

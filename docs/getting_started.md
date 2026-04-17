@@ -1,52 +1,15 @@
 # Getting started
 
+The default workflow in this repository uses the step2point HDF5 files directly.
+
+If you want to read EDM4hep ROOT files instead, see [EDM4hep ROOT input](getting_started_edm4hep.md).
+
 ## Installation
 
 Install the Python package in editable mode:
 
 ```bash
 pip install -e .[dev]
-```
-
-## EDM4hep ROOT with Key4hep
-
-The ROOT reader depends on `podio` and `edm4hep`, so it must run inside a Key4hep environment.
-
-Create a local virtual environment from the Key4hep Python:
-
-```bash
-source /cvmfs/sw.hsf.org/key4hep/setup.sh
-bash scripts/setup_key4hep_venv.sh
-source /cvmfs/sw.hsf.org/key4hep/setup.sh
-source .venv-key4hep/bin/activate
-```
-
-This matters because a regular virtual environment created before sourcing Key4hep will not see the right ROOT-stack Python packages.
-
-Run the optional ROOT-reader integration test:
-
-```bash
-pytest -q tests/integration/test_root_reader_optional.py
-```
-
-Minimal reader example:
-
-```python
-from step2point.io import EDM4hepRootReader
-
-reader = EDM4hepRootReader(
-    "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_edm4hep.root",
-    collections=(
-        "ECalBarrelCollection",
-        "ECalEndcapCollection",
-        "HCalBarrelCollection",
-        "HCalEndcapCollection",
-    ),
-    shower_limit=1,
-)
-
-shower = next(reader.iter_showers())
-print(shower.n_points, shower.cell_id is not None, shower.t is not None)
 ```
 
 ## First example
@@ -91,6 +54,8 @@ compressed = algorithm.compress(shower)
 ```bash
 pytest -q
 ```
+
+Using EDM4hep ROOT directly instead of HDF5 requires the additional Key4hep setup described in [EDM4hep ROOT input](getting_started_edm4hep.md).
 
 The test suite is meant to catch both software regressions and early physics regressions on a tiny frozen sample.
 
