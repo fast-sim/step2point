@@ -114,6 +114,48 @@ Install:
 pip install -e .[dev]
 ```
 
+### Produce Output HDF5
+
+If you want to turn an input shower file into a new output HDF5 file with a chosen algorithm, use [examples/run_step2point_pipeline.py](/home/anna/Workspace/step2point/examples/run_step2point_pipeline.py:1).
+
+Note:
+`PYTHONPATH=src` is only needed when running directly from a source checkout without installing the package first. If you already ran `pip install -e .[dev]`, you can drop that prefix and use `python ...` directly.
+
+Write an output file with no changes (`identity`):
+
+```bash
+PYTHONPATH=src python examples/run_step2point_pipeline.py \
+  --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+  --algorithm identity \
+  --output outputs/pipeline_identity
+```
+
+Write an output file with cell-wise merging:
+
+```bash
+PYTHONPATH=src python examples/run_step2point_pipeline.py \
+  --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+  --algorithm merge_within_cell \
+  --output outputs/pipeline_merge_within_cell
+```
+
+Each run writes:
+
+- `compressed_<algorithm>.h5`
+- `compression_summary_<algorithm>.txt`
+
+Minimal usage in application:
+
+```python
+from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
+from step2point.algorithms.merge_within_cell import MergeWithinCell
+
+reader = Step2PointHDF5Reader("tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5")
+algorithm = MergeWithinCell()
+
+for shower in reader.iter_showers():
+    compressed = algorithm.compress(shower).shower
+```
 ### How to use Key4hep + step2point
 
 For the EDM4hep ROOT reader, create the virtual environment from the Key4hep Python, not from the system Python:
@@ -159,19 +201,6 @@ Run tests:
 
 ```bash
 pytest -q
-```
-
-Minimal usage:
-
-```python
-from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
-from step2point.algorithms.merge_within_cell import MergeWithinCell
-
-reader = Step2PointHDF5Reader("tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5")
-algorithm = MergeWithinCell()
-
-for shower in reader.iter_showers():
-    compressed = algorithm.compress(shower).shower
 ```
 
 ## Inspection and visualization

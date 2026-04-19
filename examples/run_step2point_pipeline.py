@@ -5,8 +5,7 @@ from pathlib import Path
 
 from step2point.algorithms.identity import IdentityCompression
 from step2point.algorithms.merge_within_cell import MergeWithinCell
-from step2point.core.pipeline import Pipeline
-from step2point.io import EDM4hepRootReader, Step2PointHDF5Reader
+from step2point.io import EDM4hepRootReader, Step2PointHDF5Reader, write_step2point_hdf5
 from step2point.validation.conservation import CellCountRatioValidator, EnergyConservationValidator
 from step2point.validation.profiles import ShowerMomentsValidator
 
@@ -54,12 +53,33 @@ def main():
         reader.collections = parse_collections(args.collections)
     algorithm = IdentityCompression() if args.algorithm == "identity" else MergeWithinCell()
     validators = [EnergyConservationValidator(), CellCountRatioValidator(), ShowerMomentsValidator()]
-    report = Pipeline(reader, algorithm, validators).run()
+
+    compression_stats: list[dict] = []
+    validation_results: list[dict] = []
+    compressed_showers = []
+    for shower in reader.iter_showers():
+        result = algorithm.compress(shower)
+        compressed_showers.append(result.shower)
+        compression_stats.append(result.stats)
+        for validator in validators:
+            vr = validator.run(shower, result.shower)
+            validation_results.append({"validator": vr.name, "shower_id": shower.shower_id, **vr.metrics})
+
     outdir = Path(args.output)
     outdir.mkdir(parents=True, exist_ok=True)
-    (outdir / f"compression_summary_{args.algorithm}.txt").write_text(
-        f"compression_stats={len(report.compression_stats)}validation_results={len(report.validation_results)}"
+    output_h5 = write_step2point_hdf5(
+        compressed_showers,
+        outdir / f"compressed_{args.algorithm}.h5",
+        algorithm=args.algorithm,
+        source_input=args.input,
     )
+    (outdir / f"compression_summary_{args.algorithm}.txt").write_text(
+        f"compression_stats={len(compression_stats)}\n"
+        f"validation_results={len(validation_results)}\n"
+        f"output_hdf5={output_h5.name}\n"
+    )
+    print(f"wrote {output_h5}")
+    print(f"wrote {outdir / f'compression_summary_{args.algorithm}.txt'}")
 
 
 if __name__ == "__main__":
