@@ -86,6 +86,9 @@ def plot_barrel_wireframe(
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
     zlim: tuple[float, float] | None = None,
+    xlim_points: tuple[float, float] | None = None,
+    ylim_points: tuple[float, float] | None = None,
+    zlim_points: tuple[float, float] | None = None,
 ) -> tuple[Path, Path]:
     if modules_only:
         xy_segments, zy_segments = module_envelope_outline_xy_zy(layout)
@@ -167,19 +170,21 @@ def plot_barrel_wireframe(
     if overlay_shower is not None and overlay_shower.n_points > 0:
         energy = np.asarray(overlay_shower.E, dtype=np.float64)
         colors = np.log10(np.clip(energy, 1e-12, None))
-        xy_bounds = _expand_bounds(*_collection_bounds(xy_segments, xy_polygons))
-        zy_bounds = _expand_bounds(*_collection_bounds(zy_segments, zy_polygons))
-        xy_mask = (
-            (overlay_shower.x >= xy_bounds[0])
-            & (overlay_shower.x <= xy_bounds[1])
-            & (overlay_shower.y >= xy_bounds[2])
-            & (overlay_shower.y <= xy_bounds[3])
+        xy_auto_bounds = _expand_bounds(*_collection_bounds(xy_segments, xy_polygons))
+        zy_auto_bounds = _expand_bounds(*_collection_bounds(zy_segments, zy_polygons))
+        x_bounds = xlim_points if xlim_points is not None else (xy_auto_bounds[0], xy_auto_bounds[1])
+        y_bounds = ylim_points if ylim_points is not None else (
+            min(xy_auto_bounds[2], zy_auto_bounds[2]),
+            max(xy_auto_bounds[3], zy_auto_bounds[3]),
         )
-        zy_mask = (
-            (overlay_shower.z >= zy_bounds[0])
-            & (overlay_shower.z <= zy_bounds[1])
-            & (overlay_shower.y >= zy_bounds[2])
-            & (overlay_shower.y <= zy_bounds[3])
+        z_bounds = zlim_points if zlim_points is not None else (zy_auto_bounds[0], zy_auto_bounds[1])
+        point_mask = (
+            (overlay_shower.x >= x_bounds[0])
+            & (overlay_shower.x <= x_bounds[1])
+            & (overlay_shower.y >= y_bounds[0])
+            & (overlay_shower.y <= y_bounds[1])
+            & (overlay_shower.z >= z_bounds[0])
+            & (overlay_shower.z <= z_bounds[1])
         )
         if draw_cells and module_index is not None:
             reference_layer_index = layer_index if layer_index is not None else 1
@@ -193,20 +198,20 @@ def plot_barrel_wireframe(
             xy_sizes = 1.0 + 6.0 * np.sqrt(energy / max(float(np.max(energy)), 1e-12))
             zy_sizes = xy_sizes
         ax_xy.scatter(
-            overlay_shower.x[xy_mask],
-            overlay_shower.y[xy_mask],
-            s=xy_sizes[xy_mask],
-            c=colors[xy_mask],
+            overlay_shower.x[point_mask],
+            overlay_shower.y[point_mask],
+            s=xy_sizes[point_mask],
+            c=colors[point_mask],
             cmap="inferno",
             alpha=0.75 if draw_cells and module_index is not None else 0.8,
             linewidths=0.0,
             zorder=3,
         )
         ax_zy.scatter(
-            overlay_shower.z[zy_mask],
-            overlay_shower.y[zy_mask],
-            s=zy_sizes[zy_mask],
-            c=colors[zy_mask],
+            overlay_shower.z[point_mask],
+            overlay_shower.y[point_mask],
+            s=zy_sizes[point_mask],
+            c=colors[point_mask],
             cmap="inferno",
             alpha=0.75 if draw_cells and module_index is not None else 0.8,
             linewidths=0.0,

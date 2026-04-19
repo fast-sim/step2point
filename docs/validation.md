@@ -154,6 +154,36 @@ PYTHONPATH=src python examples/plot_detector_cells.py \
   --module 9
 ```
 
+Manual ranges can be controlled separately for:
+
+- axes only:
+  - `--xlim-axis`
+  - `--ylim-axis`
+  - `--zlim-axis`
+- overlay-point selection only:
+  - `--xlim-points`
+  - `--ylim-points`
+  - `--zlim-points`
+
+Example with separate view crop and point filtering:
+
+```bash
+PYTHONPATH=src python examples/plot_detector_cells.py \
+  --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
+  --collection ECalBarrelCollection \
+  --draw-cells \
+  --sensitive-only \
+  --overlay-input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+  --overlay-shower-index 0 \
+  --outdir outputs/detector_cells \
+  --zoom \
+  --module 9 \
+  --xlim-axis -20 20 \
+  --ylim-axis 1280 1360 \
+  --xlim-points -10 10 \
+  --ylim-points 1295 1345
+```
+
 The three views below are all `XY` projections:
 
 ### Module Envelopes With Shower Overlay
