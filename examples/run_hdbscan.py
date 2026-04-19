@@ -82,7 +82,6 @@ def main():
         noise_handle=args.noise_handle,
     )
 
-    # --- 1. Pipeline: compress + validate ---
     reader = build_reader(args.input, args.collections, args.limit)
     validators = [EnergyConservationValidator(), ShowerSanityValidator(), ShowerMomentsValidator()]
     report = Pipeline(reader, algorithm, validators).run()
@@ -100,7 +99,6 @@ def main():
     for row in report.validation_results:
         print(f"  [{row['validator']}] shower {row['shower_id']}: {row}")
 
-    # --- 2. Benchmark plots: pre vs post overlays ---
     reader2 = build_reader(args.input, args.collections, args.limit)
     pairs = []
     for shower in reader2.iter_showers():
@@ -110,7 +108,6 @@ def main():
     generate_benchmark_plots(pairs, outdir / "benchmark")
     print(f"\nBenchmark plots saved to {outdir / 'benchmark'}/")
 
-    # --- 3. Observables matrix: dataset-level summary ---
     compressed_showers = [post for _, post in pairs]
     generate_observables_matrix(
         compressed_showers,
@@ -127,7 +124,6 @@ def main():
     )
     print(f"Original observables matrix saved to {outdir / 'observables_original.png'}")
 
-    # --- 4. Single-shower visualisation ---
     if args.shower_index is not None:
         if args.shower_index < 0 or args.shower_index >= len(pairs):
             print(f"Warning: --shower-index {args.shower_index} out of range for {len(pairs)} showers, skipping.")
