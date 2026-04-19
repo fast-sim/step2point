@@ -27,11 +27,37 @@ jobs:
             --input tests/data/tiny_showers.h5 \
             --algorithm merge_within_cell \
             --outdir outputs/ci_validation_plots
+      - name: Generate detector cell plots
+        run: |
+          python examples/plot_detector_cells.py \
+            --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
+            --collection ECalBarrelCollection \
+            --draw-cells \
+            --overlay-input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+            --overlay-shower-index 0 \
+            --outdir outputs/ci_detector_cells \
+            --zoom \
+            --module 9
+          python examples/plot_detector_cells.py \
+            --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
+            --collection ECalBarrelCollection \
+            --draw-cells \
+            --overlay-input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+            --overlay-shower-index 0 \
+            --outdir outputs/ci_detector_cells \
+            --zoom \
+            --sensitive-only \
+            --module 9
       - name: Upload validation plots
         uses: actions/upload-artifact@v4
         with:
           name: validation-plots
           path: outputs/ci_validation_plots/
+      - name: Upload detector cell plots
+        uses: actions/upload-artifact@v4
+        with:
+          name: detector-cell-plots
+          path: outputs/ci_detector_cells/
 
   edm4hep-root-regression:
     runs-on: ubuntu-22.04
