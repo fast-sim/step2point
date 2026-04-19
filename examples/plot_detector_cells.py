@@ -58,6 +58,9 @@ def parse_args():
     parser.add_argument("--sensitive-only", action="store_true", help="With --draw-cells, draw only the sensitive slice thickness instead of the full layer thickness.")
     parser.add_argument("--zoom", action="store_true", help="Zoom to a single module. In zoom mode, cells are drawn only for that module.")
     parser.add_argument("--module", type=int, default=1, help="1-based module index used with --zoom.")
+    parser.add_argument("--xlim", type=float, nargs=2, metavar=("XMIN", "XMAX"), help="Optional manual x-range for the XY view.")
+    parser.add_argument("--ylim", type=float, nargs=2, metavar=("YMIN", "YMAX"), help="Optional manual y-range for both XY and ZY views.")
+    parser.add_argument("--zlim", type=float, nargs=2, metavar=("ZMIN", "ZMAX"), help="Optional manual z-range for the ZY view.")
     parser.add_argument("--overlay-input", help="Optional HDF5 or EDM4hep ROOT shower source to overlay as xyzE points.")
     parser.add_argument("--overlay-shower-index", type=int, default=0, help="Shower index used with --overlay-input.")
     parser.add_argument(
@@ -105,6 +108,9 @@ def main():
         module_index=args.module if args.zoom else None,
         modules_only=draw_modules,
         overlay_shower=overlay_shower,
+        xlim=tuple(args.xlim) if args.xlim else None,
+        ylim=tuple(args.ylim) if args.ylim else None,
+        zlim=tuple(args.zlim) if args.zlim else None,
     )
     print(f"wrote {output_xy}")
     print(f"wrote {output_zy}")

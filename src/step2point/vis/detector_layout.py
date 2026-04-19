@@ -62,6 +62,18 @@ def _expand_bounds(
     return xmin - xpad, xmax + xpad, ymin - ypad, ymax + ypad
 
 
+def _scatter_area_from_data_diameter(
+    ax: plt.Axes,
+    fig: plt.Figure,
+    data_diameter_x: float,
+) -> float:
+    p0 = ax.transData.transform((0.0, 0.0))
+    p1 = ax.transData.transform((data_diameter_x, 0.0))
+    diameter_px = max(float(abs(p1[0] - p0[0])), 1.0)
+    diameter_pt = diameter_px * 72.0 / fig.dpi
+    return diameter_pt * diameter_pt
+
+
 def plot_barrel_wireframe(
     layout: BarrelLayout,
     output_path: str | Path,
@@ -71,6 +83,9 @@ def plot_barrel_wireframe(
     module_index: int | None = None,
     modules_only: bool = False,
     overlay_shower: Shower | None = None,
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
+    zlim: tuple[float, float] | None = None,
 ) -> tuple[Path, Path]:
     if modules_only:
         xy_segments, zy_segments = module_envelope_outline_xy_zy(layout)
@@ -136,14 +151,21 @@ def plot_barrel_wireframe(
     ax_xy.add_collection(LineCollection(xy_segments, colors="tab:blue", linewidths=line_width))
     ax_zy.add_collection(LineCollection(zy_segments, colors="tab:blue", linewidths=line_width))
 
+    ax_xy.autoscale_view()
+    ax_zy.autoscale_view()
+    if xlim is not None:
+        ax_xy.set_xlim(*xlim)
+    if ylim is not None:
+        ax_xy.set_ylim(*ylim)
+        ax_zy.set_ylim(*ylim)
+    if zlim is not None:
+        ax_zy.set_xlim(*zlim)
+    ax_xy.set_aspect("equal")
+    fig_xy.canvas.draw()
+    fig_zy.canvas.draw()
+
     if overlay_shower is not None and overlay_shower.n_points > 0:
         energy = np.asarray(overlay_shower.E, dtype=np.float64)
-        if draw_cells and module_index is not None and sensitive_only:
-            xy_sizes = np.full_like(energy, 0.25, dtype=np.float64)
-        elif draw_cells and module_index is not None:
-            xy_sizes = 0.2 + 1.0 * np.sqrt(energy / max(float(np.max(energy)), 1e-12))
-        else:
-            xy_sizes = 1.0 + 6.0 * np.sqrt(energy / max(float(np.max(energy)), 1e-12))
         colors = np.log10(np.clip(energy, 1e-12, None))
         xy_bounds = _expand_bounds(*_collection_bounds(xy_segments, xy_polygons))
         zy_bounds = _expand_bounds(*_collection_bounds(zy_segments, zy_polygons))
@@ -159,6 +181,17 @@ def plot_barrel_wireframe(
             & (overlay_shower.y >= zy_bounds[2])
             & (overlay_shower.y <= zy_bounds[3])
         )
+        if draw_cells and module_index is not None:
+            reference_layer_index = layer_index if layer_index is not None else 1
+            sensor_thickness = 2.0 * layout.layers[reference_layer_index - 1].sensitive_half_thickness_mm
+            fraction = 0.35 if sensitive_only else 0.5
+            xy_area = _scatter_area_from_data_diameter(ax_xy, fig_xy, sensor_thickness * fraction)
+            zy_area = _scatter_area_from_data_diameter(ax_zy, fig_zy, sensor_thickness * fraction)
+            xy_sizes = np.full_like(energy, xy_area, dtype=np.float64)
+            zy_sizes = np.full_like(energy, zy_area, dtype=np.float64)
+        else:
+            xy_sizes = 1.0 + 6.0 * np.sqrt(energy / max(float(np.max(energy)), 1e-12))
+            zy_sizes = xy_sizes
         ax_xy.scatter(
             overlay_shower.x[xy_mask],
             overlay_shower.y[xy_mask],
@@ -172,17 +205,13 @@ def plot_barrel_wireframe(
         ax_zy.scatter(
             overlay_shower.z[zy_mask],
             overlay_shower.y[zy_mask],
-            s=xy_sizes[zy_mask],
+            s=zy_sizes[zy_mask],
             c=colors[zy_mask],
             cmap="inferno",
             alpha=0.75 if draw_cells and module_index is not None else 0.8,
             linewidths=0.0,
             zorder=3,
         )
-
-    ax_xy.autoscale_view()
-    ax_zy.autoscale_view()
-    ax_xy.set_aspect("equal")
     ax_xy.set_xlabel("x (mm)")
     ax_xy.set_ylabel("y (mm)")
     ax_zy.set_xlabel("z (mm)")
@@ -204,7 +233,7 @@ def plot_barrel_wireframe(
     output_xy = output.with_name(f"{output.stem}_xy{output.suffix}")
     output_zy = output.with_name(f"{output.stem}_zy{output.suffix}")
     if output.suffix.lower() == ".png" and draw_cells and module_index is not None and sensitive_only:
-        save_dpi = 500
+        save_dpi = 1000
     elif output.suffix.lower() == ".png" and draw_cells and module_index is not None:
         save_dpi = 300
     else:
