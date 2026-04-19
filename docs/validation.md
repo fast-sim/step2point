@@ -196,7 +196,7 @@ The three views below are all `XY` projections:
 
 ### Module 9 Sensitive-Only Cell View
 
-![detector cells sensitive xy](assets/images/detector_cells/ecalbarrelcollection_module_9_all_layers_cells_sensitive_xy_cropped.png)
+![detector cells sensitive xy](assets/images/detector_cells/ecalbarrelcollection_ecalbarrelcollection_module_9_all_layers_cells_sensitive_xy_cropped.png)
 
 ## Units used in the plots
 

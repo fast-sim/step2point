@@ -4,15 +4,13 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.collections import LineCollection
-from matplotlib.collections import PolyCollection
+from matplotlib.collections import LineCollection, PolyCollection
 
 from step2point.core.shower import Shower
 from step2point.geometry.dd4hep.factory_geometry import (
     BarrelLayout,
     module_cell_strip_polygons_xy,
     module_cell_strip_polygons_zy,
-    module_grid_lines_xy_zy,
     module_envelope_outline_xy_zy,
     module_layer_outline_xy_zy,
 )

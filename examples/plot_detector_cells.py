@@ -50,20 +50,81 @@ def parse_args():
     parser.add_argument("--collection", required=True, help="Readout collection name, e.g. ECalBarrelCollection.")
     parser.add_argument("--layer", type=int, help="Optional 1-based layer index to plot. If omitted, all layers are drawn.")
     parser.add_argument("--outdir", default="outputs/detector_cells", help="Output directory.")
-    parser.add_argument("--format", choices=("svg", "png"), default="png", help="Output format. PNG is the default; use SVG when you want to zoom deeply.")
+    parser.add_argument(
+        "--format",
+        choices=("svg", "png"),
+        default="png",
+        help="Output format. PNG is the default; use SVG when you want to zoom deeply.",
+    )
     draw_group = parser.add_mutually_exclusive_group()
-    draw_group.add_argument("--draw-modules", action="store_true", help="Draw only module/stave envelopes with full calorimeter thickness. This is the default view.")
-    draw_group.add_argument("--draw-layers", action="store_true", help="Draw layer outlines repeated across modules.")
-    draw_group.add_argument("--draw-cells", action="store_true", help="Draw internal cell grid. This is only supported together with --zoom.")
-    parser.add_argument("--sensitive-only", action="store_true", help="With --draw-cells, draw only the sensitive slice thickness instead of the full layer thickness.")
-    parser.add_argument("--zoom", action="store_true", help="Zoom to a single module. In zoom mode, cells are drawn only for that module.")
+    draw_group.add_argument(
+        "--draw-modules",
+        action="store_true",
+        help="Draw only module/stave envelopes with full calorimeter thickness. This is the default view.",
+    )
+    draw_group.add_argument(
+        "--draw-layers",
+        action="store_true",
+        help="Draw layer outlines repeated across modules.",
+    )
+    draw_group.add_argument(
+        "--draw-cells",
+        action="store_true",
+        help="Draw internal cell grid. This is only supported together with --zoom.",
+    )
+    parser.add_argument(
+        "--sensitive-only",
+        action="store_true",
+        help="With --draw-cells, draw only the sensitive slice thickness instead of the full layer thickness.",
+    )
+    parser.add_argument(
+        "--zoom",
+        action="store_true",
+        help="Zoom to a single module. In zoom mode, cells are drawn only for that module.",
+    )
     parser.add_argument("--module", type=int, default=1, help="1-based module index used with --zoom.")
-    parser.add_argument("--xlim-axis", type=float, nargs=2, metavar=("XMIN", "XMAX"), help="Optional manual x-range for the XY view axes.")
-    parser.add_argument("--ylim-axis", type=float, nargs=2, metavar=("YMIN", "YMAX"), help="Optional manual y-range for the XY and ZY view axes.")
-    parser.add_argument("--zlim-axis", type=float, nargs=2, metavar=("ZMIN", "ZMAX"), help="Optional manual z-range for the ZY view axes.")
-    parser.add_argument("--xlim-points", type=float, nargs=2, metavar=("XMIN", "XMAX"), help="Optional manual x-range for selecting overlay points in the XY view.")
-    parser.add_argument("--ylim-points", type=float, nargs=2, metavar=("YMIN", "YMAX"), help="Optional manual y-range for selecting overlay points in XY and ZY.")
-    parser.add_argument("--zlim-points", type=float, nargs=2, metavar=("ZMIN", "ZMAX"), help="Optional manual z-range for selecting overlay points in the ZY view.")
+    parser.add_argument(
+        "--xlim-axis",
+        type=float,
+        nargs=2,
+        metavar=("XMIN", "XMAX"),
+        help="Optional manual x-range for the XY view axes.",
+    )
+    parser.add_argument(
+        "--ylim-axis",
+        type=float,
+        nargs=2,
+        metavar=("YMIN", "YMAX"),
+        help="Optional manual y-range for the XY and ZY view axes.",
+    )
+    parser.add_argument(
+        "--zlim-axis",
+        type=float,
+        nargs=2,
+        metavar=("ZMIN", "ZMAX"),
+        help="Optional manual z-range for the ZY view axes.",
+    )
+    parser.add_argument(
+        "--xlim-points",
+        type=float,
+        nargs=2,
+        metavar=("XMIN", "XMAX"),
+        help="Optional manual x-range for selecting overlay points in the XY view.",
+    )
+    parser.add_argument(
+        "--ylim-points",
+        type=float,
+        nargs=2,
+        metavar=("YMIN", "YMAX"),
+        help="Optional manual y-range for selecting overlay points in XY and ZY.",
+    )
+    parser.add_argument(
+        "--zlim-points",
+        type=float,
+        nargs=2,
+        metavar=("ZMIN", "ZMAX"),
+        help="Optional manual z-range for selecting overlay points in the ZY view.",
+    )
     parser.add_argument("--overlay-input", help="Optional HDF5 or EDM4hep ROOT shower source to overlay as xyzE points.")
     parser.add_argument("--overlay-shower-index", type=int, default=0, help="Shower index used with --overlay-input.")
     parser.add_argument(
