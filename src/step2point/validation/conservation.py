@@ -17,6 +17,8 @@ class CellCountRatioValidator(Validator):
     name = "cell_count_ratio"
 
     def run(self, before, after) -> ValidationResult:
+        if before.cell_id is None or after.cell_id is None:
+            return ValidationResult(self.name, {"cell_count_ratio": float("nan")})
         _, e_pre = aggregate_cell_energy(before)
         _, e_post = aggregate_cell_energy(after)
         ratio = len(e_post) / len(e_pre) if len(e_pre) else float("nan")

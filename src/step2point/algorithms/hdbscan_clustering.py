@@ -1,0 +1,231 @@
+"""HDBSCAN density-based clustering of calorimeter step deposits.
+
+This algorithm clusters deposits per (subdetector, layer) partition using
+spatial (x, y) and temporal (t) features, then merges each cluster into a
+single representative point.  It is a direct port of the LUMEN
+``candidates/em/hdbscan.py`` pipeline into the step2point architecture.
+
+The partitioning by subdetector and layer, the feature scaling, and the
+noise-handling strategies are preserved from the original implementation.
+
+Requires ``scikit-learn`` (install via ``pip install step2point[hdbscan]``).
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+
+import numpy as np
+
+from step2point.algorithms.base import CompressionAlgorithm
+from step2point.core.results import CompressionResult
+from step2point.core.shower import Shower
+
+
+def _default_layer_extractor(cell_ids: np.ndarray) -> np.ndarray:
+    """Extract layer number from cell_id using the ODD bit layout.
+
+    The ODD (Open Data Detector) encodes the layer in 9 bits starting at
+    bit 19 of the 64-bit cell ID.
+    """
+    return (cell_ids.astype(np.int64) >> 19) & 0x1FF
+
+
+class HDBSCANClustering(CompressionAlgorithm):
+    """Density-based clustering of calorimeter step deposits.
+
+    Deposits are partitioned by (subdetector, layer) and clustered within
+    each partition using HDBSCAN on scaled (x, y, t) features.  Each
+    cluster is then merged into a single point: energy-weighted centroid
+    position, summed energy, minimum time.
+
+    Parameters
+    ----------
+    min_cluster_size : int
+        HDBSCAN ``min_cluster_size`` parameter.
+    min_samples : int
+        HDBSCAN ``min_samples`` parameter.
+    cluster_selection_epsilon : float
+        HDBSCAN ``cluster_selection_epsilon``.  Values > 0 add DBSCAN-like
+        behaviour that prevents very small clusters from being split.
+    noise_handle : str
+        Strategy for HDBSCAN noise points (label -1):
+        ``"nn"`` -- reassign to the nearest cluster (default, energy-conserving).
+        ``"singleton"`` -- each noise point becomes its own cluster.
+        ``"layer"`` -- all noise in a layer is bundled into one cluster.
+        ``"drop"`` -- discard noise points (loses energy).
+    xy_scale : float
+        Divide x, y coordinates by this value before clustering (mm).
+    t_scale : float
+        Divide (t - layer median) by this value before clustering (ns).
+    layer_extractor : callable or None
+        ``f(cell_ids: ndarray) -> ndarray`` returning per-point layer IDs.
+        Defaults to the ODD bit-extraction ``(cell_id >> 19) & 0x1FF``.
+    """
+
+    name = "hdbscan_clustering"
+
+    def __init__(
+        self,
+        min_cluster_size: int,
+        min_samples: int,
+        cluster_selection_epsilon: float = 0.0,
+        noise_handle: str = "nn",
+        xy_scale: float = 5.0,
+        t_scale: float = 1.0,
+        layer_extractor: Callable[[np.ndarray], np.ndarray] | None = None,
+    ) -> None:
+        if noise_handle not in {"drop", "singleton", "layer", "nn"}:
+            raise ValueError(f"noise_handle must be 'drop', 'singleton', 'layer', or 'nn', got '{noise_handle}'.")
+        self.min_cluster_size = min_cluster_size
+        self.min_samples = min_samples
+        self.cluster_selection_epsilon = cluster_selection_epsilon
+        self.noise_handle = noise_handle
+        self.xy_scale = xy_scale
+        self.t_scale = t_scale
+        self.layer_extractor = layer_extractor or _default_layer_extractor
+
+    @staticmethod
+    def _import_sklearn():
+        try:
+            from sklearn.cluster import HDBSCAN as SklearnHDBSCAN
+            from sklearn.neighbors import NearestNeighbors
+        except ImportError as exc:
+            raise ImportError(
+                "HDBSCANClustering requires scikit-learn. "
+                "Install it with: pip install step2point[hdbscan]"
+            ) from exc
+        return SklearnHDBSCAN, NearestNeighbors
+
+    def compress(self, shower: Shower) -> CompressionResult:
+        if shower.cell_id is None:
+            raise ValueError("HDBSCANClustering requires cell_id for layer extraction.")
+        if shower.t is None:
+            raise ValueError("HDBSCANClustering requires t (time) as a clustering feature.")
+
+        SklearnHDBSCAN, NearestNeighbors = self._import_sklearn()
+
+        layers = self.layer_extractor(shower.cell_id)
+        subdetectors = shower.metadata.get("subdetector")
+        if subdetectors is None:
+            subdetectors = np.zeros(shower.n_points, dtype=np.uint8)
+        subdetectors = np.asarray(subdetectors)
+
+        labels = np.full(shower.n_points, -1, dtype=np.int64)
+        total_clusters = 0
+
+        for subdet in np.unique(subdetectors):
+            subdet_mask = subdetectors == subdet
+            layers_sub = layers[subdet_mask]
+
+            for layer in np.unique(layers_sub):
+                layer_mask_local = layers_sub == layer
+                global_mask = np.where(subdet_mask)[0][layer_mask_local]
+
+                n_slice = len(global_mask)
+                if n_slice < max(self.min_samples, 2):
+                    if self.noise_handle not in ("drop",):
+                        for idx in global_mask:
+                            labels[idx] = total_clusters
+                            total_clusters += 1
+                    continue
+
+                xy = np.stack([shower.x[global_mask], shower.y[global_mask]], axis=1).astype(np.float32)
+                t_layer = shower.t[global_mask].astype(np.float32)
+                t_median = np.median(t_layer)
+
+                xy_scaled = xy / self.xy_scale
+                t_scaled = ((t_layer - t_median) / self.t_scale).reshape(-1, 1)
+                features = np.hstack([xy_scaled, t_scaled]).astype(np.float32)
+
+                model = SklearnHDBSCAN(
+                    min_cluster_size=self.min_cluster_size,
+                    min_samples=self.min_samples,
+                    cluster_selection_epsilon=self.cluster_selection_epsilon,
+                    n_jobs=-1,
+                    copy=False,
+                )
+                predicted = model.fit_predict(features)
+
+                n_new = len(set(predicted)) - (1 if -1 in predicted else 0)
+                is_cluster = predicted >= 0
+                is_noise = predicted == -1
+
+                if n_new > 0 and np.any(is_cluster):
+                    predicted[is_cluster] += total_clusters
+                    total_clusters += n_new
+                    if np.any(is_noise):
+                        if self.noise_handle == "nn":
+                            nn = NearestNeighbors(n_neighbors=1, n_jobs=-1)
+                            nn.fit(features[is_cluster])
+                            _, idx = nn.kneighbors(features[is_noise])
+                            predicted[is_noise] = predicted[is_cluster][idx.ravel()]
+                        elif self.noise_handle == "singleton":
+                            for i in np.where(is_noise)[0]:
+                                predicted[i] = total_clusters
+                                total_clusters += 1
+                        elif self.noise_handle == "layer":
+                            predicted[is_noise] = total_clusters
+                            total_clusters += 1
+                        # drop: leave as -1
+                elif np.any(is_noise):
+                    if self.noise_handle in ("nn", "layer"):
+                        predicted[is_noise] = total_clusters
+                        total_clusters += 1
+                    elif self.noise_handle == "singleton":
+                        for i in np.where(is_noise)[0]:
+                            predicted[i] = total_clusters
+                            total_clusters += 1
+                    # drop: leave as -1
+
+                labels[global_mask] = predicted
+
+        out_x, out_y, out_z, out_E, out_t = [], [], [], [], []
+        unique_labels = np.unique(labels)
+        unique_labels = unique_labels[unique_labels >= 0]
+
+        for lbl in unique_labels:
+            mask = labels == lbl
+            pos_x = shower.x[mask].astype(np.float64)
+            pos_y = shower.y[mask].astype(np.float64)
+            pos_z = shower.z[mask].astype(np.float64)
+            ene = shower.E[mask].astype(np.float64)
+            tim = shower.t[mask].astype(np.float64)
+
+            tot_e = ene.sum()
+            if tot_e > 0:
+                cx = float(np.sum(pos_x * ene) / tot_e)
+                cy = float(np.sum(pos_y * ene) / tot_e)
+                cz = float(np.sum(pos_z * ene) / tot_e)
+            else:
+                cx = float(pos_x.mean())
+                cy = float(pos_y.mean())
+                cz = float(pos_z.mean())
+
+            out_x.append(cx)
+            out_y.append(cy)
+            out_z.append(cz)
+            out_E.append(float(tot_e))
+            out_t.append(float(tim.min()))
+
+        out = Shower(
+            shower_id=shower.shower_id,
+            x=np.asarray(out_x, dtype=np.float32),
+            y=np.asarray(out_y, dtype=np.float32),
+            z=np.asarray(out_z, dtype=np.float32),
+            E=np.asarray(out_E, dtype=np.float32),
+            t=np.asarray(out_t, dtype=np.float32),
+            primary=shower.primary,
+            metadata={**shower.metadata, "algorithm": self.name},
+        )
+        return CompressionResult(
+            shower=out,
+            algorithm=self.name,
+            stats={
+                "n_points_before": shower.n_points,
+                "n_points_after": out.n_points,
+                "compression_ratio": out.n_points / max(shower.n_points, 1),
+                "energy_before": shower.total_energy,
+                "energy_after": out.total_energy,
+            },
+        )

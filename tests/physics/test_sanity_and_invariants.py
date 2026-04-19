@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from step2point.algorithms.identity import IdentityCompression
 from step2point.algorithms.merge_within_cell import MergeWithinCell
@@ -12,6 +13,7 @@ from step2point.metrics.shower_shapes import shower_moments
 from step2point.validation.sanity import ShowerSanityValidator
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "tiny_showers.h5"
+DATA_GAMMA = Path(__file__).resolve().parents[1] / "data" / "ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5"
 
 
 def _read_showers():
@@ -47,4 +49,17 @@ def test_merge_within_cell_preserves_total_energy_and_cell_spectrum():
         post_cells, post_e = aggregate_cell_energy(out)
         assert np.array_equal(pre_cells, post_cells)
         assert np.allclose(pre_e, post_e)
+        assert validator.run(shower, out).metrics["passed"]
+
+
+def test_hdbscan_preserves_total_energy_and_reduces_points():
+    pytest.importorskip("sklearn")
+    from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
+
+    validator = ShowerSanityValidator()
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, noise_handle="nn")
+    for shower in Step2PointHDF5Reader(str(DATA_GAMMA), shower_limit=3).iter_showers():
+        out = algo.compress(shower).shower
+        assert np.isclose(energy_ratio(shower, out), 1.0, rtol=1e-5)
+        assert out.n_points <= shower.n_points
         assert validator.run(shower, out).metrics["passed"]

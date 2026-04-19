@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from step2point.algorithms.identity import IdentityCompression
 from step2point.algorithms.merge_within_cell import MergeWithinCell
@@ -10,6 +11,7 @@ from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
 from step2point.metrics.spatial import estimate_shower_axis, longitudinal_radial_phi
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "tiny_showers.h5"
+DATA_GAMMA = Path(__file__).resolve().parents[1] / "data" / "ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5"
 
 
 def _hist(values, weights, bins):
@@ -48,3 +50,15 @@ def test_merge_within_cell_profile_distance_is_small_on_tiny_sample():
         d_long, d_rad = _profile_distance(shower, out)
         assert d_long < 2.0
         assert d_rad < 1.0
+
+
+def test_hdbscan_profile_distance_is_bounded():
+    pytest.importorskip("sklearn")
+    from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
+
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, noise_handle="nn")
+    for shower in Step2PointHDF5Reader(str(DATA_GAMMA), shower_limit=3).iter_showers():
+        out = algo.compress(shower).shower
+        d_long, d_rad = _profile_distance(shower, out)
+        assert d_long < 3.0
+        assert d_rad < 2.0
