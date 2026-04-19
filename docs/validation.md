@@ -103,6 +103,71 @@ Expected outputs:
 - `shower_<id>_distributions.png`
 - `shower_<id>_overview.png`
 
+## Detector cell inspection
+
+For detector-aware debugging of merging strategies, use `examples/plot_detector_cells.py`.
+
+This workflow reads the DD4hep compact XML and factory-derived barrel geometry (Open Data Detector-like PolyhedraBarrel), then optionally overlays a shower from HDF5 or EDM4hep ROOT on top of:
+
+- module envelopes
+- layer outlines
+- cell footprints
+
+Typical use, to see the entire detector:
+
+```bash
+PYTHONPATH=src python examples/plot_detector_cells.py \
+  --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
+  --collection ECalBarrelCollection \
+  --draw-modules \
+  --overlay-input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+  --overlay-shower-index 0 \
+  --outdir outputs/detector_cells
+```
+
+Zoomed cell view for one module:
+
+```bash
+PYTHONPATH=src python examples/plot_detector_cells.py \
+  --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
+  --collection ECalBarrelCollection \
+  --draw-cells \
+  --overlay-input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+  --overlay-shower-index 0 \
+  --outdir outputs/detector_cells \
+  --zoom \
+  --module 9
+```
+
+Zoomed view with cells spanning only over the sensitive material:
+
+```bash
+PYTHONPATH=src python examples/plot_detector_cells.py \
+  --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
+  --collection ECalBarrelCollection \
+  --draw-cells \
+  --sensitive-only \
+  --overlay-input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+  --overlay-shower-index 0 \
+  --outdir outputs/detector_cells \
+  --zoom \
+  --module 9
+```
+
+The three views below are all `XY` projections:
+
+### Module Envelopes With Shower Overlay
+
+![detector modules xy](assets/images/detector_cells/ecalbarrelcollection_detector_module_envelopes_modules_xy.png)
+
+### Module 9 Cell View With Shower Overlay
+
+![detector cells xy](assets/images/detector_cells/ecalbarrelcollection_module_9_all_layers_cells_xy.png)
+
+### Module 9 Sensitive-Only Cell View
+
+![detector cells sensitive xy](assets/images/detector_cells/ecalbarrelcollection_module_9_all_layers_cells_sensitive_xy_cropped.png)
+
 ## Units used in the plots
 
 The example HDF5 files in this repository are produced by [step2point dataset repository](https://gitlab.cern.ch/fastsim/step2point/-/tree/v1.1.0?ref_type=tags), which preserves the EDM4hep values directly:
