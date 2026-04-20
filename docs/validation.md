@@ -135,8 +135,7 @@ PYTHONPATH=src python examples/plot_detector_cells.py \
   --overlay-input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
   --overlay-shower-index 0 \
   --outdir outputs/detector_cells \
-  --zoom \
-  --module 9
+  --module 10
 ```
 
 Zoomed view with cells spanning only over the sensitive material:
@@ -150,8 +149,7 @@ PYTHONPATH=src python examples/plot_detector_cells.py \
   --overlay-input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
   --overlay-shower-index 0 \
   --outdir outputs/detector_cells \
-  --zoom \
-  --module 9
+  --module 10
 ```
 
 Manual ranges can be controlled separately for:
@@ -176,27 +174,54 @@ PYTHONPATH=src python examples/plot_detector_cells.py \
   --overlay-input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
   --overlay-shower-index 0 \
   --outdir outputs/detector_cells \
-  --zoom \
-  --module 9 \
-  --xlim-axis -20 20 \
-  --ylim-axis 1280 1360 \
-  --xlim-points -10 10 \
-  --ylim-points 1295 1345
+  --module 10 \
+  --xlim-axis -7.65 7.65 \
+  --ylim-axis 1307 1319 \
+  --zlim-axis -7.65 7.65  \
+  --xlim-points -7.65 7.65 \
+  --ylim-points 1307 1319 \
+  --zlim-points -7.65 7.65
 ```
 
-The three views below are all `XY` projections:
+There is also a `--debug` flag that allows to print the decoded cell ID bitfields to investigate visually the compression algorithms:
 
-### Module Envelopes With Shower Overlay
+
+```bash
+PYTHONPATH=src python examples/plot_detector_cells.py \
+  --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
+  --collection ECalBarrelCollection \
+  --draw-cells \
+  --sensitive-only \
+  --overlay-input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_merge_within_cell_reference.h5 \
+  --overlay-shower-index 0 \
+  --outdir outputs/detector_cells \
+  --module 10 \
+  --xlim-axis -2.55 2.55 \
+  --ylim-axis 1307 1319 \
+  --zlim-axis -2.55 2.55  \
+  --xlim-points -2.55 2.55 \
+  --ylim-points 1307 1319 \
+  --zlim-points -2.55 2.55 \
+  --debug
+```
+
+The views below are all `XY` projections:
+
+### Module envelopes with shower overlay
 
 ![detector modules xy](assets/images/detector_cells/ecalbarrelcollection_detector_module_envelopes_modules_xy.png)
 
-### Module 9 Cell View With Shower Overlay
+### Module 10 cell view with shower verlay
 
-![detector cells xy](assets/images/detector_cells/ecalbarrelcollection_module_9_all_layers_cells_xy.png)
+![detector cells xy](assets/images/detector_cells/ecalbarrelcollection_module_10_all_layers_cells_xy.png)
 
-### Module 9 Sensitive-Only Cell View
+### Module 10 sensitive-only cell view (zoomed-in) for input file
 
-![detector cells sensitive xy](assets/images/detector_cells/ecalbarrelcollection_ecalbarrelcollection_module_9_all_layers_cells_sensitive_xy_cropped.png)
+![detector cells sensitive xy](assets/images/detector_cells/ecalbarrelcollection_module_10_all_layers_cells_sensitive_xy.png){ width="75%" }
+
+### Module 10 sensitive-only cell view (zoomed-in) for `merge_within_cell` compression
+
+![detector cells sensitive xy](assets/images/detector_cells/ecalbarrelcollection_merged_within_cell_module_10_all_layers_cells_sensitive_xy.png){ width="30%" }
 
 ## Units used in the plots
 
