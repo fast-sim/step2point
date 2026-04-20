@@ -351,11 +351,6 @@ def module_cell_strip_polygons_xy(
     sensitive_only: bool = False,
 ) -> list[np.ndarray]:
     layer = layout.layers[layer_index - 1]
-    x_edges = np.arange(
-        -layer.half_tangent_mm,
-        layer.half_tangent_mm + 0.5 * layer.pitch_tangent_mm,
-        layer.pitch_tangent_mm,
-    )
 
     polygons: list[np.ndarray] = []
     module_pairs = list(zip(layer.module_angles_rad, layer.module_centers_xy_mm))
@@ -368,6 +363,9 @@ def module_cell_strip_polygons_xy(
 
     radial_half_extent = layer.sensitive_half_thickness_mm if sensitive_only else layer.half_thickness_mm
 
+    max_x_index = int(np.ceil(layer.half_tangent_mm / layer.pitch_tangent_mm - 0.5))
+    x_centers = np.arange(-max_x_index, max_x_index + 1, dtype=np.int32) * layer.pitch_tangent_mm
+
     for _, raw_center_xy in module_pairs:
         center_xy = envelope_rotation @ np.array(raw_center_xy, dtype=np.float64)
         radial = center_xy / np.linalg.norm(center_xy)
@@ -378,7 +376,11 @@ def module_cell_strip_polygons_xy(
             else center_xy + (layer.layer_center_radius_mm - layout.sect_center_radius_mm) * radial
         )
 
-        for x0, x1 in zip(x_edges[:-1], x_edges[1:]):
+        for x_center in x_centers:
+            x0 = max(float(x_center - 0.5 * layer.pitch_tangent_mm), -layer.half_tangent_mm)
+            x1 = min(float(x_center + 0.5 * layer.pitch_tangent_mm), layer.half_tangent_mm)
+            if x1 <= x0:
+                continue
             polygons.append(
                 np.array(
                     [
@@ -401,11 +403,6 @@ def module_cell_strip_polygons_zy(
     sensitive_only: bool = False,
 ) -> list[np.ndarray]:
     layer = layout.layers[layer_index - 1]
-    z_edges = np.arange(
-        -layer.half_z_mm,
-        layer.half_z_mm + 0.5 * layer.pitch_z_mm,
-        layer.pitch_z_mm,
-    )
 
     polygons: list[np.ndarray] = []
     module_pairs = list(zip(layer.module_angles_rad, layer.module_centers_xy_mm))
@@ -417,6 +414,9 @@ def module_cell_strip_polygons_zy(
     envelope_rotation = np.array([[cz, -sz], [sz, cz]], dtype=np.float64)
 
     radial_half_extent = layer.sensitive_half_thickness_mm if sensitive_only else layer.half_thickness_mm
+
+    max_z_index = int(np.ceil(layer.half_z_mm / layer.pitch_z_mm - 0.5))
+    z_centers = np.arange(-max_z_index, max_z_index + 1, dtype=np.int32) * layer.pitch_z_mm
 
     for _, raw_center_xy in module_pairs:
         center_xy = envelope_rotation @ np.array(raw_center_xy, dtype=np.float64)
@@ -440,7 +440,11 @@ def module_cell_strip_polygons_zy(
         ymin = float(np.min(corners_xy[:, 1]))
         ymax = float(np.max(corners_xy[:, 1]))
 
-        for z0, z1 in zip(z_edges[:-1], z_edges[1:]):
+        for z_center in z_centers:
+            z0 = max(float(z_center - 0.5 * layer.pitch_z_mm), -layer.half_z_mm)
+            z1 = min(float(z_center + 0.5 * layer.pitch_z_mm), layer.half_z_mm)
+            if z1 <= z0:
+                continue
             polygons.append(
                 np.array(
                     [
