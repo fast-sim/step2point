@@ -1,12 +1,10 @@
 """HDBSCAN density-based clustering of calorimeter step deposits.
 
-This algorithm clusters deposits per (subdetector, layer) partition using
-spatial (x, y) and temporal (t) features, then merges each cluster into a
-single representative point.  It is a direct port of the LUMEN
-``candidates/em/hdbscan.py`` pipeline into the step2point architecture.
+This algorithm clusters deposits using HDBSCAN within each (subdetector,
+layer) partition. Features are scaled x, y coordinates and, when available,
+time relative to the layer median. Each cluster is merged into a single
+point: energy-weighted centroid position, summed energy, minimum time.
 
-The partitioning by subdetector and layer, the feature scaling, and the
-noise-handling strategies are preserved from the original implementation.
 
 Requires ``scikit-learn`` (install via ``pip install step2point[hdbscan]``).
 """
@@ -48,12 +46,12 @@ class HDBSCANClustering(CompressionAlgorithm):
     cluster_selection_epsilon : float
         HDBSCAN ``cluster_selection_epsilon``.  Values > 0 add DBSCAN-like
         behaviour that prevents very small clusters from being split.
-    noise_handle : str
-        Strategy for HDBSCAN noise points (label -1):
+    low_energy_deposits : str
+        Strategy for low-energy deposits that HDBSCAN labels as noise:
         ``"nn"`` -- reassign to the nearest cluster (default, energy-conserving).
-        ``"singleton"`` -- each noise point becomes its own cluster.
-        ``"layer"`` -- all noise in a layer is bundled into one cluster.
-        ``"drop"`` -- discard noise points (loses energy).
+        ``"singleton"`` -- each deposit becomes its own cluster.
+        ``"layer"`` -- all unclustered deposits in a layer are bundled into one cluster.
+        ``"drop"`` -- discard (loses energy).
     xy_scale : float
         Divide x, y coordinates by this value before clustering (mm).
     t_scale : float
@@ -70,17 +68,17 @@ class HDBSCANClustering(CompressionAlgorithm):
         min_cluster_size: int,
         min_samples: int,
         cluster_selection_epsilon: float = 0.0,
-        noise_handle: str = "nn",
+        low_energy_deposits: str = "nn",
         xy_scale: float = 5.0,
         t_scale: float = 1.0,
         layer_extractor: Callable[[np.ndarray], np.ndarray] | None = None,
     ) -> None:
-        if noise_handle not in {"drop", "singleton", "layer", "nn"}:
-            raise ValueError(f"noise_handle must be 'drop', 'singleton', 'layer', or 'nn', got '{noise_handle}'.")
+        if low_energy_deposits not in {"drop", "singleton", "layer", "nn"}:
+            raise ValueError(f"low_energy_deposits must be 'drop', 'singleton', 'layer', or 'nn', got '{low_energy_deposits}'.")
         self.min_cluster_size = min_cluster_size
         self.min_samples = min_samples
         self.cluster_selection_epsilon = cluster_selection_epsilon
-        self.noise_handle = noise_handle
+        self.low_energy_deposits = low_energy_deposits
         self.xy_scale = xy_scale
         self.t_scale = t_scale
         self.layer_extractor = layer_extractor or _default_layer_extractor
@@ -100,8 +98,6 @@ class HDBSCANClustering(CompressionAlgorithm):
     def compress(self, shower: Shower) -> CompressionResult:
         if shower.cell_id is None:
             raise ValueError("HDBSCANClustering requires cell_id for layer extraction.")
-        if shower.t is None:
-            raise ValueError("HDBSCANClustering requires t (time) as a clustering feature.")
 
         SklearnHDBSCAN, NearestNeighbors = self._import_sklearn()
 
@@ -124,7 +120,7 @@ class HDBSCANClustering(CompressionAlgorithm):
 
                 n_slice = len(global_mask)
                 if n_slice < max(self.min_samples, 2):
-                    if self.noise_handle != "drop":
+                    if self.low_energy_deposits != "drop":
                         labels[global_mask] = np.arange(
                             total_clusters, total_clusters + n_slice
                         )
@@ -132,12 +128,15 @@ class HDBSCANClustering(CompressionAlgorithm):
                     continue
 
                 xy = np.stack([shower.x[global_mask], shower.y[global_mask]], axis=1).astype(np.float32)
-                t_layer = shower.t[global_mask].astype(np.float32)
-                t_median = np.median(t_layer)
-
                 xy_scaled = xy / self.xy_scale
-                t_scaled = ((t_layer - t_median) / self.t_scale).reshape(-1, 1)
-                features = np.hstack([xy_scaled, t_scaled]).astype(np.float32)
+
+                if shower.t is not None:
+                    t_layer = shower.t[global_mask].astype(np.float32)
+                    t_median = np.median(t_layer)
+                    t_scaled = ((t_layer - t_median) / self.t_scale).reshape(-1, 1)
+                    features = np.hstack([xy_scaled, t_scaled]).astype(np.float32)
+                else:
+                    features = xy_scaled
 
                 model = SklearnHDBSCAN(
                     min_cluster_size=self.min_cluster_size,
@@ -156,27 +155,27 @@ class HDBSCANClustering(CompressionAlgorithm):
                     predicted[is_cluster] += total_clusters
                     total_clusters += n_new
                     if np.any(is_noise):
-                        if self.noise_handle == "nn":
+                        if self.low_energy_deposits == "nn":
                             nn = NearestNeighbors(n_neighbors=1, n_jobs=-1)
                             nn.fit(features[is_cluster])
                             _, idx = nn.kneighbors(features[is_noise])
                             predicted[is_noise] = predicted[is_cluster][idx.ravel()]
-                        elif self.noise_handle == "singleton":
+                        elif self.low_energy_deposits == "singleton":
                             noise_idx = np.where(is_noise)[0]
                             n_noise = len(noise_idx)
                             predicted[noise_idx] = np.arange(
                                 total_clusters, total_clusters + n_noise
                             )
                             total_clusters += n_noise
-                        elif self.noise_handle == "layer":
+                        elif self.low_energy_deposits == "layer":
                             predicted[is_noise] = total_clusters
                             total_clusters += 1
                         # drop: leave as -1
                 elif np.any(is_noise):
-                    if self.noise_handle in ("nn", "layer"):
+                    if self.low_energy_deposits in ("nn", "layer"):
                         predicted[is_noise] = total_clusters
                         total_clusters += 1
-                    elif self.noise_handle == "singleton":
+                    elif self.low_energy_deposits == "singleton":
                         noise_idx = np.where(is_noise)[0]
                         n_noise = len(noise_idx)
                         predicted[noise_idx] = np.arange(
@@ -197,7 +196,7 @@ class HDBSCANClustering(CompressionAlgorithm):
                 y=np.empty(0, dtype=np.float32),
                 z=np.empty(0, dtype=np.float32),
                 E=np.empty(0, dtype=np.float32),
-                t=np.empty(0, dtype=np.float32),
+                t=np.empty(0, dtype=np.float32) if shower.t is not None else None,
                 primary=shower.primary,
                 metadata={**shower.metadata, "algorithm": self.name},
             )
@@ -206,7 +205,6 @@ class HDBSCANClustering(CompressionAlgorithm):
             kept_y = shower.y[keep].astype(np.float64)
             kept_z = shower.z[keep].astype(np.float64)
             kept_E = shower.E[keep].astype(np.float64)
-            kept_t = shower.t[keep].astype(np.float64)
 
             _, inverse = np.unique(kept_labels, return_inverse=True)
             n = len(_)
@@ -217,8 +215,13 @@ class HDBSCANClustering(CompressionAlgorithm):
             out_y = np.bincount(inverse, weights=kept_y * kept_E, minlength=n) / safe_e
             out_z = np.bincount(inverse, weights=kept_z * kept_E, minlength=n) / safe_e
 
-            out_t = np.full(n, np.inf)
-            np.minimum.at(out_t, inverse, kept_t)
+            if shower.t is not None:
+                kept_t = shower.t[keep].astype(np.float64)
+                out_t = np.full(n, np.inf)
+                np.minimum.at(out_t, inverse, kept_t)
+                out_t = out_t.astype(np.float32)
+            else:
+                out_t = None
 
             out = Shower(
                 shower_id=shower.shower_id,
@@ -226,7 +229,7 @@ class HDBSCANClustering(CompressionAlgorithm):
                 y=out_y.astype(np.float32),
                 z=out_z.astype(np.float32),
                 E=e_sum.astype(np.float32),
-                t=out_t.astype(np.float32),
+                t=out_t,
                 primary=shower.primary,
                 metadata={**shower.metadata, "algorithm": self.name},
             )

@@ -57,7 +57,7 @@ def test_hdbscan_preserves_total_energy_and_reduces_points():
     from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
 
     validator = ShowerSanityValidator()
-    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, noise_handle="nn")
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits="nn")
     for shower in Step2PointHDF5Reader(str(DATA_GAMMA), shower_limit=3).iter_showers():
         out = algo.compress(shower).shower
         assert np.isclose(energy_ratio(shower, out), 1.0, rtol=1e-5)

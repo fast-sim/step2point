@@ -43,7 +43,7 @@ def _make_clustered_shower(n_per_cluster=30, seed=42):
 
 def test_hdbscan_compresses_and_preserves_energy():
     shower = _make_clustered_shower()
-    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, noise_handle="nn")
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits="nn")
     result = algo.compress(shower)
     assert result.shower.n_points < shower.n_points
     assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
@@ -67,17 +67,17 @@ def test_hdbscan_stats_are_populated():
     assert result.stats["compression_ratio"] < 1.0
 
 
-def test_hdbscan_noise_handle_drop_may_lose_energy():
+def test_hdbscan_low_energy_deposits_drop_may_lose_energy():
     shower = _make_clustered_shower()
-    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, noise_handle="drop")
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits="drop")
     result = algo.compress(shower)
     # drop may lose energy (ratio <= 1) or preserve it if there's no noise
     assert result.stats["energy_after"] <= result.stats["energy_before"] + 1e-6
 
 
-def test_hdbscan_noise_handle_singleton():
+def test_hdbscan_low_energy_deposits_singleton():
     shower = _make_clustered_shower()
-    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, noise_handle="singleton")
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits="singleton")
     result = algo.compress(shower)
     assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
 
@@ -96,23 +96,23 @@ def test_hdbscan_requires_cell_id():
         algo.compress(shower)
 
 
-def test_hdbscan_requires_time():
-    shower = Shower(
-        shower_id=0,
-        x=np.array([0, 1], dtype=np.float32),
-        y=np.array([0, 1], dtype=np.float32),
-        z=np.array([0, 1], dtype=np.float32),
-        E=np.array([1, 2], dtype=np.float32),
-        cell_id=np.array([1, 2], dtype=np.uint64),
+def test_hdbscan_works_without_time():
+    shower = _make_clustered_shower()
+    shower_no_t = Shower(
+        shower_id=shower.shower_id,
+        x=shower.x, y=shower.y, z=shower.z, E=shower.E,
+        cell_id=shower.cell_id,
     )
-    algo = HDBSCANClustering(min_cluster_size=2, min_samples=1)
-    with pytest.raises(ValueError, match="time"):
-        algo.compress(shower)
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3)
+    result = algo.compress(shower_no_t)
+    assert result.shower.n_points < shower_no_t.n_points
+    assert result.shower.t is None
+    assert np.isclose(energy_ratio(shower_no_t, result.shower), 1.0, rtol=1e-6)
 
 
-def test_hdbscan_invalid_noise_handle():
-    with pytest.raises(ValueError, match="noise_handle"):
-        HDBSCANClustering(min_cluster_size=2, min_samples=1, noise_handle="bad")
+def test_hdbscan_invalid_low_energy_deposits():
+    with pytest.raises(ValueError, match="low_energy_deposits"):
+        HDBSCANClustering(min_cluster_size=2, min_samples=1, low_energy_deposits="bad")
 
 
 def test_hdbscan_custom_layer_extractor():
@@ -143,9 +143,9 @@ def test_hdbscan_no_subdetector_metadata():
     assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
 
 
-def test_hdbscan_noise_handle_layer():
+def test_hdbscan_low_energy_deposits_layer():
     shower = _make_clustered_shower()
-    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, noise_handle="layer")
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits="layer")
     result = algo.compress(shower)
     assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
 
@@ -179,7 +179,7 @@ def test_hdbscan_multiple_layers():
         t=np.concatenate([t1, t2]),
         cell_id=np.concatenate([cid1, cid2]),
     )
-    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, noise_handle="nn")
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits="nn")
     result = algo.compress(shower)
     assert result.shower.n_points < shower.n_points
     assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
@@ -189,7 +189,7 @@ def test_hdbscan_all_noise_fallback():
     """When min_cluster_size is larger than the slice, all points are noise."""
     shower = _make_clustered_shower(n_per_cluster=10)
     # min_cluster_size=100 forces HDBSCAN to label everything as noise
-    algo = HDBSCANClustering(min_cluster_size=100, min_samples=3, noise_handle="nn")
+    algo = HDBSCANClustering(min_cluster_size=100, min_samples=3, low_energy_deposits="nn")
     result = algo.compress(shower)
     # nn with no clusters bundles all noise in each layer into one cluster
     assert result.shower.n_points > 0
@@ -197,9 +197,9 @@ def test_hdbscan_all_noise_fallback():
 
 
 def test_hdbscan_all_noise_drop_loses_all_energy():
-    """When everything is noise and noise_handle='drop', output is empty."""
+    """When everything is noise and low_energy_deposits='drop', output is empty."""
     shower = _make_clustered_shower(n_per_cluster=10)
-    algo = HDBSCANClustering(min_cluster_size=100, min_samples=3, noise_handle="drop")
+    algo = HDBSCANClustering(min_cluster_size=100, min_samples=3, low_energy_deposits="drop")
     result = algo.compress(shower)
     assert result.shower.n_points == 0
     assert result.stats["energy_after"] == 0.0

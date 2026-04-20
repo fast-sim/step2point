@@ -45,12 +45,13 @@ This algorithm first subdivides each detector cell into a regular `x/N` by `y/M`
 Requires:
 
 - `cell_id` defined for each deposit (for layer extraction)
-- `t` (time) defined for each deposit (used as a clustering feature)
 - `scikit-learn` installed (`pip install step2point[hdbscan]`)
 
-This algorithm clusters deposits using HDBSCAN within each (subdetector, layer) partition. Features are scaled x, y coordinates and time relative to the layer median. Each cluster is merged into a single point: energy-weighted centroid position, summed energy, minimum time.
+Optional:
 
-The partitioning by subdetector and layer, the feature scaling, and the noise-handling strategies are ported from the LUMEN project's HDBSCAN implementation.
+- `t` (time) -- when present, used as a third clustering feature alongside x and y
+
+This algorithm clusters deposits using HDBSCAN within each (subdetector, layer) partition. Deposits are first partitioned by (subdetector, layer) where the layer is extracted from the cell ID using a bit-extraction function (defaulting to the ODD layout: 9 bits at bit 19). Within each partition the x/y coordinates are divided by a spatial scale (default 5 mm, roughly one cell width). If time is available, it is expressed relative to the layer median and divided by a temporal scale (default 1 ns), and HDBSCAN clusters on all three scaled features (x, y, t); otherwise it clusters on (x, y) only. Low energy deposits (label -1) are handled according to a configurable strategy: reassign to the nearest cluster ("nn"), promote each to its own singleton cluster ("singleton"), bundle all layer noise into one cluster ("layer"), or discard ("drop").
 
 Parameters:
 
@@ -61,7 +62,7 @@ Parameters:
 - `t_scale` -- divide time by this before clustering (default: 1.0 ns)
 - `layer_extractor` -- callable to extract layer from cell_id (default: ODD bit layout)
 
-Noise handling strategies (`noise_handle`):
+Low energy deposits handling strategies (`low_energy_deposits`):
 
 - `nn` -- reassign noise to the nearest cluster (default, energy-conserving)
 - `singleton` -- each noise point becomes its own cluster (energy-conserving)

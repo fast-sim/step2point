@@ -11,7 +11,7 @@ Optional flags:
     --min-cluster-size 5   (default 5)
     --min-samples 3        (default 3)
     --epsilon 0.0          (default 0.0)
-    --noise-handle nn      (nn | singleton | layer | drop)
+    --low-energy-deposits nn      (nn | singleton | layer | drop)
     --shower-index 0       (single-shower plots for this event)
     --limit 3              (process only the first N showers)
 """
@@ -67,7 +67,7 @@ def main():
     parser.add_argument("--min-cluster-size", type=int, default=5)
     parser.add_argument("--min-samples", type=int, default=3)
     parser.add_argument("--epsilon", type=float, default=0.0)
-    parser.add_argument("--noise-handle", choices=["nn", "singleton", "layer", "drop"], default="nn")
+    parser.add_argument("--low-energy-deposits", choices=["nn", "singleton", "layer", "drop"], default="nn")
     parser.add_argument("--shower-index", type=int, help="Produce single-shower plots for this event index.")
     parser.add_argument("--limit", type=int, help="Only process the first N showers.")
     args = parser.parse_args()
@@ -79,7 +79,7 @@ def main():
         min_cluster_size=args.min_cluster_size,
         min_samples=args.min_samples,
         cluster_selection_epsilon=args.epsilon,
-        noise_handle=args.noise_handle,
+        low_energy_deposits=args.low_energy_deposits,
     )
 
     reader = build_reader(args.input, args.collections, args.limit)
