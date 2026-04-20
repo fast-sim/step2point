@@ -13,8 +13,10 @@ jobs:
             test_file: tests/integration/test_algorithm_identity_regression.py
           - algorithm: merge_within_cell
             test_file: tests/integration/test_algorithm_merge_within_cell_regression.py
-          - algorithm: merge_within_regular_subcell
-            test_file: tests/integration/test_algorithm_merge_within_regular_subcell_regression.py
+          - algorithm: merge_within_regular_subcell_weighted_3x3
+            test_file: tests/integration/test_algorithm_merge_within_regular_subcell_weighted_regression.py
+          - algorithm: merge_within_regular_subcell_center_3x3
+            test_file: tests/integration/test_algorithm_merge_within_regular_subcell_center_regression.py
     runs-on: ubuntu-latest
     name: ${{ matrix.algorithm }}
     steps:

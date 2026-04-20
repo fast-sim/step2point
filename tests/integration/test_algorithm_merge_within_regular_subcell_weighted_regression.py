@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from tests.integration.algorithm_regression_helpers import (
-    REGULAR_GRID_REFERENCE,
+    REGULAR_SUBCELL_WEIGHTED_REFERENCE,
     assert_showers_equal,
     assert_summary_equals,
     find_odd_xml,
@@ -9,7 +9,7 @@ from tests.integration.algorithm_regression_helpers import (
 )
 
 
-def test_merge_within_regular_subcell_output_matches_reference(tmp_path):
+def test_merge_within_regular_subcell_weighted_3x3_output_matches_reference(tmp_path):
     outdir = run_pipeline(
         tmp_path,
         "merge_within_regular_subcell",
@@ -19,18 +19,18 @@ def test_merge_within_regular_subcell_output_matches_reference(tmp_path):
             "--collection-name",
             "ECalBarrelCollection",
             "--grid-x",
-            "2",
+            "3",
             "--grid-y",
-            "2",
+            "3",
             "--position-mode",
             "weighted",
         ],
     )
     assert_summary_equals(
         outdir / "compression_summary_merge_within_regular_subcell.txt",
-        "merge_within_regular_subcell",
+        "merge_within_regular_subcell_weighted_3x3",
     )
     assert_showers_equal(
-        REGULAR_GRID_REFERENCE,
+        REGULAR_SUBCELL_WEIGHTED_REFERENCE,
         outdir / "compressed_merge_within_regular_subcell.h5",
     )
