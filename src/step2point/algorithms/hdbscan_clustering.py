@@ -29,6 +29,32 @@ def _default_layer_extractor(cell_ids: np.ndarray) -> np.ndarray:
     return (cell_ids.astype(np.int64) >> 19) & 0x1FF
 
 
+def layer_extractor_from_encoding(
+    id_encoding: str, field_name: str = "layer"
+) -> Callable[[np.ndarray], np.ndarray]:
+    """Build a vectorized layer extractor from a DD4hep ID encoding string.
+
+    Parameters
+    ----------
+    id_encoding : str
+        DD4hep cell ID encoding (e.g. ``"system:8,barrel:3,layer:19:9"``).
+    field_name : str
+        Name of the field to extract (default ``"layer"``).
+    """
+    from step2point.geometry.dd4hep.bitfield import parse_dd4hep_id_encoding
+
+    fields = parse_dd4hep_id_encoding(id_encoding)
+    for f in fields:
+        if f.name == field_name:
+            offset = f.offset
+            mask = (1 << f.width) - 1
+            return lambda cell_ids, _o=offset, _m=mask: (
+                (cell_ids.astype(np.int64) >> _o) & _m
+            )
+    available = [f.name for f in fields]
+    raise ValueError(f"Field {field_name!r} not found in encoding. Available: {available}")
+
+
 class HDBSCANClustering(CompressionAlgorithm):
     """Density-based clustering of calorimeter step deposits.
 
@@ -56,9 +82,11 @@ class HDBSCANClustering(CompressionAlgorithm):
         Divide x, y coordinates by this value before clustering (mm).
     t_scale : float
         Divide (t - layer median) by this value before clustering (ns).
-    layer_extractor : callable or None
-        ``f(cell_ids: ndarray) -> ndarray`` returning per-point layer IDs.
-        Defaults to the ODD bit-extraction ``(cell_id >> 19) & 0x1FF``.
+    layer_extractor : callable, str, or None
+        How to extract layer IDs from cell IDs.  Can be a callable
+        ``f(cell_ids: ndarray) -> ndarray``, a DD4hep ID encoding string
+        (e.g. ``"system:8,barrel:3,layer:19:9"``), or ``None`` to use
+        the ODD default ``(cell_id >> 19) & 0x1FF``.
     """
 
     name = "hdbscan_clustering"
@@ -71,7 +99,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         low_energy_deposits: str = "nn",
         xy_scale: float = 5.0,
         t_scale: float = 1.0,
-        layer_extractor: Callable[[np.ndarray], np.ndarray] | None = None,
+        layer_extractor: Callable[[np.ndarray], np.ndarray] | str | None = None,
     ) -> None:
         if low_energy_deposits not in {"drop", "singleton", "layer", "nn"}:
             raise ValueError(f"low_energy_deposits must be 'drop', 'singleton', 'layer', or 'nn', got '{low_energy_deposits}'.")
@@ -81,7 +109,10 @@ class HDBSCANClustering(CompressionAlgorithm):
         self.low_energy_deposits = low_energy_deposits
         self.xy_scale = xy_scale
         self.t_scale = t_scale
-        self.layer_extractor = layer_extractor or _default_layer_extractor
+        if isinstance(layer_extractor, str):
+            self.layer_extractor = layer_extractor_from_encoding(layer_extractor)
+        else:
+            self.layer_extractor = layer_extractor or _default_layer_extractor
 
     @staticmethod
     def _import_sklearn():
