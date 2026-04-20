@@ -125,9 +125,10 @@ class HDBSCANClustering(CompressionAlgorithm):
                 n_slice = len(global_mask)
                 if n_slice < max(self.min_samples, 2):
                     if self.noise_handle != "drop":
-                        for idx in global_mask:
-                            labels[idx] = total_clusters
-                            total_clusters += 1
+                        labels[global_mask] = np.arange(
+                            total_clusters, total_clusters + n_slice
+                        )
+                        total_clusters += n_slice
                     continue
 
                 xy = np.stack([shower.x[global_mask], shower.y[global_mask]], axis=1).astype(np.float32)
@@ -161,9 +162,12 @@ class HDBSCANClustering(CompressionAlgorithm):
                             _, idx = nn.kneighbors(features[is_noise])
                             predicted[is_noise] = predicted[is_cluster][idx.ravel()]
                         elif self.noise_handle == "singleton":
-                            for i in np.where(is_noise)[0]:
-                                predicted[i] = total_clusters
-                                total_clusters += 1
+                            noise_idx = np.where(is_noise)[0]
+                            n_noise = len(noise_idx)
+                            predicted[noise_idx] = np.arange(
+                                total_clusters, total_clusters + n_noise
+                            )
+                            total_clusters += n_noise
                         elif self.noise_handle == "layer":
                             predicted[is_noise] = total_clusters
                             total_clusters += 1
@@ -173,9 +177,12 @@ class HDBSCANClustering(CompressionAlgorithm):
                         predicted[is_noise] = total_clusters
                         total_clusters += 1
                     elif self.noise_handle == "singleton":
-                        for i in np.where(is_noise)[0]:
-                            predicted[i] = total_clusters
-                            total_clusters += 1
+                        noise_idx = np.where(is_noise)[0]
+                        n_noise = len(noise_idx)
+                        predicted[noise_idx] = np.arange(
+                            total_clusters, total_clusters + n_noise
+                        )
+                        total_clusters += n_noise
                     # drop: leave as -1
 
                 labels[global_mask] = predicted
