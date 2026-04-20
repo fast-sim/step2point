@@ -238,8 +238,7 @@ def build_barrel_layout_from_collection(main_xml: str | Path, collection_name: s
     layer_pos_z = -(total_thickness / 2.0)
 
     sect_center_radius = rmin + total_thickness / 2.0
-    rot_y = -inner_angle / 2.0
-    rot_x = np.pi / 2.0
+    rot_y = inner_angle / 2.0
     module_angles: list[float] = []
     module_centers: list[tuple[float, float]] = []
     for _module in range(1, numsides + 1):
