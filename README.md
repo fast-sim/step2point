@@ -106,6 +106,8 @@ step2point/
 └── .github/workflows/
 ```
 
+Contribution guidelines for common extension tasks are in [CONTRIBUTING.md](/home/anna/Workspace/step2point/CONTRIBUTING.md:1).
+
 ## Quick start
 
 Install:
