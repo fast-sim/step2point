@@ -29,31 +29,6 @@ def _default_layer_extractor(cell_ids: np.ndarray) -> np.ndarray:
     return (cell_ids.astype(np.int64) >> 19) & 0x1FF
 
 
-def layer_extractor_from_encoding(
-    id_encoding: str, field_name: str = "layer"
-) -> Callable[[np.ndarray], np.ndarray]:
-    """Build a vectorized layer extractor from a DD4hep ID encoding string.
-
-    Parameters
-    ----------
-    id_encoding : str
-        DD4hep cell ID encoding (e.g. ``"system:8,barrel:3,layer:19:9"``).
-    field_name : str
-        Name of the field to extract (default ``"layer"``).
-    """
-    from step2point.geometry.dd4hep.bitfield import parse_dd4hep_id_encoding
-
-    fields = parse_dd4hep_id_encoding(id_encoding)
-    for f in fields:
-        if f.name == field_name:
-            offset = f.offset
-            mask = (1 << f.width) - 1
-            return lambda cell_ids, _o=offset, _m=mask: (
-                (cell_ids.astype(np.int64) >> _o) & _m
-            )
-    available = [f.name for f in fields]
-    raise ValueError(f"Field {field_name!r} not found in encoding. Available: {available}")
-
 
 class HDBSCANClustering(CompressionAlgorithm):
     """Density-based clustering of calorimeter step deposits.
@@ -126,7 +101,11 @@ class HDBSCANClustering(CompressionAlgorithm):
         self.xy_scale = xy_scale
         self.t_scale = t_scale
         if isinstance(layer_extractor, str):
-            self.layer_extractor = layer_extractor_from_encoding(layer_extractor)
+            from step2point.geometry.dd4hep.bitfield import extract_field
+
+            encoding = layer_extractor
+            extract_field(np.array([0], dtype=np.uint64), encoding)
+            self.layer_extractor = lambda cell_ids: extract_field(cell_ids, encoding)
         else:
             self.layer_extractor = layer_extractor or _default_layer_extractor
 
