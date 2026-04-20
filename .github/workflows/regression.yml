@@ -30,7 +30,7 @@ jobs:
       - name: Upload validation plots
         uses: actions/upload-artifact@v4
         with:
-          name: validation-plots
+          name: hdf5-validation-plots
           path: outputs/ci_validation_plots/
 
   edm4hep-root-regression:
