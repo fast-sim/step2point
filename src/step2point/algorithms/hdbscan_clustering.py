@@ -180,44 +180,49 @@ class HDBSCANClustering(CompressionAlgorithm):
 
                 labels[global_mask] = predicted
 
-        out_x, out_y, out_z, out_E, out_t = [], [], [], [], []
-        unique_labels = np.unique(labels)
-        unique_labels = unique_labels[unique_labels >= 0]
+        keep = labels >= 0
+        kept_labels = labels[keep]
 
-        for lbl in unique_labels:
-            mask = labels == lbl
-            pos_x = shower.x[mask].astype(np.float64)
-            pos_y = shower.y[mask].astype(np.float64)
-            pos_z = shower.z[mask].astype(np.float64)
-            ene = shower.E[mask].astype(np.float64)
-            tim = shower.t[mask].astype(np.float64)
+        if kept_labels.size == 0:
+            out = Shower(
+                shower_id=shower.shower_id,
+                x=np.empty(0, dtype=np.float32),
+                y=np.empty(0, dtype=np.float32),
+                z=np.empty(0, dtype=np.float32),
+                E=np.empty(0, dtype=np.float32),
+                t=np.empty(0, dtype=np.float32),
+                primary=shower.primary,
+                metadata={**shower.metadata, "algorithm": self.name},
+            )
+        else:
+            kept_x = shower.x[keep].astype(np.float64)
+            kept_y = shower.y[keep].astype(np.float64)
+            kept_z = shower.z[keep].astype(np.float64)
+            kept_E = shower.E[keep].astype(np.float64)
+            kept_t = shower.t[keep].astype(np.float64)
 
-            tot_e = ene.sum()
-            if tot_e > 0:
-                cx = float(np.sum(pos_x * ene) / tot_e)
-                cy = float(np.sum(pos_y * ene) / tot_e)
-                cz = float(np.sum(pos_z * ene) / tot_e)
-            else:
-                cx = float(pos_x.mean())
-                cy = float(pos_y.mean())
-                cz = float(pos_z.mean())
+            _, inverse = np.unique(kept_labels, return_inverse=True)
+            n = len(_)
 
-            out_x.append(cx)
-            out_y.append(cy)
-            out_z.append(cz)
-            out_E.append(float(tot_e))
-            out_t.append(float(tim.min()))
+            e_sum = np.bincount(inverse, weights=kept_E, minlength=n)
+            safe_e = np.where(e_sum > 0.0, e_sum, 1.0)
+            out_x = np.bincount(inverse, weights=kept_x * kept_E, minlength=n) / safe_e
+            out_y = np.bincount(inverse, weights=kept_y * kept_E, minlength=n) / safe_e
+            out_z = np.bincount(inverse, weights=kept_z * kept_E, minlength=n) / safe_e
 
-        out = Shower(
-            shower_id=shower.shower_id,
-            x=np.asarray(out_x, dtype=np.float32),
-            y=np.asarray(out_y, dtype=np.float32),
-            z=np.asarray(out_z, dtype=np.float32),
-            E=np.asarray(out_E, dtype=np.float32),
-            t=np.asarray(out_t, dtype=np.float32),
-            primary=shower.primary,
-            metadata={**shower.metadata, "algorithm": self.name},
-        )
+            out_t = np.full(n, np.inf)
+            np.minimum.at(out_t, inverse, kept_t)
+
+            out = Shower(
+                shower_id=shower.shower_id,
+                x=out_x.astype(np.float32),
+                y=out_y.astype(np.float32),
+                z=out_z.astype(np.float32),
+                E=e_sum.astype(np.float32),
+                t=out_t.astype(np.float32),
+                primary=shower.primary,
+                metadata={**shower.metadata, "algorithm": self.name},
+            )
         return CompressionResult(
             shower=out,
             algorithm=self.name,
