@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
 from step2point.algorithms.identity import IdentityCompression
 from step2point.algorithms.merge_within_cell import MergeWithinCell
 from step2point.algorithms.merge_within_regular_subcell import MergeWithinRegularSubcell
@@ -29,8 +30,17 @@ def parse_args():
     )
     parser.add_argument(
         "--algorithm",
-        choices=["identity", "merge_within_cell", "merge_within_regular_subcell"],
+        choices=["identity", "merge_within_cell", "merge_within_regular_subcell", "hdbscan_clustering"],
         default="identity",
+    )
+    parser.add_argument("--min-cluster-size", type=int, default=5, help="HDBSCAN min_cluster_size.")
+    parser.add_argument("--min-samples", type=int, default=3, help="HDBSCAN min_samples.")
+    parser.add_argument("--epsilon", type=float, default=0.0, help="HDBSCAN cluster_selection_epsilon.")
+    parser.add_argument(
+        "--low-energy-deposits",
+        choices=["nn", "singleton", "layer", "drop"],
+        default="nn",
+        help="Strategy for low-energy deposits in HDBSCAN.",
     )
     parser.add_argument("--compact-xml", help="DD4hep compact XML required by geometry-aware algorithms.")
     parser.add_argument("--collection-name", help="DD4hep readout collection name required by geometry-aware algorithms.")
@@ -70,6 +80,13 @@ def main():
         algorithm = IdentityCompression()
     elif args.algorithm == "merge_within_cell":
         algorithm = MergeWithinCell()
+    elif args.algorithm == "hdbscan_clustering":
+        algorithm = HDBSCANClustering(
+            min_cluster_size=args.min_cluster_size,
+            min_samples=args.min_samples,
+            cluster_selection_epsilon=args.epsilon,
+            low_energy_deposits=args.low_energy_deposits,
+        )
     else:
         if args.compact_xml is None or args.collection_name is None:
             raise ValueError("--compact-xml and --collection-name are required for merge_within_regular_subcell.")

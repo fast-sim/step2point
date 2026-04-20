@@ -17,6 +17,9 @@ REGULAR_SUBCELL_WEIGHTED_REFERENCE = Path(
 REGULAR_SUBCELL_CENTER_REFERENCE = Path(
     "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_merge_within_regular_subcell_3x3_center_reference.h5"
 )
+HDBSCAN_REFERENCE = Path(
+    "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_hdbscan_clustering_reference.h5"
+)
 
 FLOAT_RTOL = 1e-7
 FLOAT_ATOL = 1e-10
@@ -127,6 +130,17 @@ def assert_summary_equals(summary_path: Path, case: str) -> None:
             "total_n_points_after=6550\n"
             "total_compression_ratio=0.182859\n"
             "output_hdf5=compressed_merge_within_regular_subcell.h5\n"
+        ),
+        "hdbscan_clustering": (
+            "compression_stats=10\n"
+            "validation_results=30\n"
+            "mean_n_points_before=3582.000000\n"
+            "mean_n_points_after=266.800000\n"
+            "mean_compression_ratio=0.074506\n"
+            "total_n_points_before=35820\n"
+            "total_n_points_after=2668\n"
+            "total_compression_ratio=0.074484\n"
+            "output_hdf5=compressed_hdbscan_clustering.h5\n"
         ),
     }
     expected = expected_by_case[case]

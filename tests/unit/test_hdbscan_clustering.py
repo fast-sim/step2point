@@ -1,13 +1,12 @@
 import numpy as np
 import pytest
 
+from step2point.algorithms.hdbscan_clustering import HDBSCANClustering, _default_layer_extractor
 from step2point.core.shower import Shower
 from step2point.metrics.energy import energy_ratio
 from step2point.validation.sanity import ShowerSanityValidator
 
 pytest.importorskip("sklearn")
-
-from step2point.algorithms.hdbscan_clustering import HDBSCANClustering, _default_layer_extractor  # noqa: E402
 
 
 def _make_clustered_shower(n_per_cluster=30, seed=42):
@@ -39,6 +38,79 @@ def _make_clustered_shower(n_per_cluster=30, seed=42):
         t=np.concatenate([ta, tb]),
         cell_id=np.concatenate([cida, cidb]),
     )
+
+
+def test_hdbscan_does_not_mutate_input():
+    shower = _make_clustered_shower()
+    x_orig = shower.x.copy()
+    y_orig = shower.y.copy()
+    z_orig = shower.z.copy()
+    E_orig = shower.E.copy()
+    t_orig = shower.t.copy()
+    cell_id_orig = shower.cell_id.copy()
+
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3)
+    algo.compress(shower)
+
+    np.testing.assert_array_equal(shower.x, x_orig)
+    np.testing.assert_array_equal(shower.y, y_orig)
+    np.testing.assert_array_equal(shower.z, z_orig)
+    np.testing.assert_array_equal(shower.E, E_orig)
+    np.testing.assert_array_equal(shower.t, t_orig)
+    np.testing.assert_array_equal(shower.cell_id, cell_id_orig)
+
+
+def test_hdbscan_empty_shower():
+    shower = Shower(
+        shower_id=0,
+        x=np.empty(0, dtype=np.float32),
+        y=np.empty(0, dtype=np.float32),
+        z=np.empty(0, dtype=np.float32),
+        E=np.empty(0, dtype=np.float32),
+        t=np.empty(0, dtype=np.float32),
+        cell_id=np.empty(0, dtype=np.uint64),
+    )
+    algo = HDBSCANClustering(min_cluster_size=2, min_samples=2)
+    result = algo.compress(shower)
+    assert result.shower.n_points == 0
+    assert result.stats["energy_after"] == 0.0
+
+
+def test_hdbscan_single_point_shower():
+    shower = Shower(
+        shower_id=0,
+        x=np.array([100.0], dtype=np.float32),
+        y=np.array([200.0], dtype=np.float32),
+        z=np.array([300.0], dtype=np.float32),
+        E=np.array([5.0], dtype=np.float32),
+        t=np.array([1.0], dtype=np.float32),
+        cell_id=np.array([1 << 19], dtype=np.uint64),
+    )
+    algo = HDBSCANClustering(min_cluster_size=2, min_samples=2)
+    result = algo.compress(shower)
+    # Single point is below min_samples, should be preserved as singleton
+    assert result.shower.n_points == 1
+    assert np.isclose(result.shower.E[0], 5.0)
+
+
+def test_hdbscan_repeated_cell_id():
+    """Multiple points sharing the same cell_id (same layer) cluster correctly."""
+    rng = np.random.default_rng(77)
+    n = 40
+    shared_cell_id = np.uint64((1 << 19) | 42)
+    shower = Shower(
+        shower_id=0,
+        x=rng.normal(100, 2, n).astype(np.float32),
+        y=rng.normal(100, 2, n).astype(np.float32),
+        z=rng.normal(500, 1, n).astype(np.float32),
+        E=rng.exponential(0.5, n).astype(np.float32) + 0.01,
+        t=rng.normal(10, 0.3, n).astype(np.float32),
+        cell_id=np.full(n, shared_cell_id, dtype=np.uint64),
+    )
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3)
+    result = algo.compress(shower)
+    assert result.shower.n_points <= shower.n_points
+    assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
 
 
 def test_hdbscan_compresses_and_preserves_energy():
