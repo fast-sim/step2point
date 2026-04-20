@@ -71,3 +71,4 @@ Noise handling strategies (`noise_handle`):
 TODO:
 
 - [ ] C++ backend. The core HDBSCAN clustering is handled by scikit-learn (Cython/C), so the Python path already gets compiled performance for the hot loop. A native C++ implementation would require either reimplementing HDBSCAN or linking a C++ library.
+- [ ] GPU acceleration via scikit-learn's [Array API support](https://scikit-learn.org/stable/modules/array_api.html). This would allow HDBSCAN to run on GPU arrays (e.g. CuPy, PyTorch) for larger datasets. Needs investigation into whether the step2point backends API (currently Python and C++ only) should be extended to cover compute backends, or if this should be handled transparently within the Python algorithm.
