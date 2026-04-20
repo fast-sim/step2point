@@ -11,23 +11,40 @@ from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
 
 DATA = Path("tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5")
 MERGE_REFERENCE = Path("tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_merge_within_cell_reference.h5")
+REGULAR_GRID_REFERENCE = Path(
+    "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_merge_within_regular_subcell_reference.h5"
+)
 
 
-def run_pipeline(tmp_path: Path, algorithm: str) -> Path:
+def find_odd_xml() -> Path:
+    candidates = [
+        Path("../OpenDataDetector/xml/OpenDataDetector.xml"),
+        Path("OpenDataDetector/xml/OpenDataDetector.xml"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError("OpenDataDetector compact XML not found in ../OpenDataDetector or OpenDataDetector.")
+
+
+def run_pipeline(tmp_path: Path, algorithm: str, extra_args: list[str] | None = None) -> Path:
     outdir = tmp_path / f"pipeline_out_{algorithm}"
     env = dict(os.environ)
     env["PYTHONPATH"] = "src" if "PYTHONPATH" not in env else f"src:{env['PYTHONPATH']}"
+    cmd = [
+        sys.executable,
+        "examples/run_step2point_pipeline.py",
+        "--input",
+        str(DATA),
+        "--algorithm",
+        algorithm,
+        "--output",
+        str(outdir),
+    ]
+    if extra_args:
+        cmd.extend(extra_args)
     subprocess.run(
-        [
-            sys.executable,
-            "examples/run_step2point_pipeline.py",
-            "--input",
-            str(DATA),
-            "--algorithm",
-            algorithm,
-            "--output",
-            str(outdir),
-        ],
+        cmd,
         check=True,
         env=env,
     )
@@ -60,9 +77,29 @@ def assert_showers_equal(left_path: Path, right_path: Path) -> None:
 
 
 def assert_summary_equals(summary_path: Path, algorithm: str) -> None:
-    expected = (
-        f"compression_stats=10\n"
-        f"validation_results=30\n"
-        f"output_hdf5=compressed_{algorithm}.h5\n"
-    )
+    expected_by_algorithm = {
+        "identity": (
+            "compression_stats=10\n"
+            "validation_results=30\n"
+            "mean_n_points_before=3582.000000\n"
+            "mean_n_points_after=3582.000000\n"
+            "mean_compression_ratio=1.000000\n"
+            "total_n_points_before=35820\n"
+            "total_n_points_after=35820\n"
+            "total_compression_ratio=1.000000\n"
+            "output_hdf5=compressed_identity.h5\n"
+        ),
+        "merge_within_cell": (
+            "compression_stats=10\n"
+            "validation_results=30\n"
+            "mean_n_points_before=3582.000000\n"
+            "mean_n_points_after=360.400000\n"
+            "mean_compression_ratio=0.100820\n"
+            "total_n_points_before=35820\n"
+            "total_n_points_after=3604\n"
+            "total_compression_ratio=0.100614\n"
+            "output_hdf5=compressed_merge_within_cell.h5\n"
+        ),
+    }
+    expected = expected_by_algorithm[algorithm]
     assert summary_path.read_text() == expected

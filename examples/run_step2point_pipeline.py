@@ -5,6 +5,7 @@ from pathlib import Path
 
 from step2point.algorithms.identity import IdentityCompression
 from step2point.algorithms.merge_within_cell import MergeWithinCell
+from step2point.algorithms.merge_within_regular_subcell import MergeWithinRegularSubcell
 from step2point.io import EDM4hepRootReader, Step2PointHDF5Reader, write_step2point_hdf5
 from step2point.validation.conservation import CellCountRatioValidator, EnergyConservationValidator
 from step2point.validation.profiles import ShowerMomentsValidator
@@ -26,7 +27,21 @@ def parse_args():
         default=list(DEFAULT_ROOT_COLLECTIONS),
         help="EDM4hep SimCalorimeterHit collection names for ROOT input.",
     )
-    parser.add_argument("--algorithm", choices=["identity", "merge_within_cell"], default="identity")
+    parser.add_argument(
+        "--algorithm",
+        choices=["identity", "merge_within_cell", "merge_within_regular_subcell"],
+        default="identity",
+    )
+    parser.add_argument("--compact-xml", help="DD4hep compact XML required by geometry-aware algorithms.")
+    parser.add_argument("--collection-name", help="DD4hep readout collection name required by geometry-aware algorithms.")
+    parser.add_argument("--grid-x", type=int, default=2, help="Number of regular subdivisions along local cell x.")
+    parser.add_argument("--grid-y", type=int, default=2, help="Number of regular subdivisions along local cell y/z.")
+    parser.add_argument(
+        "--position-mode",
+        choices=["weighted", "center"],
+        default="weighted",
+        help="Output position within each subcell: weighted barycenter or geometric center.",
+    )
     parser.add_argument("--output", required=True)
     return parser.parse_args()
 
@@ -51,7 +66,20 @@ def main():
     reader = build_reader(args.input)
     if isinstance(reader, EDM4hepRootReader):
         reader.collections = parse_collections(args.collections)
-    algorithm = IdentityCompression() if args.algorithm == "identity" else MergeWithinCell()
+    if args.algorithm == "identity":
+        algorithm = IdentityCompression()
+    elif args.algorithm == "merge_within_cell":
+        algorithm = MergeWithinCell()
+    else:
+        if args.compact_xml is None or args.collection_name is None:
+            raise ValueError("--compact-xml and --collection-name are required for merge_within_regular_subcell.")
+        algorithm = MergeWithinRegularSubcell(
+            x_bins=args.grid_x,
+            y_bins=args.grid_y,
+            position_mode=args.position_mode,
+            compact_xml=args.compact_xml,
+            collection_name=args.collection_name,
+        )
     validators = [EnergyConservationValidator(), CellCountRatioValidator(), ShowerMomentsValidator()]
 
     compression_stats: list[dict] = []
@@ -73,9 +101,28 @@ def main():
         algorithm=args.algorithm,
         source_input=args.input,
     )
+    n_showers = len(compression_stats)
+    mean_points_before = (
+        sum(float(stats["n_points_before"]) for stats in compression_stats) / n_showers if n_showers else 0.0
+    )
+    mean_points_after = (
+        sum(float(stats["n_points_after"]) for stats in compression_stats) / n_showers if n_showers else 0.0
+    )
+    mean_compression_ratio = (
+        sum(float(stats["compression_ratio"]) for stats in compression_stats) / n_showers if n_showers else 0.0
+    )
+    total_points_before = sum(int(stats["n_points_before"]) for stats in compression_stats)
+    total_points_after = sum(int(stats["n_points_after"]) for stats in compression_stats)
+    total_compression_ratio = total_points_after / total_points_before if total_points_before else 0.0
     (outdir / f"compression_summary_{args.algorithm}.txt").write_text(
         f"compression_stats={len(compression_stats)}\n"
         f"validation_results={len(validation_results)}\n"
+        f"mean_n_points_before={mean_points_before:.6f}\n"
+        f"mean_n_points_after={mean_points_after:.6f}\n"
+        f"mean_compression_ratio={mean_compression_ratio:.6f}\n"
+        f"total_n_points_before={total_points_before}\n"
+        f"total_n_points_after={total_points_after}\n"
+        f"total_compression_ratio={total_compression_ratio:.6f}\n"
         f"output_hdf5={output_h5.name}\n"
     )
     print(f"wrote {output_h5}")
