@@ -11,7 +11,7 @@ from step2point.algorithms.hdbscan_clustering import HDBSCANClustering, _default
 
 
 def _make_clustered_shower(n_per_cluster=30, seed=42):
-    """Two well-separated blobs in x,y with distinct layers encoded in cell_id."""
+    """Two well-separated blobs in x,y within the same layer (layer 1)."""
     rng = np.random.default_rng(seed)
     # Cluster A: centred at (100, 100), layer 1
     xa = rng.normal(100, 2, n_per_cluster).astype(np.float32)
@@ -141,3 +141,65 @@ def test_hdbscan_no_subdetector_metadata():
     result = algo.compress(shower)
     assert result.shower.n_points > 0
     assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
+
+
+def test_hdbscan_noise_handle_layer():
+    shower = _make_clustered_shower()
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, noise_handle="layer")
+    result = algo.compress(shower)
+    assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
+
+
+def test_hdbscan_multiple_layers():
+    """Two clusters in different layers are processed independently."""
+    rng = np.random.default_rng(99)
+    n = 30
+    # Layer 1 cluster
+    x1 = rng.normal(100, 2, n).astype(np.float32)
+    y1 = rng.normal(100, 2, n).astype(np.float32)
+    z1 = rng.normal(500, 1, n).astype(np.float32)
+    e1 = rng.exponential(0.5, n).astype(np.float32) + 0.01
+    t1 = rng.normal(10, 0.3, n).astype(np.float32)
+    cid1 = np.array([(1 << 19) | i for i in range(n)], dtype=np.uint64)
+
+    # Layer 2 cluster at a different position
+    x2 = rng.normal(300, 2, n).astype(np.float32)
+    y2 = rng.normal(300, 2, n).astype(np.float32)
+    z2 = rng.normal(600, 1, n).astype(np.float32)
+    e2 = rng.exponential(0.5, n).astype(np.float32) + 0.01
+    t2 = rng.normal(12, 0.3, n).astype(np.float32)
+    cid2 = np.array([(2 << 19) | i for i in range(n)], dtype=np.uint64)
+
+    shower = Shower(
+        shower_id=0,
+        x=np.concatenate([x1, x2]),
+        y=np.concatenate([y1, y2]),
+        z=np.concatenate([z1, z2]),
+        E=np.concatenate([e1, e2]),
+        t=np.concatenate([t1, t2]),
+        cell_id=np.concatenate([cid1, cid2]),
+    )
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, noise_handle="nn")
+    result = algo.compress(shower)
+    assert result.shower.n_points < shower.n_points
+    assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
+
+
+def test_hdbscan_all_noise_fallback():
+    """When min_cluster_size is larger than the slice, all points are noise."""
+    shower = _make_clustered_shower(n_per_cluster=10)
+    # min_cluster_size=100 forces HDBSCAN to label everything as noise
+    algo = HDBSCANClustering(min_cluster_size=100, min_samples=3, noise_handle="nn")
+    result = algo.compress(shower)
+    # nn with no clusters bundles all noise in each layer into one cluster
+    assert result.shower.n_points > 0
+    assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
+
+
+def test_hdbscan_all_noise_drop_loses_all_energy():
+    """When everything is noise and noise_handle='drop', output is empty."""
+    shower = _make_clustered_shower(n_per_cluster=10)
+    algo = HDBSCANClustering(min_cluster_size=100, min_samples=3, noise_handle="drop")
+    result = algo.compress(shower)
+    assert result.shower.n_points == 0
+    assert result.stats["energy_after"] == 0.0

@@ -124,7 +124,7 @@ class HDBSCANClustering(CompressionAlgorithm):
 
                 n_slice = len(global_mask)
                 if n_slice < max(self.min_samples, 2):
-                    if self.noise_handle not in ("drop",):
+                    if self.noise_handle != "drop":
                         for idx in global_mask:
                             labels[idx] = total_clusters
                             total_clusters += 1
