@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
-from tests.integration.algorithm_regression_helpers import DATA, assert_showers_equal, run_pipeline
+from tests.integration.algorithm_regression_helpers import (
+    DATA,
+    assert_showers_equal,
+    assert_summary_equals,
+    run_pipeline,
+)
 
 
 def test_run_step2point_pipeline_writes_identity_hdf5(tmp_path):
@@ -11,6 +16,7 @@ def test_run_step2point_pipeline_writes_identity_hdf5(tmp_path):
     summary = outdir / "compression_summary_identity.txt"
     assert output_h5.exists()
     assert summary.exists()
+    assert_summary_equals(summary, "identity")
 
     showers = list(Step2PointHDF5Reader(str(output_h5)).iter_showers())
     assert len(showers) > 0

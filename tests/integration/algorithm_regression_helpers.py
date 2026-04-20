@@ -57,3 +57,12 @@ def assert_showers_equal(left_path: Path, right_path: Path) -> None:
             assert lhs.pdg is rhs.pdg
         else:
             np.testing.assert_array_equal(lhs.pdg, rhs.pdg)
+
+
+def assert_summary_equals(summary_path: Path, algorithm: str) -> None:
+    expected = (
+        f"compression_stats=10\n"
+        f"validation_results=30\n"
+        f"output_hdf5=compressed_{algorithm}.h5\n"
+    )
+    assert summary_path.read_text() == expected
