@@ -76,6 +76,7 @@ cpp/         future C++ core and Python bindings
 - baseline algorithms:
     - `identity`
     - `merge_within_cell`
+    - `merge_within_regular_subcell`
 - metrics / validation / plotting
 - small HDF5 regression sample and GitHub Actions CI
 - MkDocs documentation site
@@ -139,6 +140,20 @@ PYTHONPATH=src python examples/run_step2point_pipeline.py \
   --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
   --algorithm merge_within_cell \
   --output outputs/pipeline_merge_within_cell
+```
+
+Write an output file with a regular `2x2` subgrid inside each detector cell:
+
+```bash
+PYTHONPATH=src python examples/run_step2point_pipeline.py \
+  --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+  --algorithm merge_within_regular_subcell \
+  --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
+  --collection-name ECalBarrelCollection \
+  --grid-x 2 \
+  --grid-y 2 \
+  --position-mode weighted \
+  --output outputs/pipeline_regular_grid
 ```
 
 Each run writes:

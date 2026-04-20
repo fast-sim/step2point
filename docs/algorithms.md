@@ -22,3 +22,16 @@ This algorithm compresses all deposits that fall within the same detector cell (
 
 TODO:
 - [ ] Implement a configurable time window that merges deposits only within this window to reproduce a first basic digitisation step.
+
+## Merging within a regular grid inside a cell
+
+> merge_within_regular_subcell
+
+Requires:
+- `cell_id` defined for each deposit with a `Shower`
+- a DD4hep compact XML and readout collection name, or a prebuilt barrel layout
+
+This algorithm first subdivides each detector cell into a regular `x/N` by `y/M` grid in the local segmentation plane and then merges deposits within each subcell. The output position can be either:
+
+- `weighted` (default): energy-weighted barycenter of the deposits in the subcell
+- `center`: geometric center of the subcell on the sensitive surface

@@ -13,10 +13,14 @@ jobs:
             test_file: tests/integration/test_algorithm_identity_regression.py
           - algorithm: merge_within_cell
             test_file: tests/integration/test_algorithm_merge_within_cell_regression.py
+          - algorithm: merge_within_regular_subcell
+            test_file: tests/integration/test_algorithm_merge_within_regular_subcell_regression.py
     runs-on: ubuntu-latest
     name: ${{ matrix.algorithm }}
     steps:
       - uses: actions/checkout@v4
+      - name: Clone OpenDataDetector
+        run: git clone --depth 1 https://gitlab.cern.ch/acts/OpenDataDetector.git OpenDataDetector
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"

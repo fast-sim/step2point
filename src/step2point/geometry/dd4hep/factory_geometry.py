@@ -302,6 +302,48 @@ def build_barrel_layout_from_collection(main_xml: str | Path, collection_name: s
         cell_id_encoding=id_encoding,
         layers=tuple(layers),
     )
+
+
+def barrel_module_basis(
+    layout: BarrelLayout,
+    layer_index: int,
+    module_index: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    layer = layout.layers[layer_index - 1]
+    raw_center_xy = np.array(layer.module_centers_xy_mm[module_index - 1], dtype=np.float64)
+    cz = np.cos(layout.envelope_rotation_z_rad)
+    sz = np.sin(layout.envelope_rotation_z_rad)
+    envelope_rotation = np.array([[cz, -sz], [sz, cz]], dtype=np.float64)
+    center_xy = envelope_rotation @ raw_center_xy
+    radial = center_xy / np.linalg.norm(center_xy)
+    tangent = np.array([-radial[1], radial[0]], dtype=np.float64)
+    return center_xy, radial, tangent
+
+
+def barrel_sensitive_plane_center_xy(
+    layout: BarrelLayout,
+    layer_index: int,
+    module_index: int,
+) -> np.ndarray:
+    layer = layout.layers[layer_index - 1]
+    center_xy, radial, _ = barrel_module_basis(layout, layer_index, module_index)
+    radial_offset = layer.sensitive_radius_mm - layout.sect_center_radius_mm
+    return center_xy + radial_offset * radial
+
+
+def barrel_cell_center(
+    layout: BarrelLayout,
+    layer_index: int,
+    module_index: int,
+    cell_x: int,
+    cell_y: int,
+) -> np.ndarray:
+    layer = layout.layers[layer_index - 1]
+    sensitive_center_xy = barrel_sensitive_plane_center_xy(layout, layer_index, module_index)
+    _, _, tangent = barrel_module_basis(layout, layer_index, module_index)
+    xy = sensitive_center_xy + float(cell_x) * layer.pitch_tangent_mm * tangent
+    z = float(cell_y) * layer.pitch_z_mm
+    return np.array([xy[0], xy[1], z], dtype=np.float64)
 def module_grid_lines_xy_zy(
     layout: BarrelLayout,
     layer_index: int,
