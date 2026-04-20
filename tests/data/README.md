@@ -7,7 +7,7 @@
 - `ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_merge_within_regular_subcell_3x3_weighted_reference.h5` is the committed reference output for `merge_within_regular_subcell` with `--grid-x 3 --grid-y 3 --position-mode weighted` on the ODD gamma sample.
 - `ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_merge_within_regular_subcell_3x3_center_reference.h5` is the committed reference output for `merge_within_regular_subcell` with `--grid-x 3 --grid-y 3 --position-mode center` on the ODD gamma sample.
   - algorithm regressions follow the rule: `identity` is checked against the original input, while every non-identity algorithm should have its own committed reference file and regression case
-- `ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_hdbscan_clustering_reference.h5` is the committed reference output for `hdbscan_clustering` (min_cluster_size=5, min_samples=3, low_energy_deposits=nn) on the ODD gamma sample.
+- `ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_hdbscan_clustering_reference.h5` is the committed reference output for `hdbscan_clustering` (min_cluster_size=5, min_samples=3, low_energy_deposits_handler=nn) on the ODD gamma sample.
 - `ODD_pionM_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5` is the corresponding ODD pion HDF5 sample.
 - `ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_edm4hep.root` is the matching ODD gamma EDM4hep ROOT sample.
 - `ODD_pionM_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_edm4hep.root` is the matching ODD pion EDM4hep ROOT sample.

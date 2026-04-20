@@ -79,7 +79,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         A small value (e.g. 0.5 - 1.0 in scaled feature space) prevents
         over-fragmenting dense shower cores while still separating
         genuinely distinct deposits.
-    low_energy_deposits : str
+    low_energy_deposits_handler : str
         Strategy for low-energy deposits that HDBSCAN labels as noise:
         ``"nn"``: reassign to the nearest cluster (default, energy-conserving).
         ``"singleton"``: each deposit becomes its own cluster.
@@ -110,17 +110,19 @@ class HDBSCANClustering(CompressionAlgorithm):
         min_cluster_size: int,
         min_samples: int,
         cluster_selection_epsilon: float = 0.0,
-        low_energy_deposits: str = "nn",
+        low_energy_deposits_handler: str = "nn",
         xy_scale: float = 5.0,
         t_scale: float = 1.0,
         layer_extractor: Callable[[np.ndarray], np.ndarray] | str | None = None,
     ) -> None:
-        if low_energy_deposits not in {"drop", "singleton", "layer", "nn"}:
-            raise ValueError(f"low_energy_deposits must be 'drop', 'singleton', 'layer', or 'nn', got '{low_energy_deposits}'.")
+        if low_energy_deposits_handler not in {"drop", "singleton", "layer", "nn"}:
+            raise ValueError(
+                f"low_energy_deposits_handler must be 'drop', 'singleton', 'layer', or 'nn', got '{low_energy_deposits_handler}'."
+            )
         self.min_cluster_size = min_cluster_size
         self.min_samples = min_samples
         self.cluster_selection_epsilon = cluster_selection_epsilon
-        self.low_energy_deposits = low_energy_deposits
+        self.low_energy_deposits_handler = low_energy_deposits_handler
         self.xy_scale = xy_scale
         self.t_scale = t_scale
         if isinstance(layer_extractor, str):
@@ -165,7 +167,7 @@ class HDBSCANClustering(CompressionAlgorithm):
 
                 n_slice = len(global_mask)
                 if n_slice < max(self.min_samples, 2):
-                    if self.low_energy_deposits != "drop":
+                    if self.low_energy_deposits_handler != "drop":
                         labels[global_mask] = np.arange(
                             total_clusters, total_clusters + n_slice
                         )
@@ -200,27 +202,27 @@ class HDBSCANClustering(CompressionAlgorithm):
                     predicted[is_cluster] += total_clusters
                     total_clusters += n_new
                     if np.any(is_noise):
-                        if self.low_energy_deposits == "nn":
+                        if self.low_energy_deposits_handler == "nn":
                             nn = NearestNeighbors(n_neighbors=1, n_jobs=-1)
                             nn.fit(features[is_cluster])
                             _, idx = nn.kneighbors(features[is_noise])
                             predicted[is_noise] = predicted[is_cluster][idx.ravel()]
-                        elif self.low_energy_deposits == "singleton":
+                        elif self.low_energy_deposits_handler == "singleton":
                             noise_idx = np.where(is_noise)[0]
                             n_noise = len(noise_idx)
                             predicted[noise_idx] = np.arange(
                                 total_clusters, total_clusters + n_noise
                             )
                             total_clusters += n_noise
-                        elif self.low_energy_deposits == "layer":
+                        elif self.low_energy_deposits_handler == "layer":
                             predicted[is_noise] = total_clusters
                             total_clusters += 1
                         # drop: leave as -1
                 elif np.any(is_noise):
-                    if self.low_energy_deposits in ("nn", "layer"):
+                    if self.low_energy_deposits_handler in ("nn", "layer"):
                         predicted[is_noise] = total_clusters
                         total_clusters += 1
-                    elif self.low_energy_deposits == "singleton":
+                    elif self.low_energy_deposits_handler == "singleton":
                         noise_idx = np.where(is_noise)[0]
                         n_noise = len(noise_idx)
                         predicted[noise_idx] = np.arange(

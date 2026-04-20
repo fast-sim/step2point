@@ -56,7 +56,7 @@ def test_hdbscan_profile_distance_is_bounded():
     pytest.importorskip("sklearn")
     from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
 
-    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits="nn")
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits_handler="nn")
     for shower in Step2PointHDF5Reader(str(DATA_GAMMA), shower_limit=3).iter_showers():
         out = algo.compress(shower).shower
         d_long, d_rad = _profile_distance(shower, out)

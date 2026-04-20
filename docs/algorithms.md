@@ -62,7 +62,7 @@ Parameters:
 - `t_scale`: divide time (relative to the layer median) by this before clustering. Normalises the temporal dimension so it contributes meaningfully alongside the scaled spatial features. Only used when `t` is present (default: 1.0 ns)
 - `layer_extractor`: how to extract layer IDs from cell IDs. Can be a callable `f(cell_ids) -> layers`, a DD4hep ID encoding string (e.g. `"system:8,barrel:3,layer:19:9"`), or `None` to use the ODD default `(cell_id >> 19) & 0x1FF`
 
-Low energy deposits handling strategies (`low_energy_deposits`):
+Low energy deposits handling strategies (`low_energy_deposits_handler`):
 
 - `nn`: reassign low energy deposits to the nearest cluster (default, energy conserving)
 - `singleton`: each low energy deposit becomes its own cluster (energy conserving)

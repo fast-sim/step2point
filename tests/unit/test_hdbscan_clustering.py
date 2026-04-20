@@ -115,7 +115,7 @@ def test_hdbscan_repeated_cell_id():
 
 def test_hdbscan_compresses_and_preserves_energy():
     shower = _make_clustered_shower()
-    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits="nn")
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits_handler="nn")
     result = algo.compress(shower)
     assert result.shower.n_points < shower.n_points
     assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
@@ -139,17 +139,17 @@ def test_hdbscan_stats_are_populated():
     assert result.stats["compression_ratio"] < 1.0
 
 
-def test_hdbscan_low_energy_deposits_drop_may_lose_energy():
+def test_hdbscan_low_energy_deposits_handler_drop_may_lose_energy():
     shower = _make_clustered_shower()
-    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits="drop")
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits_handler="drop")
     result = algo.compress(shower)
     # drop may lose energy (ratio <= 1) or preserve it if there's no noise
     assert result.stats["energy_after"] <= result.stats["energy_before"] + 1e-6
 
 
-def test_hdbscan_low_energy_deposits_singleton():
+def test_hdbscan_low_energy_deposits_handler_singleton():
     shower = _make_clustered_shower()
-    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits="singleton")
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits_handler="singleton")
     result = algo.compress(shower)
     assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
 
@@ -182,9 +182,9 @@ def test_hdbscan_works_without_time():
     assert np.isclose(energy_ratio(shower_no_t, result.shower), 1.0, rtol=1e-6)
 
 
-def test_hdbscan_invalid_low_energy_deposits():
-    with pytest.raises(ValueError, match="low_energy_deposits"):
-        HDBSCANClustering(min_cluster_size=2, min_samples=1, low_energy_deposits="bad")
+def test_hdbscan_invalid_low_energy_deposits_handler():
+    with pytest.raises(ValueError, match="low_energy_deposits_handler"):
+        HDBSCANClustering(min_cluster_size=2, min_samples=1, low_energy_deposits_handler="bad")
 
 
 def test_hdbscan_custom_layer_extractor():
@@ -215,9 +215,9 @@ def test_hdbscan_no_subdetector_metadata():
     assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
 
 
-def test_hdbscan_low_energy_deposits_layer():
+def test_hdbscan_low_energy_deposits_handler_layer():
     shower = _make_clustered_shower()
-    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits="layer")
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits_handler="layer")
     result = algo.compress(shower)
     assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
 
@@ -251,7 +251,7 @@ def test_hdbscan_multiple_layers():
         t=np.concatenate([t1, t2]),
         cell_id=np.concatenate([cid1, cid2]),
     )
-    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits="nn")
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, low_energy_deposits_handler="nn")
     result = algo.compress(shower)
     assert result.shower.n_points < shower.n_points
     assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
@@ -261,7 +261,7 @@ def test_hdbscan_all_noise_fallback():
     """When min_cluster_size is larger than the slice, all points are noise."""
     shower = _make_clustered_shower(n_per_cluster=10)
     # min_cluster_size=100 forces HDBSCAN to label everything as noise
-    algo = HDBSCANClustering(min_cluster_size=100, min_samples=3, low_energy_deposits="nn")
+    algo = HDBSCANClustering(min_cluster_size=100, min_samples=3, low_energy_deposits_handler="nn")
     result = algo.compress(shower)
     # nn with no clusters bundles all noise in each layer into one cluster
     assert result.shower.n_points > 0
@@ -269,9 +269,9 @@ def test_hdbscan_all_noise_fallback():
 
 
 def test_hdbscan_all_noise_drop_loses_all_energy():
-    """When everything is noise and low_energy_deposits='drop', output is empty."""
+    """When everything is noise and low_energy_deposits_handler='drop', output is empty."""
     shower = _make_clustered_shower(n_per_cluster=10)
-    algo = HDBSCANClustering(min_cluster_size=100, min_samples=3, low_energy_deposits="drop")
+    algo = HDBSCANClustering(min_cluster_size=100, min_samples=3, low_energy_deposits_handler="drop")
     result = algo.compress(shower)
     assert result.shower.n_points == 0
     assert result.stats["energy_after"] == 0.0
