@@ -171,9 +171,13 @@ def plot_barrel_wireframe(
         xy_auto_bounds = _expand_bounds(*_collection_bounds(xy_segments, xy_polygons))
         zy_auto_bounds = _expand_bounds(*_collection_bounds(zy_segments, zy_polygons))
         x_bounds = xlim_points if xlim_points is not None else (xy_auto_bounds[0], xy_auto_bounds[1])
-        y_bounds = ylim_points if ylim_points is not None else (
-            min(xy_auto_bounds[2], zy_auto_bounds[2]),
-            max(xy_auto_bounds[3], zy_auto_bounds[3]),
+        y_bounds = (
+            ylim_points
+            if ylim_points is not None
+            else (
+                min(xy_auto_bounds[2], zy_auto_bounds[2]),
+                max(xy_auto_bounds[3], zy_auto_bounds[3]),
+            )
         )
         z_bounds = zlim_points if zlim_points is not None else (zy_auto_bounds[0], zy_auto_bounds[1])
         point_mask = (
