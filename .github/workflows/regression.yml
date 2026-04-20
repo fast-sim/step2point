@@ -24,45 +24,22 @@ jobs:
       - name: Generate validation plots
         run: |
           python examples/generate_validation_plots.py \
-            --input tests/data/tiny_showers.h5 \
+            --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
             --algorithm merge_within_cell \
             --outdir outputs/ci_validation_plots
-      - name: Generate detector cell plots
-        run: |
-          python examples/plot_detector_cells.py \
-            --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
-            --collection ECalBarrelCollection \
-            --draw-cells \
-            --overlay-input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
-            --overlay-shower-index 0 \
-            --outdir outputs/ci_detector_cells \
-            --zoom \
-            --module 9
-          python examples/plot_detector_cells.py \
-            --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
-            --collection ECalBarrelCollection \
-            --draw-cells \
-            --overlay-input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
-            --overlay-shower-index 0 \
-            --outdir outputs/ci_detector_cells \
-            --zoom \
-            --sensitive-only \
-            --module 9
       - name: Upload validation plots
         uses: actions/upload-artifact@v4
         with:
           name: validation-plots
           path: outputs/ci_validation_plots/
-      - name: Upload detector cell plots
-        uses: actions/upload-artifact@v4
-        with:
-          name: detector-cell-plots
-          path: outputs/ci_detector_cells/
 
   edm4hep-root-regression:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+      - name: Check out OpenDataDetector
+        run: |
+          git clone --depth 1 https://gitlab.cern.ch/acts/OpenDataDetector.git OpenDataDetector
       - name: Install Docker
         uses: docker/setup-buildx-action@v3
       - uses: cvmfs-contrib/github-action-cvmfs@v4
@@ -117,8 +94,42 @@ jobs:
               --algorithm merge_within_cell \
               --outdir outputs/ci_root_validation_plots
           '
+      - name: Generate detector cell plots from ROOT overlay
+        run: |
+          docker exec step2point-key4hep-regression /bin/bash -lc '
+            set -eo pipefail
+            cd /workspace
+            source /cvmfs/sw.hsf.org/key4hep/setup.sh
+            source .venv-key4hep/bin/activate
+            python examples/plot_detector_cells.py \
+              --compact-xml OpenDataDetector/xml/OpenDataDetector.xml \
+              --collection ECalBarrelCollection \
+              --draw-cells \
+              --overlay-input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_edm4hep.root \
+              --overlay-collections ECalBarrelCollection ECalEndcapCollection HCalBarrelCollection HCalEndcapCollection \
+              --overlay-shower-index 0 \
+              --outdir outputs/ci_detector_cells_root \
+              --zoom \
+              --module 9
+            python examples/plot_detector_cells.py \
+              --compact-xml OpenDataDetector/xml/OpenDataDetector.xml \
+              --collection ECalBarrelCollection \
+              --draw-cells \
+              --sensitive-only \
+              --overlay-input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_edm4hep.root \
+              --overlay-collections ECalBarrelCollection ECalEndcapCollection HCalBarrelCollection HCalEndcapCollection \
+              --overlay-shower-index 0 \
+              --outdir outputs/ci_detector_cells_root \
+              --zoom \
+              --module 9
+          '
       - name: Upload ROOT validation plots
         uses: actions/upload-artifact@v4
         with:
           name: root-validation-plots
           path: outputs/ci_root_validation_plots/
+      - name: Upload ROOT detector cell plots
+        uses: actions/upload-artifact@v4
+        with:
+          name: root-detector-cell-plots
+          path: outputs/ci_detector_cells_root/
