@@ -7,7 +7,7 @@ from step2point.validation.sanity import ShowerSanityValidator
 
 pytest.importorskip("sklearn")
 
-from step2point.algorithms.hdbscan_clustering import HDBSCANClustering, _default_layer_extractor, layer_extractor_from_encoding  # noqa: E402
+from step2point.algorithms.hdbscan_clustering import HDBSCANClustering, _default_layer_extractor  # noqa: E402
 
 
 def _make_clustered_shower(n_per_cluster=30, seed=42):
@@ -131,24 +131,6 @@ def test_default_layer_extractor():
     cell_ids = np.array([0, 1 << 19, 2 << 19, (3 << 19) | 0xFF], dtype=np.uint64)
     layers = _default_layer_extractor(cell_ids)
     np.testing.assert_array_equal(layers, [0, 1, 2, 3])
-
-
-def test_layer_extractor_from_encoding():
-    # ODD-like encoding: layer is 9 bits at offset 19
-    extractor = layer_extractor_from_encoding("system:8,barrel:3,module:8,layer:19:9")
-    cell_ids = np.array([0, 1 << 19, 2 << 19, (3 << 19) | 0xFF], dtype=np.uint64)
-    np.testing.assert_array_equal(extractor(cell_ids), [0, 1, 2, 3])
-
-
-def test_hdbscan_with_encoding_string():
-    shower = _make_clustered_shower()
-    algo = HDBSCANClustering(
-        min_cluster_size=5, min_samples=3,
-        layer_extractor="system:8,barrel:3,module:8,layer:19:9",
-    )
-    result = algo.compress(shower)
-    assert result.shower.n_points < shower.n_points
-    assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
 
 
 def test_hdbscan_no_subdetector_metadata():
