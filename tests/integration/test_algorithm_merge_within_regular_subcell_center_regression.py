@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from tests.integration.algorithm_regression_helpers import (
     REGULAR_SUBCELL_CENTER_REFERENCE,
     assert_showers_equal,
@@ -7,6 +9,8 @@ from tests.integration.algorithm_regression_helpers import (
     find_odd_xml,
     run_pipeline,
 )
+
+pytestmark = pytest.mark.odd_geometry
 
 
 def test_merge_within_regular_subcell_center_3x3_output_matches_reference(tmp_path):

@@ -38,6 +38,7 @@ pythonpath = ["src"]
 testpaths = ["tests"]
 markers = [
   "root: tests that require podio/edm4hep ROOT input",
+  "odd_geometry: tests that require an OpenDataDetector checkout",
 ]
 
 [tool.ruff]
