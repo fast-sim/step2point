@@ -88,7 +88,7 @@ def parse_args():
         type=float,
         nargs=2,
         metavar=("XMIN", "XMAX"),
-        help="Optional manual x-range for the XY view axes.",
+        help="Optional manual x-range for the XY and XZ view axes.",
     )
     parser.add_argument(
         "--ylim-axis",
@@ -102,7 +102,7 @@ def parse_args():
         type=float,
         nargs=2,
         metavar=("ZMIN", "ZMAX"),
-        help="Optional manual z-range for the ZY view axes.",
+        help="Optional manual z-range for the XZ and ZY view axes.",
     )
     parser.add_argument(
         "--xlim-points",
@@ -169,7 +169,7 @@ def main():
     scope = f"module_{args.module}" if selected_module is not None else "detector"
     label = "module_envelopes" if draw_modules else (f"layer_{args.layer}" if args.layer is not None else "all_layers")
     outpath = outdir / f"{args.collection.lower()}_{scope}_{label}_{mode}.{args.format}"
-    output_xy, output_zy = plot_barrel_wireframe(
+    output_xy, output_xz, output_zy = plot_barrel_wireframe(
         layout,
         outpath,
         layer_index=args.layer,
@@ -187,6 +187,7 @@ def main():
         zlim_points=tuple(args.zlim_points) if args.zlim_points else None,
     )
     print(f"wrote {output_xy}")
+    print(f"wrote {output_xz}")
     print(f"wrote {output_zy}")
 
 

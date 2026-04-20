@@ -505,13 +505,78 @@ def module_cell_strip_polygons_zy(
     return polygons
 
 
-def module_layer_outline_xy_zy(
+def module_cell_strip_polygons_xz(
     layout: BarrelLayout,
     layer_index: int,
     module_index: int | None = None,
-) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    sensitive_only: bool = False,
+) -> list[np.ndarray]:
+    layer = layout.layers[layer_index - 1]
+
+    polygons: list[np.ndarray] = []
+    module_pairs = list(zip(layer.module_angles_rad, layer.module_centers_xy_mm))
+    if module_index is not None:
+        module_pairs = [module_pairs[module_index - 1]]
+
+    cz = np.cos(layout.envelope_rotation_z_rad)
+    sz = np.sin(layout.envelope_rotation_z_rad)
+    envelope_rotation = np.array([[cz, -sz], [sz, cz]], dtype=np.float64)
+
+    radial_half_extent = layer.sensitive_half_thickness_mm if sensitive_only else layer.half_thickness_mm
+
+    max_x_index = int(np.ceil(layer.half_tangent_mm / layer.pitch_tangent_mm - 0.5))
+    x_centers = np.arange(-max_x_index, max_x_index + 1, dtype=np.int32) * layer.pitch_tangent_mm
+
+    for _, raw_center_xy in module_pairs:
+        center_xy = envelope_rotation @ np.array(raw_center_xy, dtype=np.float64)
+        radial = center_xy / np.linalg.norm(center_xy)
+        tangent = np.array([-radial[1], radial[0]], dtype=np.float64)
+        radial_center_xy = (
+            center_xy + (layer.sensitive_radius_mm - layout.sect_center_radius_mm) * radial
+            if sensitive_only
+            else center_xy + (layer.layer_center_radius_mm - layout.sect_center_radius_mm) * radial
+        )
+
+        corners_xy = np.array(
+            [
+                radial_center_xy - layer.half_tangent_mm * tangent - radial_half_extent * radial,
+                radial_center_xy + layer.half_tangent_mm * tangent - radial_half_extent * radial,
+                radial_center_xy + layer.half_tangent_mm * tangent + radial_half_extent * radial,
+                radial_center_xy - layer.half_tangent_mm * tangent + radial_half_extent * radial,
+            ],
+            dtype=np.float64,
+        )
+        xmin = float(np.min(corners_xy[:, 0]))
+        xmax = float(np.max(corners_xy[:, 0]))
+
+        for x_center in x_centers:
+            x0 = max(float(x_center - 0.5 * layer.pitch_tangent_mm), -layer.half_tangent_mm)
+            x1 = min(float(x_center + 0.5 * layer.pitch_tangent_mm), layer.half_tangent_mm)
+            if x1 <= x0:
+                continue
+            polygons.append(
+                np.array(
+                    [
+                        [xmin, x0],
+                        [xmax, x0],
+                        [xmax, x1],
+                        [xmin, x1],
+                    ],
+                    dtype=np.float64,
+                )
+            )
+
+    return polygons
+
+
+def module_layer_outline_xy_xz_zy(
+    layout: BarrelLayout,
+    layer_index: int,
+    module_index: int | None = None,
+) -> tuple[list[np.ndarray], list[np.ndarray], list[np.ndarray]]:
     layer = layout.layers[layer_index - 1]
     xy_segments: list[np.ndarray] = []
+    xz_segments: list[np.ndarray] = []
     zy_segments: list[np.ndarray] = []
     cross_section = np.array(
         [
@@ -538,11 +603,15 @@ def module_layer_outline_xy_zy(
         layer_center_xy = center_xy + radial_offset * radial
 
         xy_corners: list[np.ndarray] = []
+        front_face_xz: list[np.ndarray] = []
+        back_face_xz: list[np.ndarray] = []
         front_face: list[np.ndarray] = []
         back_face: list[np.ndarray] = []
         for tangent_local, radial_local in cross_section:
             xy = layer_center_xy + tangent_local * tangent + radial_local * radial
             xy_corners.append(xy)
+            front_face_xz.append(np.array([xy[0], +layer.half_z_mm], dtype=np.float64))
+            back_face_xz.append(np.array([xy[0], -layer.half_z_mm], dtype=np.float64))
             front_face.append(np.array([+layer.half_z_mm, xy[1]], dtype=np.float64))
             back_face.append(np.array([-layer.half_z_mm, xy[1]], dtype=np.float64))
 
@@ -555,14 +624,28 @@ def module_layer_outline_xy_zy(
             p1_front = front_face[(i + 1) % 4]
             p0_back = back_face[i]
             p1_back = back_face[(i + 1) % 4]
+            p0_front_xz = front_face_xz[i]
+            p1_front_xz = front_face_xz[(i + 1) % 4]
+            p0_back_xz = back_face_xz[i]
+            p1_back_xz = back_face_xz[(i + 1) % 4]
+            xz_segments.append(
+                np.array([[p0_front_xz[0], p0_front_xz[1]], [p1_front_xz[0], p1_front_xz[1]]], dtype=np.float64)
+            )
+            xz_segments.append(
+                np.array([[p0_back_xz[0], p0_back_xz[1]], [p1_back_xz[0], p1_back_xz[1]]], dtype=np.float64)
+            )
+            xz_segments.append(
+                np.array([[p0_back_xz[0], p0_back_xz[1]], [p0_front_xz[0], p0_front_xz[1]]], dtype=np.float64)
+            )
             zy_segments.append(np.array([[p0_front[0], p0_front[1]], [p1_front[0], p1_front[1]]], dtype=np.float64))
             zy_segments.append(np.array([[p0_back[0], p0_back[1]], [p1_back[0], p1_back[1]]], dtype=np.float64))
             zy_segments.append(np.array([[p0_back[0], p0_back[1]], [p0_front[0], p0_front[1]]], dtype=np.float64))
-    return xy_segments, zy_segments
+    return xy_segments, xz_segments, zy_segments
 
 
-def module_envelope_outline_xy_zy(layout: BarrelLayout) -> tuple[list[np.ndarray], list[np.ndarray]]:
+def module_envelope_outline_xy_xz_zy(layout: BarrelLayout) -> tuple[list[np.ndarray], list[np.ndarray], list[np.ndarray]]:
     xy_segments: list[np.ndarray] = []
+    xz_segments: list[np.ndarray] = []
     zy_segments: list[np.ndarray] = []
     inner_half = layout.inner_face_length_mm / 2.0
     outer_half = layout.outer_face_length_mm / 2.0
@@ -589,11 +672,15 @@ def module_envelope_outline_xy_zy(layout: BarrelLayout) -> tuple[list[np.ndarray
         tangent = np.array([-radial[1], radial[0]], dtype=np.float64)
 
         xy_corners: list[np.ndarray] = []
+        front_face_xz: list[np.ndarray] = []
+        back_face_xz: list[np.ndarray] = []
         front_face: list[np.ndarray] = []
         back_face: list[np.ndarray] = []
         for tangent_local, radial_local in cross_section:
             xy = center_xy + tangent_local * tangent + radial_local * radial
             xy_corners.append(xy)
+            front_face_xz.append(np.array([xy[0], +half_z], dtype=np.float64))
+            back_face_xz.append(np.array([xy[0], -half_z], dtype=np.float64))
             front_face.append(np.array([+half_z, xy[1]], dtype=np.float64))
             back_face.append(np.array([-half_z, xy[1]], dtype=np.float64))
 
@@ -606,10 +693,23 @@ def module_envelope_outline_xy_zy(layout: BarrelLayout) -> tuple[list[np.ndarray
             p1_front = front_face[(i + 1) % 4]
             p0_back = back_face[i]
             p1_back = back_face[(i + 1) % 4]
+            p0_front_xz = front_face_xz[i]
+            p1_front_xz = front_face_xz[(i + 1) % 4]
+            p0_back_xz = back_face_xz[i]
+            p1_back_xz = back_face_xz[(i + 1) % 4]
+            xz_segments.append(
+                np.array([[p0_front_xz[0], p0_front_xz[1]], [p1_front_xz[0], p1_front_xz[1]]], dtype=np.float64)
+            )
+            xz_segments.append(
+                np.array([[p0_back_xz[0], p0_back_xz[1]], [p1_back_xz[0], p1_back_xz[1]]], dtype=np.float64)
+            )
+            xz_segments.append(
+                np.array([[p0_back_xz[0], p0_back_xz[1]], [p0_front_xz[0], p0_front_xz[1]]], dtype=np.float64)
+            )
             zy_segments.append(np.array([[p0_front[0], p0_front[1]], [p1_front[0], p1_front[1]]], dtype=np.float64))
             zy_segments.append(np.array([[p0_back[0], p0_back[1]], [p1_back[0], p1_back[1]]], dtype=np.float64))
             zy_segments.append(np.array([[p0_back[0], p0_back[1]], [p0_front[0], p0_front[1]]], dtype=np.float64))
-    return xy_segments, zy_segments
+    return xy_segments, xz_segments, zy_segments
 
 
 def barrel_layout_debug_report(layout: BarrelLayout, max_layers: int = 5) -> str:

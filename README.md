@@ -272,7 +272,7 @@ Typical outputs are:
 - `shower_<id>_distributions.png`
 - `shower_<id>_overview.png`
 
-For detector-aware geometry inspection and shower overlays on module/layer/cell views, use [examples/plot_detector_cells.py](examples/plot_detector_cells.py:1). The detailed workflow and example screenshots are documented in [docs/validation.md](docs/validation.md:1).
+For detector-aware geometry inspection and shower overlays on module/layer/cell views, use [examples/plot_detector_cells.py](examples/plot_detector_cells.py:1). It writes `XY`, `XZ`, and `ZY` detector projections. The detailed workflow and example screenshots are documented in [docs/validation.md](docs/validation.md:1).
 
 ## [WIP] C++ backend
 
