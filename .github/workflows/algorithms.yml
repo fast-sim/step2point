@@ -1,0 +1,28 @@
+name: Algorithms
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  algorithm-regressions:
+    strategy:
+      matrix:
+        include:
+          - algorithm: identity
+            test_file: tests/integration/test_algorithm_identity_regression.py
+          - algorithm: merge_within_cell
+            test_file: tests/integration/test_algorithm_merge_within_cell_regression.py
+    runs-on: ubuntu-latest
+    name: ${{ matrix.algorithm }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+      - name: Run algorithm regression tests
+        run: pytest -q ${{ matrix.test_file }}

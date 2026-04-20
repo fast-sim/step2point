@@ -13,7 +13,7 @@ DATA = Path("tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10G
 MERGE_REFERENCE = Path("tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_merge_within_cell_reference.h5")
 
 
-def _run_pipeline(tmp_path: Path, algorithm: str) -> Path:
+def run_pipeline(tmp_path: Path, algorithm: str) -> Path:
     outdir = tmp_path / f"pipeline_out_{algorithm}"
     env = dict(os.environ)
     env["PYTHONPATH"] = "src" if "PYTHONPATH" not in env else f"src:{env['PYTHONPATH']}"
@@ -34,7 +34,7 @@ def _run_pipeline(tmp_path: Path, algorithm: str) -> Path:
     return outdir
 
 
-def _assert_showers_equal(left_path: Path, right_path: Path) -> None:
+def assert_showers_equal(left_path: Path, right_path: Path) -> None:
     left = list(Step2PointHDF5Reader(str(left_path)).iter_showers())
     right = list(Step2PointHDF5Reader(str(right_path)).iter_showers())
     assert len(left) == len(right)
@@ -57,26 +57,3 @@ def _assert_showers_equal(left_path: Path, right_path: Path) -> None:
             assert lhs.pdg is rhs.pdg
         else:
             np.testing.assert_array_equal(lhs.pdg, rhs.pdg)
-
-
-def test_run_step2point_pipeline_writes_hdf5(tmp_path: Path):
-    outdir = _run_pipeline(tmp_path, "identity")
-
-    output_h5 = outdir / "compressed_identity.h5"
-    summary = outdir / "compression_summary_identity.txt"
-    assert output_h5.exists()
-    assert summary.exists()
-
-    showers = list(Step2PointHDF5Reader(str(output_h5)).iter_showers())
-    assert len(showers) > 0
-    assert sum(shower.n_points for shower in showers) > 0
-
-
-def test_identity_output_matches_input(tmp_path: Path):
-    outdir = _run_pipeline(tmp_path, "identity")
-    _assert_showers_equal(DATA, outdir / "compressed_identity.h5")
-
-
-def test_merge_within_cell_output_matches_reference(tmp_path: Path):
-    outdir = _run_pipeline(tmp_path, "merge_within_cell")
-    _assert_showers_equal(MERGE_REFERENCE, outdir / "compressed_merge_within_cell.h5")
