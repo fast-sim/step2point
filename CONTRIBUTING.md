@@ -24,6 +24,16 @@ pytest -q
 
 If you work on the ROOT/EDM4hep path, use the Key4hep environment described in the README.
 
+Before adding new helpers, check whether the repo already has a reusable implementation you can build on.
+For example, DD4hep cell-id decoding now lives in:
+
+- `src/step2point/geometry/dd4hep/bitfield.py`
+
+Recommendation:
+
+- prefer reusing existing helpers where possible
+- if logic is currently buried inside one feature, extract it into a small reusable module instead of reimplementing it elsewhere
+
 ## Adding a new compression algorithm
 
 Put the implementation in:
@@ -172,4 +182,3 @@ When behavior changes:
 1. Update the relevant example command in docs.
 2. Update screenshots if the visible output changed.
 3. Keep docs concise and task-oriented.
-
