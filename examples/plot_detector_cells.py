@@ -70,7 +70,7 @@ def parse_args():
     draw_group.add_argument(
         "--draw-cells",
         action="store_true",
-        help="Draw internal cell grid. This is only supported together with --zoom.",
+        help="Draw internal cell grid. This requires --module to select one module.",
     )
     parser.add_argument(
         "--sensitive-only",
@@ -80,9 +80,9 @@ def parse_args():
     parser.add_argument(
         "--zoom",
         action="store_true",
-        help="Zoom to a single module. In zoom mode, cells are drawn only for that module.",
+        help="Zoom the view to a single module.",
     )
-    parser.add_argument("--module", type=int, default=1, help="1-based module index used with --zoom.")
+    parser.add_argument("--module", type=int, help="1-based module index used with --zoom or --draw-cells.")
     parser.add_argument(
         "--xlim-axis",
         type=float,
@@ -133,6 +133,11 @@ def parse_args():
         default=list(DEFAULT_ROOT_COLLECTIONS),
         help="EDM4hep SimCalorimeterHit collection names for ROOT overlay input.",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debugging additions such as decoded cell-id labels on overlay hits.",
+    )
     parser.add_argument("--verbose", action="store_true", help="Print detailed resolved geometry/debug information.")
     return parser.parse_args()
 
@@ -142,12 +147,12 @@ def main():
     layout = build_barrel_layout_from_collection(args.compact_xml, args.collection)
     if args.verbose:
         print(barrel_layout_debug_report(layout))
-    if args.zoom and not (1 <= args.module <= layout.numsides):
+    if args.module is not None and not (1 <= args.module <= layout.numsides):
         raise ValueError(f"--module must be in [1, {layout.numsides}] for {args.collection}")
-    if args.draw_modules and (args.layer is not None or args.zoom):
-        raise ValueError("--draw-modules cannot be combined with --layer or --zoom")
-    if args.draw_cells and not args.zoom:
-        raise ValueError("--draw-cells requires --zoom")
+    if args.draw_modules and (args.layer is not None or args.zoom or args.module is not None):
+        raise ValueError("--draw-modules cannot be combined with --layer, --zoom, or --module")
+    if args.draw_cells and args.module is None:
+        raise ValueError("--draw-cells requires --module")
     if args.sensitive_only and not args.draw_cells:
         raise ValueError("--sensitive-only requires --draw-cells")
 
@@ -160,7 +165,8 @@ def main():
     mode = "modules" if draw_modules else ("cells" if draw_cells else "layers")
     if draw_cells and args.sensitive_only:
         mode = f"{mode}_sensitive"
-    scope = f"module_{args.module}" if args.zoom else "detector"
+    selected_module = args.module if (args.zoom or draw_cells) else None
+    scope = f"module_{args.module}" if selected_module is not None else "detector"
     label = "module_envelopes" if draw_modules else (f"layer_{args.layer}" if args.layer is not None else "all_layers")
     outpath = outdir / f"{args.collection.lower()}_{scope}_{label}_{mode}.{args.format}"
     output_xy, output_zy = plot_barrel_wireframe(
@@ -169,9 +175,10 @@ def main():
         layer_index=args.layer,
         draw_cells=draw_cells,
         sensitive_only=args.sensitive_only,
-        module_index=args.module if args.zoom else None,
+        module_index=selected_module,
         modules_only=draw_modules,
         overlay_shower=overlay_shower,
+        annotate_cell_id=args.debug,
         xlim=tuple(args.xlim_axis) if args.xlim_axis else None,
         ylim=tuple(args.ylim_axis) if args.ylim_axis else None,
         zlim=tuple(args.zlim_axis) if args.zlim_axis else None,

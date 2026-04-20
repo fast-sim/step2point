@@ -105,6 +105,7 @@ class BarrelLayout:
     envelope_rotation_z_rad: float
     pitch_tangent_mm: float
     pitch_z_mm: float
+    cell_id_encoding: str
     layers: tuple[BarrelLayerGeometry, ...]
 
 
@@ -214,6 +215,9 @@ def build_barrel_layout_from_collection(main_xml: str | Path, collection_name: s
     seg = readout.find("segmentation")
     if seg is None or seg.attrib.get("type") != "CartesianGridXY":
         raise NotImplementedError("This prototype currently supports only barrel CartesianGridXY readouts")
+    id_encoding = (readout.findtext("id") or "").strip()
+    if not id_encoding:
+        raise ValueError(f"Readout {collection_name!r} does not define an <id> encoding")
 
     pitch_tangent = _eval_expr(seg.attrib["grid_size_x"], resolver.constants)
     pitch_z = _eval_expr(seg.attrib["grid_size_y"], resolver.constants)
@@ -295,10 +299,9 @@ def build_barrel_layout_from_collection(main_xml: str | Path, collection_name: s
         envelope_rotation_z_rad=float(np.pi / numsides),
         pitch_tangent_mm=float(pitch_tangent),
         pitch_z_mm=float(pitch_z),
+        cell_id_encoding=id_encoding,
         layers=tuple(layers),
     )
-
-
 def module_grid_lines_xy_zy(
     layout: BarrelLayout,
     layer_index: int,

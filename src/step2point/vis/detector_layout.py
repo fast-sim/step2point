@@ -7,6 +7,7 @@ import numpy as np
 from matplotlib.collections import LineCollection, PolyCollection
 
 from step2point.core.shower import Shower
+from step2point.geometry.dd4hep.bitfield import decode_dd4hep_cell_id
 from step2point.geometry.dd4hep.factory_geometry import (
     BarrelLayout,
     module_cell_strip_polygons_xy,
@@ -81,6 +82,7 @@ def plot_barrel_wireframe(
     module_index: int | None = None,
     modules_only: bool = False,
     overlay_shower: Shower | None = None,
+    annotate_cell_id: bool = False,
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
     zlim: tuple[float, float] | None = None,
@@ -188,6 +190,15 @@ def plot_barrel_wireframe(
             & (overlay_shower.z >= z_bounds[0])
             & (overlay_shower.z <= z_bounds[1])
         )
+        if annotate_cell_id and module_index is not None and overlay_shower.cell_id is not None:
+            module_mask = np.array(
+                [
+                    decode_dd4hep_cell_id(int(cell_id), layout.cell_id_encoding).get("module") == module_index
+                    for cell_id in overlay_shower.cell_id
+                ],
+                dtype=bool,
+            )
+            point_mask &= module_mask
         if draw_cells and module_index is not None:
             reference_layer_index = layer_index if layer_index is not None else 1
             sensor_thickness = 2.0 * layout.layers[reference_layer_index - 1].sensitive_half_thickness_mm
@@ -219,6 +230,45 @@ def plot_barrel_wireframe(
             linewidths=0.0,
             zorder=3,
         )
+        if annotate_cell_id and overlay_shower.cell_id is not None:
+            selected_indices = np.flatnonzero(point_mask)
+            if selected_indices.size:
+                first_decoded = decode_dd4hep_cell_id(
+                    int(overlay_shower.cell_id[selected_indices[0]]),
+                    layout.cell_id_encoding,
+                )
+                label_fields = tuple(
+                    field
+                    for field in ("module", "layer", "x", "y", "z")
+                    if field in first_decoded
+                )
+            else:
+                label_fields = ()
+            for idx in selected_indices:
+                decoded = decode_dd4hep_cell_id(int(overlay_shower.cell_id[idx]), layout.cell_id_encoding)
+                label = ", ".join(f"{field}={decoded[field]}" for field in label_fields if field in decoded)
+                if not label:
+                    continue
+                ax_xy.annotate(
+                    label,
+                    (float(overlay_shower.x[idx]), float(overlay_shower.y[idx])),
+                    xytext=(3, 3),
+                    textcoords="offset points",
+                    fontsize=6,
+                    color="black",
+                    alpha=0.8,
+                    zorder=4,
+                )
+                ax_zy.annotate(
+                    label,
+                    (float(overlay_shower.z[idx]), float(overlay_shower.y[idx])),
+                    xytext=(3, 3),
+                    textcoords="offset points",
+                    fontsize=6,
+                    color="black",
+                    alpha=0.8,
+                    zorder=4,
+                )
     ax_xy.set_xlabel("x (mm)")
     ax_xy.set_ylabel("y (mm)")
     ax_zy.set_xlabel("z (mm)")
