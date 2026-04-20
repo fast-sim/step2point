@@ -59,9 +59,10 @@ class HDBSCANClustering(CompressionAlgorithm):
     """Density-based clustering of calorimeter step deposits.
 
     Deposits are partitioned by (subdetector, layer) and clustered within
-    each partition using HDBSCAN on scaled (x, y, t) features.  Each
-    cluster is then merged into a single point: energy-weighted centroid
-    position, summed energy, minimum time.
+    each partition using HDBSCAN on scaled (x, y) features, optionally
+    including time (t) when available.  Each cluster is then merged into
+    a single point: energy-weighted centroid position, summed energy,
+    minimum time.
 
     Parameters
     ----------
@@ -70,18 +71,31 @@ class HDBSCANClustering(CompressionAlgorithm):
     min_samples : int
         HDBSCAN ``min_samples`` parameter.
     cluster_selection_epsilon : float
-        HDBSCAN ``cluster_selection_epsilon``.  Values > 0 add DBSCAN-like
-        behaviour that prevents very small clusters from being split.
+        HDBSCAN builds a hierarchy of clusters at different density
+        levels and by default (epsilon=0) picks the most persistent ones,
+        which can produce many small, high-density clusters.  When
+        epsilon > 0, clusters separated by a distance below this threshold
+        are merged rather than split, producing fewer, larger clusters.
+        A small value (e.g. 0.5 - 1.0 in scaled feature space) prevents
+        over-fragmenting dense shower cores while still separating
+        genuinely distinct deposits.
     low_energy_deposits : str
         Strategy for low-energy deposits that HDBSCAN labels as noise:
-        ``"nn"`` -- reassign to the nearest cluster (default, energy-conserving).
-        ``"singleton"`` -- each deposit becomes its own cluster.
-        ``"layer"`` -- all unclustered deposits in a layer are bundled into one cluster.
-        ``"drop"`` -- discard (loses energy).
+        ``"nn"``: reassign to the nearest cluster (default, energy-conserving).
+        ``"singleton"``: each deposit becomes its own cluster.
+        ``"layer"``: all unclustered deposits in a layer are bundled into one cluster.
+        ``"drop"``: discard (loses energy).
     xy_scale : float
         Divide x, y coordinates by this value before clustering (mm).
+        Normalises spatial distances so that 1.0 in scaled space
+        corresponds to roughly one cell width, putting spatial and
+        temporal features on comparable footing.  The value is
+        detector-specific (default 5.0 mm matches ODD calorimeter cells).
     t_scale : float
         Divide (t - layer median) by this value before clustering (ns).
+        Normalises the temporal dimension so it contributes meaningfully
+        alongside the scaled spatial features.  Only used when time is
+        present in the input shower.
     layer_extractor : callable, str, or None
         How to extract layer IDs from cell IDs.  Can be a callable
         ``f(cell_ids: ndarray) -> ndarray``, a DD4hep ID encoding string

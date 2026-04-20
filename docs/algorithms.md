@@ -49,25 +49,25 @@ Requires:
 
 Optional:
 
-- `t` (time) -- when present, used as a third clustering feature alongside x and y
+- `t` (time): when present, used as a third clustering feature alongside x and y
 
 This algorithm clusters deposits using HDBSCAN within each (subdetector, layer) partition. Deposits are first partitioned by (subdetector, layer) where the layer is extracted from the cell ID using a bit-extraction function (defaulting to the ODD layout: 9 bits at bit 19). Within each partition the x/y coordinates are divided by a spatial scale (default 5 mm, roughly one cell width). If time is available, it is expressed relative to the layer median and divided by a temporal scale (default 1 ns), and HDBSCAN clusters on all three scaled features (x, y, t); otherwise it clusters on (x, y) only. Low energy deposits (label -1) are handled according to a configurable strategy: reassign to the nearest cluster ("nn"), promote each to its own singleton cluster ("singleton"), bundle all layer noise into one cluster ("layer"), or discard ("drop").
 
 Parameters:
 
-- `min_cluster_size` -- HDBSCAN minimum cluster size (required)
-- `min_samples` -- HDBSCAN minimum samples for core points (required)
-- `cluster_selection_epsilon` -- values > 0 add DBSCAN-like behaviour (default: 0)
-- `xy_scale` -- divide x, y coordinates by this before clustering (default: 5.0 mm)
-- `t_scale` -- divide time by this before clustering (default: 1.0 ns)
-- `layer_extractor` -- callable to extract layer from cell_id (default: ODD bit layout)
+- `min_cluster_size`: HDBSCAN minimum cluster size (required)
+- `min_samples`: HDBSCAN minimum samples for core points (required)
+- `cluster_selection_epsilon`: HDBSCAN builds a hierarchy of clusters at different density levels and by default (epsilon=0) picks the most persistent ones, which can produce many small, high-density clusters. When epsilon > 0, clusters separated by a distance below this threshold are merged rather than split, producing fewer, larger clusters. A small value (e.g. 0.5 - 1.0 in scaled feature space) prevents over-fragmenting dense shower cores while still separating distinct deposits (default: 0)
+- `xy_scale`: divide x, y coordinates by this before clustering. This normalises spatial distances so that 1.0 in scaled space corresponds to roughly one cell width, putting spatial and temporal features on comparable magnitudes for HDBSCAN. The value is detector-specific (default: 5.0 mm, matching the ODD calorimeter cell size)
+- `t_scale`: divide time (relative to the layer median) by this before clustering. Normalises the temporal dimension so it contributes meaningfully alongside the scaled spatial features. Only used when `t` is present (default: 1.0 ns)
+- `layer_extractor`: how to extract layer IDs from cell IDs. Can be a callable `f(cell_ids) -> layers`, a DD4hep ID encoding string (e.g. `"system:8,barrel:3,layer:19:9"`), or `None` to use the ODD default `(cell_id >> 19) & 0x1FF`
 
 Low energy deposits handling strategies (`low_energy_deposits`):
 
-- `nn` -- reassign noise to the nearest cluster (default, energy-conserving)
-- `singleton` -- each noise point becomes its own cluster (energy-conserving)
-- `layer` -- all noise in a layer is bundled into one cluster (energy-conserving)
-- `drop` -- discard noise points (loses energy)
+- `nn`: reassign low energy deposits to the nearest cluster (default, energy conserving)
+- `singleton`: each low energy deposit becomes its own cluster (energy conserving)
+- `layer`: all low energy deposits in a layer is bundled into one cluster (energy conserving)
+- `drop`: discard low energy deposits (loses energy)
 
 TODO:
 
