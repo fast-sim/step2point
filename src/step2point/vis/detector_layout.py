@@ -208,9 +208,13 @@ def plot_barrel_wireframe(
         xy_auto_bounds = _expand_bounds(*_collection_bounds(xy_segments, xy_polygons))
         xz_auto_bounds = _expand_bounds(*_collection_bounds(xz_segments, xz_polygons))
         zy_auto_bounds = _expand_bounds(*_collection_bounds(zy_segments, zy_polygons))
-        x_bounds = xlim_points if xlim_points is not None else (
-            min(xy_auto_bounds[0], xz_auto_bounds[0]),
-            max(xy_auto_bounds[1], xz_auto_bounds[1]),
+        x_bounds = (
+            xlim_points
+            if xlim_points is not None
+            else (
+                min(xy_auto_bounds[0], xz_auto_bounds[0]),
+                max(xy_auto_bounds[1], xz_auto_bounds[1]),
+            )
         )
         y_bounds = (
             ylim_points
@@ -289,11 +293,7 @@ def plot_barrel_wireframe(
                     int(overlay_shower.cell_id[selected_indices[0]]),
                     layout.cell_id_encoding,
                 )
-                label_fields = tuple(
-                    field
-                    for field in ("module", "layer", "x", "y", "z")
-                    if field in first_decoded
-                )
+                label_fields = tuple(field for field in ("module", "layer", "x", "y", "z") if field in first_decoded)
             else:
                 label_fields = ()
             for idx in selected_indices:

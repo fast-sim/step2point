@@ -102,12 +102,8 @@ def main():
         source_input=args.input,
     )
     n_showers = len(compression_stats)
-    mean_points_before = (
-        sum(float(stats["n_points_before"]) for stats in compression_stats) / n_showers if n_showers else 0.0
-    )
-    mean_points_after = (
-        sum(float(stats["n_points_after"]) for stats in compression_stats) / n_showers if n_showers else 0.0
-    )
+    mean_points_before = sum(float(stats["n_points_before"]) for stats in compression_stats) / n_showers if n_showers else 0.0
+    mean_points_after = sum(float(stats["n_points_after"]) for stats in compression_stats) / n_showers if n_showers else 0.0
     mean_compression_ratio = (
         sum(float(stats["compression_ratio"]) for stats in compression_stats) / n_showers if n_showers else 0.0
     )

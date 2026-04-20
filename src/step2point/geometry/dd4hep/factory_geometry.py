@@ -344,6 +344,8 @@ def barrel_cell_center(
     xy = sensitive_center_xy + float(cell_x) * layer.pitch_tangent_mm * tangent
     z = float(cell_y) * layer.pitch_z_mm
     return np.array([xy[0], xy[1], z], dtype=np.float64)
+
+
 def module_grid_lines_xy_zy(
     layout: BarrelLayout,
     layer_index: int,
@@ -628,15 +630,9 @@ def module_layer_outline_xy_xz_zy(
             p1_front_xz = front_face_xz[(i + 1) % 4]
             p0_back_xz = back_face_xz[i]
             p1_back_xz = back_face_xz[(i + 1) % 4]
-            xz_segments.append(
-                np.array([[p0_front_xz[0], p0_front_xz[1]], [p1_front_xz[0], p1_front_xz[1]]], dtype=np.float64)
-            )
-            xz_segments.append(
-                np.array([[p0_back_xz[0], p0_back_xz[1]], [p1_back_xz[0], p1_back_xz[1]]], dtype=np.float64)
-            )
-            xz_segments.append(
-                np.array([[p0_back_xz[0], p0_back_xz[1]], [p0_front_xz[0], p0_front_xz[1]]], dtype=np.float64)
-            )
+            xz_segments.append(np.array([[p0_front_xz[0], p0_front_xz[1]], [p1_front_xz[0], p1_front_xz[1]]], dtype=np.float64))
+            xz_segments.append(np.array([[p0_back_xz[0], p0_back_xz[1]], [p1_back_xz[0], p1_back_xz[1]]], dtype=np.float64))
+            xz_segments.append(np.array([[p0_back_xz[0], p0_back_xz[1]], [p0_front_xz[0], p0_front_xz[1]]], dtype=np.float64))
             zy_segments.append(np.array([[p0_front[0], p0_front[1]], [p1_front[0], p1_front[1]]], dtype=np.float64))
             zy_segments.append(np.array([[p0_back[0], p0_back[1]], [p1_back[0], p1_back[1]]], dtype=np.float64))
             zy_segments.append(np.array([[p0_back[0], p0_back[1]], [p0_front[0], p0_front[1]]], dtype=np.float64))
@@ -697,15 +693,9 @@ def module_envelope_outline_xy_xz_zy(layout: BarrelLayout) -> tuple[list[np.ndar
             p1_front_xz = front_face_xz[(i + 1) % 4]
             p0_back_xz = back_face_xz[i]
             p1_back_xz = back_face_xz[(i + 1) % 4]
-            xz_segments.append(
-                np.array([[p0_front_xz[0], p0_front_xz[1]], [p1_front_xz[0], p1_front_xz[1]]], dtype=np.float64)
-            )
-            xz_segments.append(
-                np.array([[p0_back_xz[0], p0_back_xz[1]], [p1_back_xz[0], p1_back_xz[1]]], dtype=np.float64)
-            )
-            xz_segments.append(
-                np.array([[p0_back_xz[0], p0_back_xz[1]], [p0_front_xz[0], p0_front_xz[1]]], dtype=np.float64)
-            )
+            xz_segments.append(np.array([[p0_front_xz[0], p0_front_xz[1]], [p1_front_xz[0], p1_front_xz[1]]], dtype=np.float64))
+            xz_segments.append(np.array([[p0_back_xz[0], p0_back_xz[1]], [p1_back_xz[0], p1_back_xz[1]]], dtype=np.float64))
+            xz_segments.append(np.array([[p0_back_xz[0], p0_back_xz[1]], [p0_front_xz[0], p0_front_xz[1]]], dtype=np.float64))
             zy_segments.append(np.array([[p0_front[0], p0_front[1]], [p1_front[0], p1_front[1]]], dtype=np.float64))
             zy_segments.append(np.array([[p0_back[0], p0_back[1]], [p1_back[0], p1_back[1]]], dtype=np.float64))
             zy_segments.append(np.array([[p0_back[0], p0_back[1]], [p0_front[0], p0_front[1]]], dtype=np.float64))

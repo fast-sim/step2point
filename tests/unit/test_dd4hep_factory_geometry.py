@@ -44,15 +44,7 @@ def test_parse_dd4hep_id_encoding_signed_fields():
 
 def test_decode_dd4hep_cell_id_signed_values():
     encoding = "system:8,barrel:3,module:4,layer:6,slice:5,x:32:-16,y:-16"
-    cell_id = (
-        10
-        | (1 << 8)
-        | (9 << 11)
-        | (12 << 15)
-        | (3 << 21)
-        | ((5 & 0xFFFF) << 32)
-        | ((-7 & 0xFFFF) << 48)
-    )
+    cell_id = 10 | (1 << 8) | (9 << 11) | (12 << 15) | (3 << 21) | ((5 & 0xFFFF) << 32) | ((-7 & 0xFFFF) << 48)
     decoded = decode_dd4hep_cell_id(cell_id, encoding)
     assert decoded["system"] == 10
     assert decoded["barrel"] == 1

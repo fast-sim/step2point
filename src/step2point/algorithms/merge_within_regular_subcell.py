@@ -24,10 +24,7 @@ def _subcell_indices(offset: np.ndarray, pitch: float, bins: int) -> np.ndarray:
 
 def _subcell_center(parent_index: np.ndarray, sub_index: np.ndarray, pitch: float, bins: int) -> np.ndarray:
     sub_pitch = pitch / bins
-    return (
-        parent_index.astype(np.float64) * pitch
-        + (-0.5 * pitch + (sub_index.astype(np.float64) + 0.5) * sub_pitch)
-    )
+    return parent_index.astype(np.float64) * pitch + (-0.5 * pitch + (sub_index.astype(np.float64) + 0.5) * sub_pitch)
 
 
 class MergeWithinRegularSubcell(CompressionAlgorithm):

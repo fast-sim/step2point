@@ -44,12 +44,7 @@ def _simple_layout() -> BarrelLayout:
 
 
 def _cell_id(module: int, layer: int, cell_x: int, cell_y: int) -> np.uint64:
-    value = (
-        (module & 0xF)
-        | ((layer & 0xF) << 4)
-        | ((cell_x & 0xFF) << 16)
-        | ((cell_y & 0xFF) << 24)
-    )
+    value = (module & 0xF) | ((layer & 0xF) << 4) | ((cell_x & 0xFF) << 16) | ((cell_y & 0xFF) << 24)
     return np.uint64(value)
 
 
