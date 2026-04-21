@@ -45,7 +45,7 @@ def parse_args():
     parser.add_argument(
         "--hdbscan-algorithm",
         choices=["auto", "brute", "kd_tree", "ball_tree"],
-        default="kd_tree",
+        default="brute",
         help="HDBSCAN tree-building algorithm."
     )
     parser.add_argument("--n-jobs", type=int, default=1, help="Number of parallel jobs for HDBSCAN (-1 for all cores).")
