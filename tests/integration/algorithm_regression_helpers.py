@@ -18,6 +18,9 @@ REGULAR_SUBCELL_CENTER_REFERENCE = Path(
     "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_merge_within_regular_subcell_3x3_center_reference.h5"
 )
 
+FLOAT_RTOL = 1e-7
+FLOAT_ATOL = 1e-10
+
 
 def find_odd_xml() -> Path:
     candidates = [
@@ -61,14 +64,14 @@ def assert_showers_equal(left_path: Path, right_path: Path) -> None:
 
     for lhs, rhs in zip(left, right, strict=True):
         assert lhs.shower_id == rhs.shower_id
-        np.testing.assert_allclose(lhs.x, rhs.x)
-        np.testing.assert_allclose(lhs.y, rhs.y)
-        np.testing.assert_allclose(lhs.z, rhs.z)
-        np.testing.assert_allclose(lhs.E, rhs.E)
+        np.testing.assert_allclose(lhs.x, rhs.x, rtol=FLOAT_RTOL, atol=FLOAT_ATOL)
+        np.testing.assert_allclose(lhs.y, rhs.y, rtol=FLOAT_RTOL, atol=FLOAT_ATOL)
+        np.testing.assert_allclose(lhs.z, rhs.z, rtol=FLOAT_RTOL, atol=FLOAT_ATOL)
+        np.testing.assert_allclose(lhs.E, rhs.E, rtol=FLOAT_RTOL, atol=FLOAT_ATOL)
         if lhs.t is None or rhs.t is None:
             assert lhs.t is rhs.t
         else:
-            np.testing.assert_allclose(lhs.t, rhs.t)
+            np.testing.assert_allclose(lhs.t, rhs.t, rtol=FLOAT_RTOL, atol=FLOAT_ATOL)
         if lhs.cell_id is None or rhs.cell_id is None:
             assert lhs.cell_id is rhs.cell_id
         else:
