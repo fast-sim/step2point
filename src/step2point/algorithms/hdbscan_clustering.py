@@ -76,6 +76,10 @@ class HDBSCANClustering(CompressionAlgorithm):
         ``f(cell_ids: ndarray) -> ndarray``, a DD4hep ID encoding string
         (e.g. ``"system:8,barrel:3,layer:19:9"``), or ``None`` to use
         the ODD default ``(cell_id >> 19) & 0x1FF``.
+    n_jobs : int
+        Number of parallel jobs for HDBSCAN and nearest-neighbour queries.
+        ``-1`` uses all cores (default).  ``1`` forces single-threaded
+        execution, which guarantees deterministic results across runs.
     """
 
     name = "hdbscan_clustering"
@@ -89,6 +93,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         xy_scale: float = 5.0,
         t_scale: float = 1.0,
         layer_extractor: Callable[[np.ndarray], np.ndarray] | str | None = None,
+        n_jobs: int = -1,
     ) -> None:
         if low_energy_deposits_handler not in {"drop", "singleton", "layer", "nn"}:
             raise ValueError(
@@ -100,6 +105,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         self.low_energy_deposits_handler = low_energy_deposits_handler
         self.xy_scale = xy_scale
         self.t_scale = t_scale
+        self.n_jobs = n_jobs
         if isinstance(layer_extractor, str):
             from step2point.geometry.dd4hep.bitfield import extract_field
 
@@ -168,7 +174,7 @@ class HDBSCANClustering(CompressionAlgorithm):
                     min_cluster_size=self.min_cluster_size,
                     min_samples=self.min_samples,
                     cluster_selection_epsilon=self.cluster_selection_epsilon,
-                    n_jobs=-1,
+                    n_jobs=self.n_jobs,
                     copy=False,
                 )
                 predicted = model.fit_predict(features)
@@ -182,7 +188,7 @@ class HDBSCANClustering(CompressionAlgorithm):
                     total_clusters += n_new
                     if np.any(is_noise):
                         if self.low_energy_deposits_handler == "nn":
-                            nn = NearestNeighbors(n_neighbors=1, n_jobs=-1)
+                            nn = NearestNeighbors(n_neighbors=1, n_jobs=self.n_jobs)
                             nn.fit(features[is_cluster])
                             _, idx = nn.kneighbors(features[is_noise])
                             predicted[is_noise] = predicted[is_cluster][idx.ravel()]

@@ -42,6 +42,7 @@ def parse_args():
         default="nn",
         help="Strategy for low-energy deposits in HDBSCAN.",
     )
+    parser.add_argument("--n-jobs", type=int, default=1, help="Number of parallel jobs for HDBSCAN (-1 for all cores).")
     parser.add_argument("--compact-xml", help="DD4hep compact XML required by geometry-aware algorithms.")
     parser.add_argument("--collection-name", help="DD4hep readout collection name required by geometry-aware algorithms.")
     parser.add_argument("--grid-x", type=int, default=2, help="Number of regular subdivisions along local cell x.")
@@ -86,6 +87,7 @@ def main():
             min_samples=args.min_samples,
             cluster_selection_epsilon=args.epsilon,
             low_energy_deposits_handler=args.low_energy_deposits_handler,
+            n_jobs=args.n_jobs,
         )
     else:
         if args.compact_xml is None or args.collection_name is None:
