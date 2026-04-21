@@ -131,40 +131,17 @@ def assert_summary_equals(summary_path: Path, case: str) -> None:
             "total_compression_ratio=0.182859\n"
             "output_hdf5=compressed_merge_within_regular_subcell.h5\n"
         ),
+        "hdbscan_clustering": (
+            "compression_stats=10\n"
+            "validation_results=30\n"
+            "mean_n_points_before=3582.000000\n"
+            "mean_n_points_after=266.400000\n"
+            "mean_compression_ratio=0.074382\n"
+            "total_n_points_before=35820\n"
+            "total_n_points_after=2664\n"
+            "total_compression_ratio=0.074372\n"
+            "output_hdf5=compressed_hdbscan_clustering.h5\n"
+        ),
     }
     expected = expected_by_case[case]
     assert summary_path.read_text() == expected
-
-
-def assert_summary_approx(summary_path: Path, case: str, rtol: float = 0.05) -> None:
-    """Like assert_summary_equals but with numeric tolerance.
-
-    String fields (e.g. output_hdf5) are compared exactly.
-    Numeric fields are compared with the given rtol to absorb
-    platform-dependent non-determinism in algorithms like HDBSCAN.
-    """
-    expected_by_case = {
-        "hdbscan_clustering": {
-            "compression_stats": "10",
-            "validation_results": "30",
-            "mean_n_points_before": 3582.0,
-            "mean_n_points_after": 266.4,
-            "mean_compression_ratio": 0.074382,
-            "total_n_points_before": 35820,
-            "total_n_points_after": 2664,
-            "total_compression_ratio": 0.074372,
-            "output_hdf5": "compressed_hdbscan_clustering.h5",
-        },
-    }
-    expected = expected_by_case[case]
-    actual = dict(line.split("=", 1) for line in summary_path.read_text().strip().splitlines())
-
-    for key, expected_val in expected.items():
-        assert key in actual, f"Missing key {key!r} in summary"
-        if isinstance(expected_val, str):
-            assert actual[key] == expected_val, f"{key}: {actual[key]!r} != {expected_val!r}"
-        else:
-            actual_num = float(actual[key])
-            assert np.isclose(actual_num, expected_val, rtol=rtol), (
-                f"{key}: {actual_num} != {expected_val} (rtol={rtol})"
-            )
