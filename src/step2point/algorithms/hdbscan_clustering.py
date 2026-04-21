@@ -76,10 +76,16 @@ class HDBSCANClustering(CompressionAlgorithm):
         ``f(cell_ids: ndarray) -> ndarray``, a DD4hep ID encoding string
         (e.g. ``"system:8,barrel:3,layer:19:9"``), or ``None`` to use
         the ODD default ``(cell_id >> 19) & 0x1FF``.
+    algorithm : str
+        HDBSCAN tree-building algorithm: ``"auto"``, ``"brute"``,
+        ``"kd_tree"``, or ``"ball_tree"`` (default ``"auto"``).
+        ``"auto"`` lets sklearn choose based on input size.  Fixing
+        the algorithm (e.g. ``"kd_tree"``) can improve cross-platform
+        reproducibility by avoiding dispatch differences.
     n_jobs : int
         Number of parallel jobs for HDBSCAN and nearest-neighbour queries.
         ``-1`` uses all cores (default).  ``1`` forces single-threaded
-        execution, which guarantees deterministic results across runs.
+        execution, which improves reproducibility across runs.
     """
 
     name = "hdbscan_clustering"
@@ -93,6 +99,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         xy_scale: float = 5.0,
         t_scale: float = 1.0,
         layer_extractor: Callable[[np.ndarray], np.ndarray] | str | None = None,
+        algorithm: str = "auto",
         n_jobs: int = -1,
     ) -> None:
         if low_energy_deposits_handler not in {"drop", "singleton", "layer", "nn"}:
@@ -105,6 +112,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         self.low_energy_deposits_handler = low_energy_deposits_handler
         self.xy_scale = xy_scale
         self.t_scale = t_scale
+        self.algorithm = algorithm
         self.n_jobs = n_jobs
         if isinstance(layer_extractor, str):
             from step2point.geometry.dd4hep.bitfield import extract_field
@@ -174,6 +182,7 @@ class HDBSCANClustering(CompressionAlgorithm):
                     min_cluster_size=self.min_cluster_size,
                     min_samples=self.min_samples,
                     cluster_selection_epsilon=self.cluster_selection_epsilon,
+                    algorithm=self.algorithm,
                     n_jobs=self.n_jobs,
                     copy=False,
                 )

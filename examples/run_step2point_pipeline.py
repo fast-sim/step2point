@@ -42,6 +42,7 @@ def parse_args():
         default="nn",
         help="Strategy for low-energy deposits in HDBSCAN.",
     )
+    parser.add_argument("--hdbscan-algorithm", choices=["auto", "brute", "kd_tree", "ball_tree"], default="auto", help="HDBSCAN tree-building algorithm.")
     parser.add_argument("--n-jobs", type=int, default=1, help="Number of parallel jobs for HDBSCAN (-1 for all cores).")
     parser.add_argument("--compact-xml", help="DD4hep compact XML required by geometry-aware algorithms.")
     parser.add_argument("--collection-name", help="DD4hep readout collection name required by geometry-aware algorithms.")
@@ -87,6 +88,7 @@ def main():
             min_samples=args.min_samples,
             cluster_selection_epsilon=args.epsilon,
             low_energy_deposits_handler=args.low_energy_deposits_handler,
+            algorithm=args.hdbscan_algorithm,
             n_jobs=args.n_jobs,
         )
     else:

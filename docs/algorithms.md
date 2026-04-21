@@ -61,6 +61,8 @@ Parameters:
 - `xy_scale`: divide x, y coordinates by this before clustering. This normalises spatial distances so that 1.0 in scaled space corresponds to roughly one cell width, putting spatial and temporal features on comparable magnitudes for HDBSCAN. The value is detector-specific (default: 5.0 mm, matching the ODD calorimeter cell size)
 - `t_scale`: divide time (relative to the layer median) by this before clustering. Normalises the temporal dimension so it contributes meaningfully alongside the scaled spatial features. Only used when `t` is present (default: 1.0 ns)
 - `layer_extractor`: how to extract layer IDs from cell IDs. Can be a callable `f(cell_ids) -> layers`, a DD4hep ID encoding string (e.g. `"system:8,barrel:3,layer:19:9"`), or `None` to use the ODD default `(cell_id >> 19) & 0x1FF`
+- `algorithm`: HDBSCAN tree-building algorithm -- `"auto"` (default), `"brute"`, `"kd_tree"`, or `"ball_tree"`. `"auto"` lets sklearn choose based on input size. Fixing the algorithm (e.g. `"kd_tree"`) can improve cross-platform reproducibility by avoiding dispatch differences
+- `n_jobs`: number of parallel jobs for HDBSCAN and nearest-neighbour queries. `-1` uses all cores (default). `1` forces single-threaded execution, which improves reproducibility across runs
 
 Low energy deposits handling strategies (`low_energy_deposits_handler`):
 
