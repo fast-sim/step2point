@@ -54,7 +54,7 @@ def test_merge_within_cell_profile_distance_is_small_on_tiny_sample():
 def test_hdbscan_profile_distance_is_bounded():
     from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
 
-    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3)
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, use_time=True)
     for shower in Step2PointHDF5Reader(str(DATA_GAMMA), shower_limit=3).iter_showers():
         out = algo.compress(shower).shower
         d_long, d_rad = _profile_distance(shower, out)

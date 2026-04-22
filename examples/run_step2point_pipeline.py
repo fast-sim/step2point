@@ -42,6 +42,7 @@ def parse_args():
         default="brute",
         help="HDBSCAN tree-building algorithm."
     )
+    parser.add_argument("--use-time", action="store_true", help="Include time as a clustering feature in HDBSCAN.")
     parser.add_argument("--n-jobs", type=int, default=1, help="Number of parallel jobs for HDBSCAN (-1 for all cores).")
     parser.add_argument("--compact-xml", help="DD4hep compact XML required by geometry-aware algorithms.")
     parser.add_argument("--collection-name", help="DD4hep readout collection name required by geometry-aware algorithms.")
@@ -86,6 +87,7 @@ def main():
             min_cluster_size=args.min_cluster_size,
             min_samples=args.min_samples,
             cluster_selection_epsilon=args.epsilon,
+            use_time=args.use_time,
             algorithm=args.hdbscan_algorithm,
             n_jobs=args.n_jobs,
         )
