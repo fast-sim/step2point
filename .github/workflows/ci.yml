@@ -36,6 +36,9 @@ jobs:
         run: pytest -q tests/unit
       - name: Integration tests
         run: pytest -q tests/integration -m "not root and not odd_geometry"
+      - name: Debug HDBSCAN summary
+        if: always()
+        run: cat /tmp/pytest-of-runner/pytest-*/test_hdbscan_clustering_output0/pipeline_out_hdbscan_clustering/compression_summary_hdbscan_clustering.txt || true
       - name: Physics sanity tests
         run: pytest -q tests/physics
 
