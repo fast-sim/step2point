@@ -56,9 +56,10 @@ class HDBSCANClustering(CompressionAlgorithm):
     xy_scale : float
         Divide x, y coordinates by this value before clustering (mm).
         Normalises spatial distances so that 1.0 in scaled space
-        corresponds to roughly one cell width, putting spatial and
-        temporal features on comparable footing.  The value is
-        detector-specific (default 5.0 mm matches ODD calorimeter cells).
+        corresponds to roughly one cell width.  When ``use_time`` is
+        True, this also ensures spatial and temporal features are on
+        comparable magnitudes.  The value is detector-specific
+        (default 5.0 mm matches ODD calorimeter cells).
     t_scale : float
         Divide (t - layer median) by this value before clustering (ns).
         Normalises the temporal dimension so it contributes meaningfully
