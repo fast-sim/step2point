@@ -11,7 +11,6 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import numpy as np
-
 from sklearn.cluster import HDBSCAN as SklearnHDBSCAN
 from sklearn.neighbors import NearestNeighbors
 

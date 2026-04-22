@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from step2point.algorithms.identity import IdentityCompression
 from step2point.algorithms.merge_within_cell import MergeWithinCell
