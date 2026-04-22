@@ -6,8 +6,6 @@ from step2point.core.shower import Shower
 from step2point.metrics.energy import energy_ratio
 from step2point.validation.sanity import ShowerSanityValidator
 
-pytest.importorskip("sklearn")
-
 
 def _make_clustered_shower(n_per_cluster=30, seed=42):
     """Two well-separated blobs in x,y within the same layer (layer 1)."""

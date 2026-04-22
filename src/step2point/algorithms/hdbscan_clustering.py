@@ -4,9 +4,6 @@ This algorithm clusters deposits using HDBSCAN within each (subdetector,
 layer) partition. Features are scaled x, y coordinates and, when available,
 time relative to the layer median. Each cluster is merged into a single
 point: energy-weighted centroid position, summed energy, minimum time.
-
-
-Requires ``scikit-learn`` (install via ``pip install step2point[hdbscan]``).
 """
 
 from __future__ import annotations
@@ -14,6 +11,9 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import numpy as np
+
+from sklearn.cluster import HDBSCAN as SklearnHDBSCAN
+from sklearn.neighbors import NearestNeighbors
 
 from step2point.algorithms.base import CompressionAlgorithm
 from step2point.core.results import CompressionResult
@@ -118,25 +118,11 @@ class HDBSCANClustering(CompressionAlgorithm):
         else:
             self.layer_extractor = layer_extractor or _default_layer_extractor
 
-    @staticmethod
-    def _import_sklearn():
-        try:
-            from sklearn.cluster import HDBSCAN as SklearnHDBSCAN
-            from sklearn.neighbors import NearestNeighbors
-        except ImportError as exc:
-            raise ImportError(
-                "HDBSCANClustering requires scikit-learn. "
-                "Install it with: pip install step2point[hdbscan]"
-            ) from exc
-        return SklearnHDBSCAN, NearestNeighbors
-
     def compress(self, shower: Shower) -> CompressionResult:
         if shower.cell_id is None:
             raise ValueError("HDBSCANClustering requires cell_id for layer extraction.")
         if self.use_time and shower.t is None:
             raise ValueError("use_time=True but shower has no time data.")
-
-        SklearnHDBSCAN, NearestNeighbors = self._import_sklearn()
 
         layers = self.layer_extractor(shower.cell_id)
         subdetectors = shower.metadata.get("subdetector")

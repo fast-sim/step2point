@@ -53,7 +53,6 @@ def test_merge_within_cell_profile_distance_is_small_on_tiny_sample():
 
 
 def test_hdbscan_profile_distance_is_bounded():
-    pytest.importorskip("sklearn")
     from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
 
     algo = HDBSCANClustering(min_cluster_size=5, min_samples=3)

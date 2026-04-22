@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import pytest
-
 from tests.integration.algorithm_regression_helpers import (
     HDBSCAN_REFERENCE,
     assert_showers_equal,
     assert_summary_equals,
     run_pipeline,
 )
-
-pytest.importorskip("sklearn")
 
 
 def test_hdbscan_clustering_output_matches_reference(tmp_path):

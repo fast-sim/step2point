@@ -5,10 +5,7 @@ from step2point.algorithms.merge_within_cell import MergeWithinCell
 from step2point.algorithms.merge_within_regular_subcell import MergeWithinRegularSubcell
 from step2point.core.shower import Shower
 
-try:
-    from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
-except ImportError:
-    pass
+from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
 
 try:
     __version__ = version("step2point")

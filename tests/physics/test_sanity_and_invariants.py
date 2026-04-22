@@ -53,7 +53,6 @@ def test_merge_within_cell_preserves_total_energy_and_cell_spectrum():
 
 
 def test_hdbscan_preserves_total_energy_and_reduces_points():
-    pytest.importorskip("sklearn")
     from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
 
     validator = ShowerSanityValidator()

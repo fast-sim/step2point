@@ -45,7 +45,6 @@ This algorithm first subdivides each detector cell into a regular `x/N` by `y/M`
 Requires:
 
 - `cell_id` defined for each deposit (for layer extraction)
-- `scikit-learn` installed (`pip install step2point[hdbscan]`)
 
 Optional:
 
