@@ -167,6 +167,33 @@ def test_hdbscan_works_without_time():
     assert np.isclose(energy_ratio(shower_no_t, result.shower), 1.0, rtol=1e-6)
 
 
+def test_hdbscan_use_time_true_requires_time():
+    shower = _make_clustered_shower()
+    shower_no_t = Shower(
+        shower_id=shower.shower_id,
+        x=shower.x, y=shower.y, z=shower.z, E=shower.E,
+        cell_id=shower.cell_id,
+    )
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, use_time=True)
+    with pytest.raises(ValueError, match="use_time"):
+        algo.compress(shower_no_t)
+
+
+def test_hdbscan_use_time_false_ignores_time():
+    """use_time=False clusters on (x, y) only even when time is present."""
+    shower = _make_clustered_shower()
+    assert shower.t is not None
+    algo_with_t = HDBSCANClustering(min_cluster_size=5, min_samples=3, use_time=True)
+    algo_without_t = HDBSCANClustering(min_cluster_size=5, min_samples=3, use_time=False)
+    result_with = algo_with_t.compress(shower)
+    result_without = algo_without_t.compress(shower)
+    # Both conserve energy
+    assert np.isclose(energy_ratio(shower, result_with.shower), 1.0, rtol=1e-6)
+    assert np.isclose(energy_ratio(shower, result_without.shower), 1.0, rtol=1e-6)
+    # use_time=False should still output time (min per cluster)
+    assert result_without.shower.t is not None
+
+
 def test_hdbscan_custom_layer_extractor():
     shower = _make_clustered_shower()
     # Use a trivial layer extractor that puts everything in layer 0

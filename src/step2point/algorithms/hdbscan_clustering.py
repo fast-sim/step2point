@@ -64,18 +64,23 @@ class HDBSCANClustering(CompressionAlgorithm):
         Divide (t - layer median) by this value before clustering (ns).
         Normalises the temporal dimension so it contributes meaningfully
         alongside the scaled spatial features.  Only used when time is
-        present in the input shower.
+        present and ``use_time`` is True.
+    use_time : bool
+        Whether to include time as a clustering feature (default False).
+        When True, time must be present in the input shower or a
+        ``ValueError`` is raised.
     layer_extractor : callable, str, or None
         How to extract layer IDs from cell IDs.  Can be a callable
         ``f(cell_ids: ndarray) -> ndarray``, a DD4hep ID encoding string
         (e.g. ``"system:8,barrel:3,layer:19:9"``), or ``None`` to use
         the ODD default ``(cell_id >> 19) & 0x1FF``.
     algorithm : str
-        HDBSCAN tree-building algorithm: ``"auto"``, ``"brute"``,
-        ``"kd_tree"``, or ``"ball_tree"`` (default ``"auto"``).
-        ``"auto"`` lets sklearn choose based on input size.  Fixing
-        the algorithm (e.g. ``"kd_tree"``) can improve cross-platform
-        reproducibility by avoiding dispatch differences.
+        Internal neighbour-search method used by scikit-learn's HDBSCAN:
+        `"auto"` (default), `"brute"`, `"kd_tree"`, or `"ball_tree"`
+        (default: `"auto"`). Use `"brute"` for the most reproducible
+        reference outputs across machines. `"auto"` may choose different
+        methods depending on the environment, which can slightly change
+        cluster boundaries and therefore the compressed output.
     n_jobs : int
         Number of parallel jobs for HDBSCAN and nearest-neighbour queries.
         ``-1`` uses all cores (default).  ``1`` forces single-threaded
@@ -91,6 +96,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         cluster_selection_epsilon: float = 0.0,
         xy_scale: float = 5.0,
         t_scale: float = 1.0,
+        use_time: bool = False,
         layer_extractor: Callable[[np.ndarray], np.ndarray] | str | None = None,
         algorithm: str = "auto",
         n_jobs: int = -1,
@@ -100,6 +106,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         self.cluster_selection_epsilon = cluster_selection_epsilon
         self.xy_scale = xy_scale
         self.t_scale = t_scale
+        self.use_time = use_time
         self.algorithm = algorithm
         self.n_jobs = n_jobs
         if isinstance(layer_extractor, str):
@@ -126,6 +133,8 @@ class HDBSCANClustering(CompressionAlgorithm):
     def compress(self, shower: Shower) -> CompressionResult:
         if shower.cell_id is None:
             raise ValueError("HDBSCANClustering requires cell_id for layer extraction.")
+        if self.use_time and shower.t is None:
+            raise ValueError("use_time=True but shower has no time data.")
 
         SklearnHDBSCAN, NearestNeighbors = self._import_sklearn()
 
@@ -158,7 +167,7 @@ class HDBSCANClustering(CompressionAlgorithm):
                 xy = np.stack([shower.x[global_mask], shower.y[global_mask]], axis=1).astype(np.float32)
                 xy_scaled = xy / self.xy_scale
 
-                if shower.t is not None:
+                if self.use_time and shower.t is not None:
                     t_layer = shower.t[global_mask].astype(np.float32)
                     t_median = np.median(t_layer)
                     t_scaled = ((t_layer - t_median) / self.t_scale).reshape(-1, 1)
