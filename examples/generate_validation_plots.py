@@ -51,12 +51,6 @@ def main():
     parser.add_argument("--min-samples", type=int, default=3, help="HDBSCAN min_samples.")
     parser.add_argument("--epsilon", type=float, default=0.0, help="HDBSCAN cluster_selection_epsilon.")
     parser.add_argument(
-        "--low-energy-deposits-handler",
-        choices=["nn", "singleton", "layer", "drop"],
-        default="nn",
-        help="Strategy for low-energy deposits in HDBSCAN.",
-    )
-    parser.add_argument(
         "--hdbscan-algorithm",
         choices=["auto", "brute", "kd_tree", "ball_tree"],
         default="brute",
@@ -88,7 +82,6 @@ def main():
             min_cluster_size=args.min_cluster_size,
             min_samples=args.min_samples,
             cluster_selection_epsilon=args.epsilon,
-            low_energy_deposits_handler=args.low_energy_deposits_handler,
             algorithm=args.hdbscan_algorithm,
             n_jobs=args.n_jobs,
         )

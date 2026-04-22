@@ -51,7 +51,7 @@ Optional:
 
 - `t` (time): when present, used as a third clustering feature alongside x and y
 
-This algorithm clusters deposits using HDBSCAN within each (subdetector, layer) partition. Deposits are first partitioned by (subdetector, layer) where the layer is extracted from the cell ID using a bit-extraction function (defaulting to the ODD layout: 9 bits at bit 19). Within each partition the x/y coordinates are divided by a spatial scale (default 5 mm, roughly one cell width). If time is available, it is expressed relative to the layer median and divided by a temporal scale (default 1 ns), and HDBSCAN clusters on all three scaled features (x, y, t); otherwise it clusters on (x, y) only. Low energy deposits (label -1) are handled according to a configurable strategy: reassign to the nearest cluster ("nn"), promote each to its own singleton cluster ("singleton"), bundle all layer noise into one cluster ("layer"), or discard ("drop").
+This algorithm clusters deposits using HDBSCAN within each (subdetector, layer) partition. Deposits are first partitioned by (subdetector, layer) where the layer is extracted from the cell ID using a bit-extraction function (defaulting to the ODD layout: 9 bits at bit 19). Within each partition the x/y coordinates are divided by a spatial scale (default 5 mm, roughly one cell width). If time is available, it is expressed relative to the layer median and divided by a temporal scale (default 1 ns), and HDBSCAN clusters on all three scaled features (x, y, t); otherwise it clusters on (x, y) only. Deposits that HDBSCAN labels as noise (label -1) are reassigned to their nearest cluster, ensuring energy conservation.
 
 Parameters:
 
@@ -63,13 +63,6 @@ Parameters:
 - `layer_extractor`: how to extract layer IDs from cell IDs. Can be a callable `f(cell_ids) -> layers`, a DD4hep ID encoding string (e.g. `"system:8,barrel:3,layer:19:9"`), or `None` to use the ODD default `(cell_id >> 19) & 0x1FF`
 - `algorithm`: HDBSCAN tree-building algorithm -- `"auto"` (default), `"brute"`, `"kd_tree"`, or `"ball_tree"`. `"auto"` lets sklearn choose based on input size. Fixing the algorithm (e.g. `"kd_tree"`) can improve cross-platform reproducibility by avoiding dispatch differences
 - `n_jobs`: number of parallel jobs for HDBSCAN and nearest-neighbour queries. `-1` uses all cores (default). `1` forces single-threaded execution, which improves reproducibility across runs
-
-Low energy deposits handling strategies (`low_energy_deposits_handler`):
-
-- `nn`: reassign low energy deposits to the nearest cluster (default, energy conserving)
-- `singleton`: each low energy deposit becomes its own cluster (energy conserving)
-- `layer`: all low energy deposits in a layer is bundled into one cluster (energy conserving)
-- `drop`: discard low energy deposits (loses energy)
 
 TODO:
 
