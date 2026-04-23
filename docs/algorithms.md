@@ -48,9 +48,9 @@ Requires:
 
 Optional:
 
-- `t` (time): when present, used as a third clustering feature alongside x and y
+- `t` (time): when used (and present), used as a third clustering feature alongside x and y
 
-This algorithm clusters deposits using HDBSCAN within each (subdetector, layer) partition. Deposits are first partitioned by (subdetector, layer) where the layer is extracted from the cell ID using a bit-extraction function (defaulting to the ODD layout: 9 bits at bit 19). Within each partition the x/y coordinates are divided by a spatial scale (default 5 mm, roughly one cell width). If time is available, it is expressed relative to the layer median and divided by a temporal scale (default 1 ns), and HDBSCAN clusters on all three scaled features (x, y, t); otherwise it clusters on (x, y) only. Deposits that HDBSCAN labels as noise (label -1) are reassigned to their nearest cluster, ensuring energy conservation.
+This algorithm clusters deposits using HDBSCAN within each (subdetector, layer) partition. Deposits are first partitioned by (subdetector, layer) where the layer is extracted from the cell ID using a bit-extraction function (defaulting to the ODD layout: 9 bits at bit 19). Within each partition the x/y coordinates are divided by a spatial scale (default 5 mm, roughly one cell width). If time is used (and available), it is expressed relative to the layer median and divided by a temporal scale (default 1 ns), and HDBSCAN clusters on all three scaled features (x, y, t); otherwise it clusters on (x, y) only. Deposits that HDBSCAN labels as noise (label -1) are reassigned to their nearest cluster, ensuring energy conservation.
 
 Parameters:
 

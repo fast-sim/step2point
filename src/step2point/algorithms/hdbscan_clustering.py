@@ -1,9 +1,10 @@
 """HDBSCAN density-based clustering of calorimeter step deposits.
 
 This algorithm clusters deposits using HDBSCAN within each (subdetector,
-layer) partition. Features are scaled x, y coordinates and, when available,
-time relative to the layer median. Each cluster is merged into a single
-point: energy-weighted centroid position, summed energy, minimum time.
+layer) partition. Features are scaled x, y coordinates and, is used (
+and if available), time relative to the layer median. Each cluster is
+merged into a single point: energy-weighted centroid position, summed
+energy, minimum time.
 """
 
 from __future__ import annotations
@@ -34,9 +35,9 @@ class HDBSCANClustering(CompressionAlgorithm):
 
     Deposits are partitioned by (subdetector, layer) and clustered within
     each partition using HDBSCAN on scaled (x, y) features, optionally
-    including time (t) when available.  Each cluster is then merged into
-    a single point: energy-weighted centroid position, summed energy,
-    minimum time.
+    including time (t) (if ``use_time`` is True).  Each cluster is then
+    merged into a single point: energy-weighted centroid position, summed
+    energy, minimum time.
 
     Parameters
     ----------
