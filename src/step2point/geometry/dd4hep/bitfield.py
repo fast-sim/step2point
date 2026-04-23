@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
+
 
 @dataclass(frozen=True, slots=True)
 class CellIDField:
@@ -42,3 +44,22 @@ def decode_dd4hep_cell_id(cell_id: int, id_encoding: str) -> dict[str, int]:
             raw_value -= 1 << field.width
         decoded[field.name] = int(raw_value)
     return decoded
+
+
+def extract_field(cell_ids: np.ndarray, id_encoding: str, field_name: str = "layer") -> np.ndarray:
+    """Extract a single field from an array of cell IDs (vectorized).
+
+    Parameters
+    ----------
+    cell_ids : np.ndarray
+        Array of cell IDs.
+    id_encoding : str
+        DD4hep cell ID encoding string.
+    field_name : str
+        Name of the field to extract.
+    """
+    fields = parse_dd4hep_id_encoding(id_encoding)
+    for f in fields:
+        if f.name == field_name:
+            return (cell_ids.astype(np.int64) >> f.offset) & ((1 << f.width) - 1)
+    raise ValueError(f"Field {field_name!r} not found in encoding. Available: {[f.name for f in fields]}")
