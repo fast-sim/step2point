@@ -19,6 +19,8 @@ jobs:
             test_file: tests/integration/test_algorithm_merge_within_regular_subcell_center_regression.py
           - algorithm: hdbscan_clustering
             test_file: tests/integration/test_algorithm_hdbscan_regression.py
+          - algorithm: cluster_within_cell
+            test_file: tests/integration/test_algorithm_cluster_within_cell_regression.py
     runs-on: ubuntu-latest
     name: ${{ matrix.algorithm }}
     steps:

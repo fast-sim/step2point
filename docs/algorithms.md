@@ -68,3 +68,24 @@ TODO:
 
 - [ ] C++ backend. The core HDBSCAN clustering is handled by scikit-learn (Cython/C), so the Python path already gets compiled performance for the hot loop. A native C++ implementation would require either reimplementing HDBSCAN or linking a C++ library.
 - [ ] GPU acceleration via scikit-learn's [Array API support](https://scikit-learn.org/stable/modules/array_api.html). This would allow HDBSCAN to run on GPU arrays (e.g. CuPy, PyTorch) for larger datasets. Needs investigation into whether the step2point backends API (currently Python and C++ only) should be extended to cover compute backends, or if this should be handled transparently within the Python algorithm.
+
+## Clustering within a cell
+
+> cluster_within_cell
+
+Requires:
+
+- `cell_id` defined for each deposit
+
+Optional:
+
+- `t` (time): when present, the minimum time per cluster is preserved in the output
+
+This algorithm groups deposits by `cell_id` and runs a user-supplied clustering algorithm within each cell. The number of output points per cell is determined by the clusterer (adaptive K), not fixed in advance. Each cluster is merged into a single point: energy-weighted centroid position, summed energy, minimum time. Output `cell_id` is preserved (all deposits in a cluster share the same cell by construction).
+
+A good starting point is `AgglomerativeClustering(n_clusters=None, distance_threshold=1.0)` from scikit-learn, which merges deposits closer than 1 mm. This is physically motivated (the threshold maps to detector resolution) and deterministic.
+
+Parameters:
+
+- `clusterer`: any sklearn-compatible estimator that implements `fit_predict(X) -> labels` (required, no default)
+- `n_jobs`: number of parallel jobs for per-cell clustering. `1` (default) runs sequentially. `-1` uses all available cores

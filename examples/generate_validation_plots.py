@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from step2point.algorithms.cluster_within_cell import ClusterWithinCell
 from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
 from step2point.algorithms.identity import IdentityCompression
 from step2point.algorithms.merge_within_cell import MergeWithinCell
@@ -44,7 +45,7 @@ def main():
     )
     parser.add_argument(
         "--algorithm",
-        choices=["identity", "merge_within_cell", "merge_within_regular_subcell", "hdbscan_clustering"],
+        choices=["identity", "merge_within_cell", "merge_within_regular_subcell", "hdbscan_clustering", "cluster_within_cell"],
         default="merge_within_cell",
     )
     parser.add_argument("--min-cluster-size", type=int, default=5, help="HDBSCAN min_cluster_size.")
@@ -57,7 +58,9 @@ def main():
         help="HDBSCAN tree-building algorithm."
     )
     parser.add_argument("--use-time", action="store_true", help="Include time as a clustering feature in HDBSCAN.")
-    parser.add_argument("--n-jobs", type=int, default=1, help="Number of parallel jobs for HDBSCAN (-1 for all cores).")
+    parser.add_argument("--n-jobs", type=int, default=1, help="Number of parallel jobs (-1 for all cores).")
+    parser.add_argument("--distance-threshold", type=float, default=1.0, help="ClusterWithinCell distance threshold (mm).")
+    parser.add_argument("--n-jobs-cells", type=int, default=1, help="ClusterWithinCell parallel jobs across cells.")
     parser.add_argument("--compact-xml", help="DD4hep compact XML required by geometry-aware algorithms.")
     parser.add_argument("--collection-name", help="DD4hep readout collection name required by geometry-aware algorithms.")
     parser.add_argument("--grid-x", type=int, default=2, help="Number of regular subdivisions along local cell x.")
@@ -85,6 +88,13 @@ def main():
             cluster_selection_epsilon=args.epsilon,
             use_time=args.use_time,
             algorithm=args.hdbscan_algorithm,
+            n_jobs=args.n_jobs,
+        )
+    elif args.algorithm == "cluster_within_cell":
+        from sklearn.cluster import AgglomerativeClustering
+
+        algorithm = ClusterWithinCell(
+            clusterer=AgglomerativeClustering(n_clusters=None, distance_threshold=args.distance_threshold),
             n_jobs=args.n_jobs,
         )
     else:
