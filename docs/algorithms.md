@@ -77,15 +77,11 @@ Requires:
 
 - `cell_id` defined for each deposit
 
-Optional:
-
-- `t` (time): when present, the minimum time per cluster is preserved in the output
-
 This algorithm groups deposits by `cell_id` and runs a user-supplied clustering algorithm within each cell. The number of output points per cell is determined by the clusterer (adaptive K), not fixed in advance. Each cluster is merged into a single point: energy-weighted centroid position, summed energy, minimum time. Output `cell_id` is preserved (all deposits in a cluster share the same cell by construction).
 
 A good starting point is `AgglomerativeClustering(n_clusters=None, distance_threshold=1.0)` from scikit-learn, which merges deposits closer than 1 mm. This is physically motivated (the threshold maps to detector resolution) and deterministic.
 
 Parameters:
 
-- `clusterer`: any sklearn-compatible estimator that implements `fit_predict(X) -> labels` (required, no default)
+- `clusterer`: any scikit-learn-compatible estimator that implements `fit_predict(X) -> labels` (required, no default)
 - `n_jobs`: number of parallel jobs for per-cell clustering. `1` (default) runs sequentially. `-1` uses all available cores

@@ -1,9 +1,9 @@
 """Adaptive clustering of deposits within each detector cell.
 
 This algorithm groups deposits by ``cell_id`` and runs a pluggable
-sklearn-compatible clusterer within each cell.  The number of output
+scikit-learn-compatible clusterer within each cell. The number of output
 points per cell is determined by the clusterer (adaptive K), not fixed
-in advance.  Each cluster is merged into a single point: energy-weighted
+in advance. Each cluster is merged into a single point: energy-weighted
 centroid position, summed energy, minimum time.
 """
 
@@ -19,14 +19,18 @@ from step2point.core.shower import Shower
 
 
 def _cluster_one_cell(clusterer, positions: np.ndarray) -> np.ndarray:
-    """Cluster a single cell's positions, returning integer labels."""
+    """Cluster a single cell's positions, returning integer labels.
+
+    Module-level (not a method) so that joblib can pickle it for
+    process-based parallelism.
+    """
     if len(positions) <= 1:
         return np.zeros(len(positions), dtype=np.int64)
     try:
         return clone(clusterer).fit_predict(positions)
     except ValueError:
         # Clusterer can't handle this group (e.g. KMeans with
-        # n_clusters > n_points).  Each point becomes its own cluster.
+        # n_clusters > n_points). Each point becomes its own cluster.
         return np.arange(len(positions), dtype=np.int64)
 
 
@@ -34,21 +38,21 @@ class ClusterWithinCell(CompressionAlgorithm):
     """Adaptive clustering of deposits within each detector cell.
 
     Deposits are grouped by ``cell_id``, then a user-supplied clusterer
-    is run on the 3-D positions within each cell.  The clusterer decides
-    how many sub-clusters to produce (adaptive K).  Each cluster is
+    is run on the 3-D positions within each cell. The clusterer decides
+    how many sub-clusters to produce (adaptive K). Each cluster is
     merged into a single point: energy-weighted centroid position,
     summed energy, minimum time.
 
     Parameters
     ----------
     clusterer
-        Any sklearn-compatible estimator that implements
-        ``fit_predict(X) -> labels``.  A good starting point is
+        Any scikit-learn-compatible estimator that implements
+        ``fit_predict(X) -> labels``. A good starting point is
         ``AgglomerativeClustering(n_clusters=None, distance_threshold=1.0)``
         which merges deposits closer than 1 mm.
     n_jobs : int
-        Number of parallel jobs for per-cell clustering.  ``1``
-        (default) runs sequentially.  ``-1`` uses all available cores.
+        Number of parallel jobs for per-cell clustering. ``1``
+        (default) runs sequentially. ``-1`` uses all available cores.
     """
 
     name = "cluster_within_cell"
@@ -85,10 +89,9 @@ class ClusterWithinCell(CompressionAlgorithm):
                 },
             )
 
-        # --- Group by cell_id (same as MergeWithinCell) ---
         unique_cells, cell_inverse = np.unique(shower.cell_id, return_inverse=True)
 
-        # --- Per-cell clustering (parallelised over cells) ---
+        # Per-cell clustering (parallelised over cells)
         cell_indices_list = [np.where(cell_inverse == ci)[0] for ci in range(len(unique_cells))]
         cell_positions = [
             np.stack([shower.x[idx], shower.y[idx], shower.z[idx]], axis=1).astype(np.float64)
@@ -110,7 +113,6 @@ class ClusterWithinCell(CompressionAlgorithm):
             global_labels[cell_indices] = label_remap[local_labels]
             total_clusters += len(unique_local)
 
-        # --- Vectorized merge (same bincount pattern as MergeWithinCell) ---
         _, inverse = np.unique(global_labels, return_inverse=True)
         n = total_clusters
 
