@@ -64,37 +64,12 @@ class ClusterWithinCell(CompressionAlgorithm):
     def compress(self, shower: Shower) -> CompressionResult:
         if shower.cell_id is None:
             raise ValueError("ClusterWithinCell requires cell_id.")
-
-        if shower.n_points == 0:
-            out = Shower(
-                shower_id=shower.shower_id,
-                x=np.empty(0, dtype=np.float32),
-                y=np.empty(0, dtype=np.float32),
-                z=np.empty(0, dtype=np.float32),
-                E=np.empty(0, dtype=np.float32),
-                t=np.empty(0, dtype=np.float32) if shower.t is not None else None,
-                cell_id=np.empty(0, dtype=np.uint64),
-                primary=shower.primary,
-                metadata={**shower.metadata, "algorithm": self.name},
-            )
-            return CompressionResult(
-                shower=out,
-                algorithm=self.name,
-                stats={
-                    "n_points_before": 0,
-                    "n_points_after": 0,
-                    "compression_ratio": 0.0,
-                    "energy_before": 0.0,
-                    "energy_after": 0.0,
-                },
-            )
-
         unique_cells, cell_inverse = np.unique(shower.cell_id, return_inverse=True)
 
         # Per-cell clustering (parallelised over cells)
         cell_indices_list = [np.where(cell_inverse == ci)[0] for ci in range(len(unique_cells))]
         cell_positions = [
-            np.stack([shower.x[idx], shower.y[idx], shower.z[idx]], axis=1).astype(np.float64)
+            np.stack([shower.x[idx], shower.y[idx], shower.z[idx]], axis=1)
             for idx in cell_indices_list
         ]
 
@@ -116,17 +91,15 @@ class ClusterWithinCell(CompressionAlgorithm):
         _, inverse = np.unique(global_labels, return_inverse=True)
         n = total_clusters
 
-        E64 = shower.E.astype(np.float64)
-        e_sum = np.bincount(inverse, weights=E64, minlength=n)
+        e_sum = np.bincount(inverse, weights=shower.E, minlength=n)
         safe_e = np.where(e_sum > 0.0, e_sum, 1.0)
-        out_x = np.bincount(inverse, weights=shower.x.astype(np.float64) * E64, minlength=n) / safe_e
-        out_y = np.bincount(inverse, weights=shower.y.astype(np.float64) * E64, minlength=n) / safe_e
-        out_z = np.bincount(inverse, weights=shower.z.astype(np.float64) * E64, minlength=n) / safe_e
+        out_x = np.bincount(inverse, weights=shower.x * shower.E, minlength=n) / safe_e
+        out_y = np.bincount(inverse, weights=shower.y * shower.E, minlength=n) / safe_e
+        out_z = np.bincount(inverse, weights=shower.z * shower.E, minlength=n) / safe_e
 
         if shower.t is not None:
-            out_t = np.full(n, np.inf)
-            np.minimum.at(out_t, inverse, shower.t.astype(np.float64))
-            out_t = out_t.astype(np.float32)
+            out_t = np.full(n, np.inf, dtype=np.float32)
+            np.minimum.at(out_t, inverse, shower.t)
         else:
             out_t = None
 
