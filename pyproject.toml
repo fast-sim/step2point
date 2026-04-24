@@ -43,6 +43,8 @@ testpaths = ["tests"]
 markers = [
   "root: tests that require podio/edm4hep ROOT input",
   "odd_geometry: tests that require an OpenDataDetector checkout",
+  "strict_regression: exact reference regression tests",
+  "loose_regression: range- and invariant-based regression tests for nondeterministic algorithms",
 ]
 
 [tool.ruff]

@@ -70,6 +70,10 @@ Current conventions:
 
 - `identity` is checked against the original input
 - every non-identity algorithm should have a committed reference output and a dedicated regression test
+- deterministic algorithms should use a `strict_regression` test with exact output/reference checks
+- nondeterministic (on different hardware/OS) algorithms should add:
+  - a `loose_regression` test that checks stable invariants such as point-count range, compression level, and energy conservation
+  - a `strict_regression` test for the pinned reference CI job only
 - the split of the tests should follow:
   - `tests/unit/` for focused algorithm behavior
   - `tests/integration/` for full pipeline output and reference regression
@@ -155,17 +159,21 @@ Current workflows:
 - `.github/workflows/ci.yml`
   main correctness checks: lint, unit tests, integration tests, physics tests, ROOT checks, docs, C++
 - `.github/workflows/algorithms.yml`
-  strict per-algorithm output regressions
+  per-algorithm regressions:
+  - `strict_regression` jobs for exact reference checks
+  - `loose_regression` jobs for nondeterministic algorithms
 - `.github/workflows/regression.yml`
   plot and artifact generation, broader regression-style runs
 
 When changing CI:
 
 1. Keep correctness checks and artifact-generation jobs separate.
-2. Put strict per-algorithm output regression in `algorithms.yml`.
-3. Put plot-generation and workflow artifacts in `regression.yml`.
-4. Use the Key4hep container path for ROOT/EDM4hep jobs.
-5. If an external detector checkout is required, make that explicit in the workflow.
+2. Put per-algorithm regression in `algorithms.yml`.
+3. Use `strict_regression` for deterministic algorithms and pinned exact-reference checks.
+4. Use `loose_regression` for nondeterministic algorithms that need invariant/range-based checks in local and generic CI (and please justify this choice).
+5. Put plot-generation and workflow artifacts in `regression.yml`.
+6. Use the Key4hep container path for ROOT/EDM4hep jobs.
+7. If an external detector checkout is required, make that explicit in the workflow.
 
 ## Updating the documentation
 

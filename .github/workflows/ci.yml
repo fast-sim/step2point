@@ -35,7 +35,7 @@ jobs:
       - name: Unit tests
         run: pytest -q tests/unit
       - name: Integration tests
-        run: pytest -q tests/integration -m "not root and not odd_geometry"
+        run: pytest -q tests/integration -m "not root and not odd_geometry and not strict_regression"
       - name: Physics sanity tests
         run: pytest -q tests/physics
 
@@ -53,7 +53,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .[dev,test]
       - name: ODD geometry integration tests
-        run: pytest -q tests/integration -m "odd_geometry"
+        run: pytest -q tests/integration -m "odd_geometry and not strict_regression"
 
   edm4hep-root-tests:
     runs-on: ubuntu-22.04

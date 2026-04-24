@@ -5,25 +5,28 @@ on:
   pull_request:
 
 jobs:
-  algorithm-regressions:
+  strict-deterministic-regressions:
     strategy:
       matrix:
         include:
           - algorithm: identity
-            test_file: tests/integration/test_algorithm_identity_regression.py
+            test_file: tests/integration/test_algorithm_identity_strict_regression.py
+            needs_odd_geometry: false
           - algorithm: merge_within_cell
-            test_file: tests/integration/test_algorithm_merge_within_cell_regression.py
+            test_file: tests/integration/test_algorithm_merge_within_cell_strict_regression.py
+            needs_odd_geometry: false
           - algorithm: merge_within_regular_subcell_weighted_3x3
-            test_file: tests/integration/test_algorithm_merge_within_regular_subcell_weighted_regression.py
+            test_file: tests/integration/test_algorithm_merge_within_regular_subcell_weighted_strict_regression.py
+            needs_odd_geometry: true
           - algorithm: merge_within_regular_subcell_center_3x3
-            test_file: tests/integration/test_algorithm_merge_within_regular_subcell_center_regression.py
-          - algorithm: hdbscan_clustering
-            test_file: tests/integration/test_algorithm_hdbscan_regression.py
-    runs-on: ubuntu-latest
-    name: ${{ matrix.algorithm }}
+            test_file: tests/integration/test_algorithm_merge_within_regular_subcell_center_strict_regression.py
+            needs_odd_geometry: true
+    runs-on: ubuntu-22.04
+    name: strict/${{ matrix.algorithm }}
     steps:
       - uses: actions/checkout@v4
       - name: Clone OpenDataDetector
+        if: ${{ matrix.needs_odd_geometry }}
         run: git clone --depth 1 https://gitlab.cern.ch/acts/OpenDataDetector.git OpenDataDetector
       - uses: actions/setup-python@v5
         with:
@@ -32,5 +35,52 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev,test]
-      - name: Run algorithm regression tests
+      - name: Run strict algorithm regression
+        run: pytest -q ${{ matrix.test_file }}
+
+  strict-nondeterministic-regressions:
+    strategy:
+      matrix:
+        include:
+          - algorithm: hdbscan_clustering
+            test_file: tests/integration/test_algorithm_hdbscan_strict_regression.py
+    runs-on: ubuntu-22.04
+    name: strict/${{ matrix.algorithm }}
+    env:
+      STEP2POINT_ENABLE_STRICT_HDBSCAN: "1"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,test]
+      - name: Run strict algorithm regression
+        run: pytest -q ${{ matrix.test_file }}
+
+  loose-regressions:
+    strategy:
+      matrix:
+        include:
+          - algorithm: hdbscan_clustering
+            test_file: tests/integration/test_algorithm_hdbscan_loose_regression.py
+    runs-on: ubuntu-latest
+    name: loose/${{ matrix.algorithm }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,test]
+      - name: Run loose algorithm regression
         run: pytest -q ${{ matrix.test_file }}
