@@ -77,7 +77,7 @@ Requires:
 
 - `cell_id` defined for each deposit
 
-This algorithm groups deposits by `cell_id` and runs a user-supplied clustering algorithm within each cell. The number of output points per cell is determined by the clusterer, not fixed in advance. Each cluster is merged into a single point: energy-weighted centroid position, summed energy, minimum time. Output `cell_id` is preserved (all deposits in a cluster share the same cell by construction).
+This algorithm groups deposits by `cell_id` and runs a user-supplied clustering algorithm within each cell. The number of output points per cell is determined by the clusterer, not fixed in advance. Each cluster is merged into a single point: energy-weighted centroid position, summed energy, energy-weighted time. Output `cell_id` is preserved (all deposits in a cluster share the same cell by construction).
 
 A good starting point is `AgglomerativeClustering(n_clusters=None, distance_threshold=1.0)` from scikit-learn, which merges deposits closer than 1 mm. This is physically motivated (the threshold maps to detector resolution) and deterministic.
 
@@ -85,3 +85,8 @@ Parameters:
 
 - `clusterer`: any scikit-learn-compatible estimator that implements `fit_predict(X) -> labels` (required, no default)
 - `n_jobs`: number of parallel jobs for per-cell clustering. `1` (default) runs sequentially. `-1` uses all available cores
+
+TODO:
+
+- [ ] C++ backend. The inner clusterer (e.g. AgglomerativeClustering) is sklearn Cython, but the per-cell loop and global label assignment are Python.
+- [ ] GPU acceleration via scikit-learn's [Array API support](https://scikit-learn.org/stable/modules/array_api.html). This would allow the per-cell clustering to run on GPU arrays (e.g. CuPy, PyTorch) for showers with many cells.

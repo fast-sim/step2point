@@ -4,7 +4,7 @@ This algorithm groups deposits by ``cell_id`` and runs a pluggable
 scikit-learn-compatible clusterer within each cell. The number of output
 points per cell is determined by the clusterer, not fixed in advance.
 Each cluster is merged into a single point: energy-weighted centroid
-position, summed energy, minimum time.
+position, summed energy, energy-weighted time.
 """
 
 from __future__ import annotations
@@ -98,8 +98,7 @@ class ClusterWithinCell(CompressionAlgorithm):
         out_z = np.bincount(inverse, weights=shower.z * shower.E, minlength=n) / safe_e
 
         if shower.t is not None:
-            out_t = np.full(n, np.inf, dtype=np.float32)
-            np.minimum.at(out_t, inverse, shower.t)
+            out_t = np.bincount(inverse, weights=shower.t * shower.E, minlength=n) / safe_e
         else:
             out_t = None
 
