@@ -46,7 +46,6 @@ def parse_args():
     parser.add_argument("--use-time", action="store_true", help="Include time as a clustering feature in HDBSCAN.")
     parser.add_argument("--n-jobs", type=int, default=1, help="Number of parallel jobs (-1 for all cores).")
     parser.add_argument("--distance-threshold", type=float, default=1.0, help="ClusterWithinCell distance threshold (mm).")
-    parser.add_argument("--n-jobs-cells", type=int, default=1, help="ClusterWithinCell parallel jobs across cells.")
     parser.add_argument("--compact-xml", help="DD4hep compact XML required by geometry-aware algorithms.")
     parser.add_argument("--collection-name", help="DD4hep readout collection name required by geometry-aware algorithms.")
     parser.add_argument("--grid-x", type=int, default=2, help="Number of regular subdivisions along local cell x.")
