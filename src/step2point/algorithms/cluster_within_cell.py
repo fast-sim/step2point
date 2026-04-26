@@ -2,9 +2,9 @@
 
 This algorithm groups deposits by ``cell_id`` and runs a pluggable
 scikit-learn-compatible clusterer within each cell. The number of output
-points per cell is determined by the clusterer (adaptive K), not fixed
-in advance. Each cluster is merged into a single point: energy-weighted
-centroid position, summed energy, minimum time.
+points per cell is determined by the clusterer, not fixed in advance.
+Each cluster is merged into a single point: energy-weighted centroid
+position, summed energy, minimum time.
 """
 
 from __future__ import annotations
@@ -39,9 +39,9 @@ class ClusterWithinCell(CompressionAlgorithm):
 
     Deposits are grouped by ``cell_id``, then a user-supplied clusterer
     is run on the 3-D positions within each cell. The clusterer decides
-    how many sub-clusters to produce (adaptive K). Each cluster is
-    merged into a single point: energy-weighted centroid position,
-    summed energy, minimum time.
+    how many sub-clusters to produce. Each cluster is merged into a
+    single point: energy-weighted centroid position, summed energy,
+    minimum time.
 
     Parameters
     ----------
