@@ -107,7 +107,7 @@ step2point/
 └── .github/workflows/
 ```
 
-Contribution guidelines for common extension tasks are in [CONTRIBUTING.md](/home/anna/Workspace/step2point/CONTRIBUTING.md:1).
+Contribution guidelines for common extension tasks are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Quick start
 
@@ -119,7 +119,7 @@ pip install -e .[dev]
 
 ### Produce Output HDF5
 
-If you want to turn an input shower file into a new output HDF5 file with a chosen algorithm, use [examples/run_step2point_pipeline.py](/home/anna/Workspace/step2point/examples/run_step2point_pipeline.py:1).
+If you want to turn an input shower file into a new output HDF5 file with a chosen algorithm, use [examples/run_step2point_pipeline.py](examples/run_step2point_pipeline.py).
 
 Note:
 `PYTHONPATH=src` is only needed when running directly from a source checkout without installing the package first. If you already ran `pip install -e .[dev]`, you can drop that prefix and use `python ...` directly.
@@ -148,7 +148,7 @@ Write an output file with a regular `2x2` subgrid inside each detector cell:
 PYTHONPATH=src python examples/run_step2point_pipeline.py \
   --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
   --algorithm merge_within_regular_subcell \
-  --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
+  --compact-xml OpenDataDetector/xml/OpenDataDetector.xml \
   --collection-name ECalBarrelCollection \
   --grid-x 2 \
   --grid-y 2 \
@@ -222,7 +222,7 @@ pytest -q
 
 ## Inspection and visualization
 
-An example basic inspection of shower observables can be done with [examples/inspect_showers.py](/home/anna/Workspace/step2point/examples/inspect_showers.py:1) which produces plots for manual validation.
+An example basic inspection of shower observables can be done with [examples/inspect_showers.py](examples/inspect_showers.py) which produces plots for manual validation.
 
 Note:
 `PYTHONPATH=src` is only needed when running directly from a source checkout without installing the package first. If you already ran `pip install -e .[dev]`, you can drop that prefix and use `python ...` directly.
@@ -267,7 +267,7 @@ python examples/inspect_showers.py \
 
 ### Presentation-style shower displays
 
-Use [examples/render_shower_display.py](/home/anna/Workspace/step2point/examples/render_shower_display.py:1) for publication/PR-style 3D renders. The same script now handles:
+Use [examples/render_shower_display.py](examples/render_shower_display.py) for publication/PR-style 3D renders. The same script now handles:
 
 - `1` input: single-shower display
 - `2` inputs: side-by-side comparison

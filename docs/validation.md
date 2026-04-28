@@ -117,7 +117,7 @@ Typical use, to see the entire detector:
 
 ```bash
 PYTHONPATH=src python examples/plot_detector_cells.py \
-  --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
+  --compact-xml OpenDataDetector/xml/OpenDataDetector.xml \
   --collection ECalBarrelCollection \
   --draw-modules \
   --overlay-input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
@@ -129,7 +129,7 @@ Zoomed cell view for one module:
 
 ```bash
 PYTHONPATH=src python examples/plot_detector_cells.py \
-  --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
+  --compact-xml OpenDataDetector/xml/OpenDataDetector.xml \
   --collection ECalBarrelCollection \
   --draw-cells \
   --overlay-input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
@@ -142,7 +142,7 @@ Zoomed view with cells spanning only over the sensitive material:
 
 ```bash
 PYTHONPATH=src python examples/plot_detector_cells.py \
-  --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
+  --compact-xml OpenDataDetector/xml/OpenDataDetector.xml \
   --collection ECalBarrelCollection \
   --draw-cells \
   --sensitive-only \
@@ -168,7 +168,7 @@ Example with a manual detector/debug window:
 
 ```bash
 PYTHONPATH=src python examples/plot_detector_cells.py \
-  --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
+  --compact-xml OpenDataDetector/xml/OpenDataDetector.xml \
   --collection ECalBarrelCollection \
   --draw-cells \
   --sensitive-only \
@@ -186,7 +186,7 @@ There is also a `--debug` flag that allows to print the decoded cell ID bitfield
 
 ```bash
 PYTHONPATH=src python examples/plot_detector_cells.py \
-  --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
+  --compact-xml OpenDataDetector/xml/OpenDataDetector.xml \
   --collection ECalBarrelCollection \
   --draw-cells \
   --sensitive-only \
@@ -218,7 +218,7 @@ Use `--debug-events` with one or more (0-based) shower indices:
 python examples/run_step2point_pipeline.py \
   --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
   --algorithm merge_within_regular_subcell \
-  --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
+  --compact-xml OpenDataDetector/xml/OpenDataDetector.xml \
   --collection-name ECalBarrelCollection \
   --grid-x 5 \
   --grid-y 5 \
@@ -254,13 +254,13 @@ When `examples/plot_detector_cells.py` receives a debug HDF5 as `--overlay-input
 
 ```bash
 python examples/plot_detector_cells.py \
-  --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
+  --compact-xml OpenDataDetector/xml/OpenDataDetector.xml \
   --collection ECalBarrelCollection \
   --draw-cells \
   --sensitive-only \
-  --overlay-input outputs/pipeline_gamma_100GeV_merge_within_regular_subcell_weighted/debug_merge_within_regular_subcell.h5 \
+  --overlay-input tests/data/ODD_gamma_10ev_theta90deg_phi90deg_posX0mmY1250mmZ0mm_100GeV_merge_within_regular_subcell_5x5_weighted_debug.h5 \
   --overlay-shower-index 0 \
-  --outdir outputs/detector_100GeV \
+  --outdir outputs/detector_regular_subcell_5x5_debug \
   --module 10 \
   --xlim -2.55 2.55 \
   --ylim 1307 1309 \
