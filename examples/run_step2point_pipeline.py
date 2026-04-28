@@ -3,11 +3,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import numpy as np
+
 from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
 from step2point.algorithms.identity import IdentityCompression
 from step2point.algorithms.merge_within_cell import MergeWithinCell
 from step2point.algorithms.merge_within_regular_subcell import MergeWithinRegularSubcell
-from step2point.io import EDM4hepRootReader, Step2PointHDF5Reader, write_step2point_hdf5
+from step2point.io import EDM4hepRootReader, Step2PointHDF5Reader, write_step2point_debug_hdf5, write_step2point_hdf5
 from step2point.validation.conservation import CellCountRatioValidator, EnergyConservationValidator
 from step2point.validation.profiles import ShowerMomentsValidator
 
@@ -54,6 +56,16 @@ def parse_args():
         default="weighted",
         help="Output position within each subcell: weighted barycenter or geometric center.",
     )
+    parser.add_argument(
+        "--debug-events",
+        nargs="+",
+        type=int,
+        help="Selected 0-based shower indices for which to write original points with per-point cluster labels.",
+    )
+    parser.add_argument(
+        "--debug-output",
+        help="Optional output path for the debug HDF5. Defaults to debug_<algorithm>.h5 in --output.",
+    )
     parser.add_argument("--output", required=True)
     return parser.parse_args()
 
@@ -71,6 +83,17 @@ def parse_collections(collections: list[str] | None) -> tuple[str, ...] | None:
     if not collections:
         return None
     return tuple(collections)
+
+
+def _fallback_debug_labels(algorithm_name: str, shower) -> np.ndarray:
+    if algorithm_name == "identity":
+        return np.arange(shower.n_points, dtype=np.int64)
+    if algorithm_name == "merge_within_cell":
+        if shower.cell_id is None:
+            raise ValueError("merge_within_cell debug output requires cell_id.")
+        _, inverse = np.unique(shower.cell_id, return_inverse=True)
+        return inverse.astype(np.int64, copy=False)
+    raise ValueError(f"Algorithm '{algorithm_name}' did not provide debug cluster labels.")
 
 
 def main():
@@ -102,14 +125,29 @@ def main():
             collection_name=args.collection_name,
         )
     validators = [EnergyConservationValidator(), CellCountRatioValidator(), ShowerMomentsValidator()]
+    debug_event_indices = set(args.debug_events or [])
 
     compression_stats: list[dict] = []
     validation_results: list[dict] = []
     compressed_showers = []
-    for shower in reader.iter_showers():
+    debug_showers = []
+    debug_labels = []
+    for shower_index, shower in enumerate(reader.iter_showers()):
         result = algorithm.compress(shower)
         compressed_showers.append(result.shower)
         compression_stats.append(result.stats)
+        if shower_index in debug_event_indices:
+            cluster_label = result.debug_data.get("cluster_label")
+            if cluster_label is None:
+                cluster_label = _fallback_debug_labels(args.algorithm, shower)
+            cluster_label = np.ascontiguousarray(np.asarray(cluster_label), dtype=np.int64)
+            if len(cluster_label) != shower.n_points:
+                raise ValueError(
+                    f"Debug cluster labels for shower index {shower_index} have length {len(cluster_label)} "
+                    f"but shower has {shower.n_points} points."
+                )
+            debug_showers.append(shower.copy())
+            debug_labels.append(cluster_label.copy())
         for validator in validators:
             vr = validator.run(shower, result.shower)
             validation_results.append({"validator": vr.name, "shower_id": shower.shower_id, **vr.metrics})
@@ -144,6 +182,17 @@ def main():
     )
     print(f"wrote {output_h5}")
     print(f"wrote {outdir / f'compression_summary_{args.algorithm}.txt'}")
+    if debug_showers:
+        debug_output_path = Path(args.debug_output) if args.debug_output else outdir / f"debug_{args.algorithm}.h5"
+        debug_h5 = write_step2point_debug_hdf5(
+            debug_showers,
+            debug_labels,
+            debug_output_path,
+            algorithm=args.algorithm,
+            source_input=args.input,
+            debug_event_indices=sorted(debug_event_indices),
+        )
+        print(f"wrote {debug_h5}")
 
 
 if __name__ == "__main__":

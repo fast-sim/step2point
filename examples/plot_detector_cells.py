@@ -84,48 +84,31 @@ def parse_args():
     )
     parser.add_argument("--module", type=int, help="1-based module index used with --zoom or --draw-cells.")
     parser.add_argument(
-        "--xlim-axis",
+        "--xlim",
         type=float,
         nargs=2,
         metavar=("XMIN", "XMAX"),
-        help="Optional manual x-range for the XY and XZ view axes.",
+        help="Optional manual x-range used for detector selection, overlay-point selection, and XY/XZ axis limits.",
     )
     parser.add_argument(
-        "--ylim-axis",
+        "--ylim",
         type=float,
         nargs=2,
         metavar=("YMIN", "YMAX"),
-        help="Optional manual y-range for the XY and ZY view axes.",
+        help="Optional manual y-range used for detector selection, overlay-point selection, and XY/ZY axis limits.",
     )
     parser.add_argument(
-        "--zlim-axis",
+        "--zlim",
         type=float,
         nargs=2,
         metavar=("ZMIN", "ZMAX"),
-        help="Optional manual z-range for the XZ and ZY view axes.",
+        help="Optional manual z-range used for detector selection, overlay-point selection, and XZ/ZY axis limits.",
     )
     parser.add_argument(
-        "--xlim-points",
-        type=float,
-        nargs=2,
-        metavar=("XMIN", "XMAX"),
-        help="Optional manual x-range for selecting overlay points in the XY view.",
+        "--overlay-input",
+        help="Optional HDF5 or EDM4hep ROOT shower source to overlay as xyzE points. Debug HDF5 files with "
+        "steps/cluster_label are colored by cluster label automatically.",
     )
-    parser.add_argument(
-        "--ylim-points",
-        type=float,
-        nargs=2,
-        metavar=("YMIN", "YMAX"),
-        help="Optional manual y-range for selecting overlay points in XY and ZY.",
-    )
-    parser.add_argument(
-        "--zlim-points",
-        type=float,
-        nargs=2,
-        metavar=("ZMIN", "ZMAX"),
-        help="Optional manual z-range for selecting overlay points in the ZY view.",
-    )
-    parser.add_argument("--overlay-input", help="Optional HDF5 or EDM4hep ROOT shower source to overlay as xyzE points.")
     parser.add_argument("--overlay-shower-index", type=int, default=0, help="Shower index used with --overlay-input.")
     parser.add_argument(
         "--overlay-collections",
@@ -179,12 +162,9 @@ def main():
         modules_only=draw_modules,
         overlay_shower=overlay_shower,
         annotate_cell_id=args.debug,
-        xlim=tuple(args.xlim_axis) if args.xlim_axis else None,
-        ylim=tuple(args.ylim_axis) if args.ylim_axis else None,
-        zlim=tuple(args.zlim_axis) if args.zlim_axis else None,
-        xlim_points=tuple(args.xlim_points) if args.xlim_points else None,
-        ylim_points=tuple(args.ylim_points) if args.ylim_points else None,
-        zlim_points=tuple(args.zlim_points) if args.zlim_points else None,
+        xlim=tuple(args.xlim) if args.xlim else None,
+        ylim=tuple(args.ylim) if args.ylim else None,
+        zlim=tuple(args.zlim) if args.zlim else None,
     )
     print(f"wrote {output_xy}")
     print(f"wrote {output_xz}")

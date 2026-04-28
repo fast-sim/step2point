@@ -249,4 +249,5 @@ class HDBSCANClustering(CompressionAlgorithm):
                 "energy_before": shower.total_energy,
                 "energy_after": out.total_energy,
             },
+            debug_data={"cluster_label": labels.astype(np.int64, copy=False)},
         )

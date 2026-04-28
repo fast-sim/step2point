@@ -528,6 +528,8 @@ def module_cell_strip_polygons_xz(
 
     max_x_index = int(np.ceil(layer.half_tangent_mm / layer.pitch_tangent_mm - 0.5))
     x_centers = np.arange(-max_x_index, max_x_index + 1, dtype=np.int32) * layer.pitch_tangent_mm
+    max_z_index = int(np.ceil(layer.half_z_mm / layer.pitch_z_mm - 0.5))
+    z_centers = np.arange(-max_z_index, max_z_index + 1, dtype=np.int32) * layer.pitch_z_mm
 
     for _, raw_center_xy in module_pairs:
         center_xy = envelope_rotation @ np.array(raw_center_xy, dtype=np.float64)
@@ -539,34 +541,31 @@ def module_cell_strip_polygons_xz(
             else center_xy + (layer.layer_center_radius_mm - layout.sect_center_radius_mm) * radial
         )
 
-        corners_xy = np.array(
-            [
-                radial_center_xy - layer.half_tangent_mm * tangent - radial_half_extent * radial,
-                radial_center_xy + layer.half_tangent_mm * tangent - radial_half_extent * radial,
-                radial_center_xy + layer.half_tangent_mm * tangent + radial_half_extent * radial,
-                radial_center_xy - layer.half_tangent_mm * tangent + radial_half_extent * radial,
-            ],
-            dtype=np.float64,
-        )
-        xmin = float(np.min(corners_xy[:, 0]))
-        xmax = float(np.max(corners_xy[:, 0]))
-
         for x_center in x_centers:
             x0 = max(float(x_center - 0.5 * layer.pitch_tangent_mm), -layer.half_tangent_mm)
             x1 = min(float(x_center + 0.5 * layer.pitch_tangent_mm), layer.half_tangent_mm)
             if x1 <= x0:
                 continue
-            polygons.append(
-                np.array(
-                    [
-                        [xmin, x0],
-                        [xmax, x0],
-                        [xmax, x1],
-                        [xmin, x1],
-                    ],
-                    dtype=np.float64,
+            p00 = radial_center_xy + x0 * tangent - radial_half_extent * radial
+            p01 = radial_center_xy + x1 * tangent - radial_half_extent * radial
+            p11 = radial_center_xy + x1 * tangent + radial_half_extent * radial
+            p10 = radial_center_xy + x0 * tangent + radial_half_extent * radial
+            for z_center in z_centers:
+                z0 = max(float(z_center - 0.5 * layer.pitch_z_mm), -layer.half_z_mm)
+                z1 = min(float(z_center + 0.5 * layer.pitch_z_mm), layer.half_z_mm)
+                if z1 <= z0:
+                    continue
+                polygons.append(
+                    np.array(
+                        [
+                            [p00[0], z0],
+                            [p01[0], z0],
+                            [p11[0], z1],
+                            [p10[0], z1],
+                        ],
+                        dtype=np.float64,
+                    )
                 )
-            )
 
     return polygons
 
