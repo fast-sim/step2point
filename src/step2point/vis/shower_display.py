@@ -268,6 +268,11 @@ def _default_incident_label(shower) -> str:
     return f"{energy_label} {particle}".strip()
 
 
+def _primary_energy_line(primary: dict) -> str:
+    momentum = np.asarray(primary.get("momentum", (np.nan, np.nan, np.nan)), dtype=np.float64)
+    return f"Energy: {_format_energy_gev(np.linalg.norm(momentum))}"
+
+
 def _display_origin(shower) -> np.ndarray | None:
     primary = shower.primary or {}
     vertex = primary.get("vertex")
@@ -630,7 +635,13 @@ def render_shower_display_3d(
         ax.set_box_aspect((1.0, 1.0, 1.0))
     except AttributeError:  # pragma: no cover - older matplotlib fallback
         pass
-    _draw_incident_label(fig, ax, line_start, line_end, incident_label if incident_label is not None else _default_incident_label(reference))
+    _draw_incident_label(
+        fig,
+        ax,
+        line_start,
+        line_end,
+        incident_label if incident_label is not None else _default_incident_label(reference),
+    )
     fig.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
     fig.savefig(outpath, facecolor=fig.get_facecolor(), pad_inches=0.0)
     plt.close(fig)
@@ -684,8 +695,6 @@ def render_shower_display_triptych_3d(
     )
     energy_max = float(np.max(all_energy))
     line_start, line_end = _incident_line_points(origin, axis, projected, all_energy)
-    label_text = incident_label if incident_label is not None else _default_incident_label(showers[0])
-
     counts = [shower.n_points for shower in showers]
     if panel_titles is None:
         panel_titles = ["Detailed Shower", "Intermediate Representation", "Compressed Shower"]
@@ -789,7 +798,15 @@ def render_shower_display_triptych_3d(
     legend_ax.add_patch(left_box)
     legend_ax.add_patch(right_box)
 
-    legend_ax.text(0.06, 0.68, "Color = deposited energy", transform=legend_ax.transAxes, fontsize=10, color="#333333", weight="bold")
+    legend_ax.text(
+        0.06,
+        0.68,
+        "Color = deposited energy",
+        transform=legend_ax.transAxes,
+        fontsize=10,
+        color="#333333",
+        weight="bold",
+    )
     gradient_ax = legend_ax.inset_axes([0.06, 0.38, 0.22, 0.16])
     gradient = np.linspace(0.0, 1.0, 256).reshape(1, -1)
     gradient_ax.imshow(gradient, aspect="auto", cmap=palette, origin="lower")
@@ -797,7 +814,15 @@ def render_shower_display_triptych_3d(
     legend_ax.text(0.06, 0.28, "low", transform=legend_ax.transAxes, fontsize=9, color="#666666")
     legend_ax.text(0.26, 0.28, "high", transform=legend_ax.transAxes, fontsize=9, color="#666666", ha="right")
 
-    legend_ax.text(0.34, 0.68, "Size = deposited energy", transform=legend_ax.transAxes, fontsize=10, color="#333333", weight="bold")
+    legend_ax.text(
+        0.34,
+        0.68,
+        "Size = deposited energy",
+        transform=legend_ax.transAxes,
+        fontsize=10,
+        color="#333333",
+        weight="bold",
+    )
     size_ax = legend_ax.inset_axes([0.34, 0.30, 0.18, 0.28])
     size_ax.axis("off")
     size_energies = np.linspace(0.05, 1.0, 5) * energy_max
@@ -813,7 +838,7 @@ def render_shower_display_triptych_3d(
     info_lines = [
         "Shower information",
         f"Incident particle: {_particle_label_from_pdg(int(primary.get('pdg', 0)))}",
-        f"Energy: {_format_energy_gev(np.linalg.norm(np.asarray(primary.get('momentum', (np.nan, np.nan, np.nan)), dtype=np.float64)))}",
+        _primary_energy_line(primary),
         "Detector: Open Data Detector",
     ]
     y = 0.67
@@ -986,7 +1011,15 @@ def render_shower_display_comparison_3d(
     footer_ax.add_patch(footer_box)
     footer_ax.add_patch(info_box)
 
-    footer_ax.text(0.06, 0.64, "Color = deposited energy", transform=footer_ax.transAxes, fontsize=10, color="#333333", weight="bold")
+    footer_ax.text(
+        0.06,
+        0.64,
+        "Color = deposited energy",
+        transform=footer_ax.transAxes,
+        fontsize=10,
+        color="#333333",
+        weight="bold",
+    )
     gradient_ax = footer_ax.inset_axes([0.06, 0.36, 0.24, 0.16])
     gradient = np.linspace(0.0, 1.0, 256).reshape(1, -1)
     gradient_ax.imshow(gradient, aspect="auto", cmap=palette, origin="lower")
@@ -994,7 +1027,15 @@ def render_shower_display_comparison_3d(
     footer_ax.text(0.06, 0.26, "low", transform=footer_ax.transAxes, fontsize=9, color="#666666")
     footer_ax.text(0.30, 0.26, "high", transform=footer_ax.transAxes, fontsize=9, color="#666666", ha="right")
 
-    footer_ax.text(0.34, 0.68, "Size = deposited energy", transform=footer_ax.transAxes, fontsize=10, color="#333333", weight="bold")
+    footer_ax.text(
+        0.34,
+        0.68,
+        "Size = deposited energy",
+        transform=footer_ax.transAxes,
+        fontsize=10,
+        color="#333333",
+        weight="bold",
+    )
     size_ax = footer_ax.inset_axes([0.34, 0.30, 0.18, 0.28])
     size_ax.axis("off")
     size_energies = np.linspace(0.05, 1.0, 5) * energy_max
@@ -1010,7 +1051,7 @@ def render_shower_display_comparison_3d(
     info_lines = [
         "Shower information",
         f"Incident particle: {_particle_label_from_pdg(int(primary.get('pdg', 0)))}",
-        f"Energy: {_format_energy_gev(np.linalg.norm(np.asarray(primary.get('momentum', (np.nan, np.nan, np.nan)), dtype=np.float64)))}",
+        _primary_energy_line(primary),
         "Detector: Open Data Detector",
     ]
     y = 0.67
