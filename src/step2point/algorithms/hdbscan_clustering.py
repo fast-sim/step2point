@@ -1,7 +1,7 @@
 """HDBSCAN density-based clustering of calorimeter step deposits.
 
-This algorithm clusters deposits using HDBSCAN within each decoded
-``(system, layer)`` partition. Features are scaled x, y coordinates and,
+This algorithm clusters deposits using HDBSCAN within each configured
+merge scope. Features are scaled x, y coordinates and,
 if enabled and available, time relative to the layer median. Each cluster
 is merged into a single point: energy-weighted centroid position, summed
 energy, minimum time.
@@ -22,7 +22,7 @@ from step2point.geometry.dd4hep.bitfield import extract_field
 class HDBSCANClustering(CompressionAlgorithm):
     """Density-based clustering of calorimeter step deposits.
 
-    Deposits are partitioned by decoded ``(system, layer)`` and clustered
+    Deposits are partitioned by the configured merge scope and clustered
     within each partition using HDBSCAN on scaled (x, y) features,
     optionally including time (t) (if ``use_time`` is True). Each cluster
     is then merged into a single point: energy-weighted centroid position,
@@ -59,6 +59,11 @@ class HDBSCANClustering(CompressionAlgorithm):
         Whether to include time as a clustering feature (default False).
         When True, time must be present in the input shower or a
         ``ValueError`` is raised.
+    merge_scope : str
+        Defines which detector boundaries HDBSCAN is not allowed to cross.
+        Supported values are ``"none"``, ``"layer"``,
+        ``"system_layer"``, and ``"cell_id"``. The default is
+        ``"system_layer"``.
     cell_id_encoding : str or tuple[str, ...]
         Cell-ID encoding string(s) used to decode fields such as
         ``system`` and ``layer`` from each deposit `cell_id`. A single
@@ -88,6 +93,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         xy_scale: float = 5.0,
         t_scale: float = 1.0,
         use_time: bool = False,
+        merge_scope: str = "system_layer",
         cell_id_encoding: str | tuple[str, ...] | None = None,
         algorithm: str = "auto",
         n_jobs: int = -1,
@@ -98,24 +104,35 @@ class HDBSCANClustering(CompressionAlgorithm):
         self.xy_scale = xy_scale
         self.t_scale = t_scale
         self.use_time = use_time
+        self.merge_scope = merge_scope
         self.algorithm = algorithm
         self.n_jobs = n_jobs
-        if cell_id_encoding is None:
+        valid_merge_scopes = {"none", "layer", "system_layer", "cell_id"}
+        if self.merge_scope not in valid_merge_scopes:
+            raise ValueError(f"Unsupported merge_scope {merge_scope!r}. Expected one of {sorted(valid_merge_scopes)}.")
+
+        self.cell_id_encoding: tuple[str, ...] | None
+        if self.merge_scope in {"layer", "system_layer"} and cell_id_encoding is None:
             raise ValueError(
                 "HDBSCANClustering assumes a cell_id can be decoded to define the unmergeable points. "
                 "Provide cell_id_encoding directly or configure it from compact XML plus collection name(s)."
             )
-        if isinstance(cell_id_encoding, str):
+        if cell_id_encoding is None:
+            self.cell_id_encoding = None
+        elif isinstance(cell_id_encoding, str):
             self.cell_id_encoding = (cell_id_encoding,)
         else:
             self.cell_id_encoding = tuple(cell_id_encoding)
-        for encoding in self.cell_id_encoding:
-            extract_field(np.array([0], dtype=np.uint64), encoding, "layer")
-            extract_field(np.array([0], dtype=np.uint64), encoding, "system")
+        if self.cell_id_encoding is not None:
+            for encoding in self.cell_id_encoding:
+                extract_field(np.array([0], dtype=np.uint64), encoding, "layer")
+                extract_field(np.array([0], dtype=np.uint64), encoding, "system")
 
     def _decoded_field(self, shower: Shower, field_name: str) -> np.ndarray:
         if shower.cell_id is None:
             raise ValueError("HDBSCANClustering requires cell_id for field decoding.")
+        if self.cell_id_encoding is None:
+            raise ValueError("HDBSCANClustering has no cell_id_encoding configured for decoded merge scopes.")
         cell_ids = np.asarray(shower.cell_id, dtype=np.uint64)
         if len(self.cell_id_encoding) == 1:
             return extract_field(cell_ids, self.cell_id_encoding[0], field_name)
@@ -142,75 +159,82 @@ class HDBSCANClustering(CompressionAlgorithm):
             )
         return decoded
 
-    def compress(self, shower: Shower) -> CompressionResult:
+    def _partition_indices(self, shower: Shower) -> list[np.ndarray]:
+        if shower.n_points == 0:
+            return []
+        if self.merge_scope == "none":
+            return [np.arange(shower.n_points, dtype=np.int64)]
         if shower.cell_id is None:
-            raise ValueError("HDBSCANClustering requires cell_id to decode layer boundaries.")
+            raise ValueError(f"HDBSCANClustering with merge_scope={self.merge_scope!r} requires cell_id.")
+        if self.merge_scope == "cell_id":
+            _, inverse = np.unique(np.asarray(shower.cell_id, dtype=np.uint64), return_inverse=True)
+        elif self.merge_scope == "layer":
+            _, inverse = np.unique(self._decoded_field(shower, "layer"), return_inverse=True)
+        else:
+            systems = self._decoded_field(shower, "system")
+            layers = self._decoded_field(shower, "layer")
+            key_dtype = np.dtype([("system", np.int64), ("layer", np.int64)])
+            keys = np.empty(shower.n_points, dtype=key_dtype)
+            keys["system"] = systems
+            keys["layer"] = layers
+            _, inverse = np.unique(keys, return_inverse=True)
+        return [np.where(inverse == idx)[0] for idx in range(int(np.max(inverse)) + 1)]
+
+    def compress(self, shower: Shower) -> CompressionResult:
         if self.use_time and shower.t is None:
             raise ValueError("use_time=True but shower has no time data.")
-
-        layers = self._decoded_field(shower, "layer")
-        systems = self._decoded_field(shower, "system")
 
         labels = np.full(shower.n_points, -1, dtype=np.int64)
         total_clusters = 0
 
-        for system in np.unique(systems):
-            system_mask = systems == system
-            layers_sub = layers[system_mask]
+        for global_mask in self._partition_indices(shower):
+            n_slice = len(global_mask)
+            if n_slice < max(self.min_samples, 2):
+                # Too few points for HDBSCAN - each becomes its own cluster
+                labels[global_mask] = np.arange(total_clusters, total_clusters + n_slice)
+                total_clusters += n_slice
+                continue
 
-            for layer in np.unique(layers_sub):
-                layer_mask_local = layers_sub == layer
-                global_mask = np.where(system_mask)[0][layer_mask_local]
+            xy = np.stack([shower.x[global_mask], shower.y[global_mask]], axis=1).astype(np.float32)
+            xy_scaled = xy / self.xy_scale
 
-                n_slice = len(global_mask)
-                if n_slice < max(self.min_samples, 2):
-                    # Too few points for HDBSCAN - each becomes its own cluster
-                    labels[global_mask] = np.arange(
-                        total_clusters, total_clusters + n_slice
-                    )
-                    total_clusters += n_slice
-                    continue
+            if self.use_time and shower.t is not None:
+                t_layer = shower.t[global_mask].astype(np.float32)
+                t_median = np.median(t_layer)
+                t_scaled = ((t_layer - t_median) / self.t_scale).reshape(-1, 1)
+                features = np.hstack([xy_scaled, t_scaled]).astype(np.float32)
+            else:
+                features = xy_scaled
 
-                xy = np.stack([shower.x[global_mask], shower.y[global_mask]], axis=1).astype(np.float32)
-                xy_scaled = xy / self.xy_scale
+            model = SklearnHDBSCAN(
+                min_cluster_size=self.min_cluster_size,
+                min_samples=self.min_samples,
+                cluster_selection_epsilon=self.cluster_selection_epsilon,
+                algorithm=self.algorithm,
+                n_jobs=self.n_jobs,
+                copy=False,
+            )
+            predicted = model.fit_predict(features)
 
-                if self.use_time and shower.t is not None:
-                    t_layer = shower.t[global_mask].astype(np.float32)
-                    t_median = np.median(t_layer)
-                    t_scaled = ((t_layer - t_median) / self.t_scale).reshape(-1, 1)
-                    features = np.hstack([xy_scaled, t_scaled]).astype(np.float32)
-                else:
-                    features = xy_scaled
+            n_new = len(set(predicted)) - (1 if -1 in predicted else 0)
+            is_cluster = predicted >= 0
+            is_noise = predicted == -1
 
-                model = SklearnHDBSCAN(
-                    min_cluster_size=self.min_cluster_size,
-                    min_samples=self.min_samples,
-                    cluster_selection_epsilon=self.cluster_selection_epsilon,
-                    algorithm=self.algorithm,
-                    n_jobs=self.n_jobs,
-                    copy=False,
-                )
-                predicted = model.fit_predict(features)
+            if n_new > 0 and np.any(is_cluster):
+                predicted[is_cluster] += total_clusters
+                total_clusters += n_new
+                if np.any(is_noise):
+                    # Reassign noise to nearest cluster (energy-conserving)
+                    nn = NearestNeighbors(n_neighbors=1, n_jobs=self.n_jobs)
+                    nn.fit(features[is_cluster])
+                    _, idx = nn.kneighbors(features[is_noise])
+                    predicted[is_noise] = predicted[is_cluster][idx.ravel()]
+            elif np.any(is_noise):
+                # No clusters found - bundle all noise into one cluster
+                predicted[is_noise] = total_clusters
+                total_clusters += 1
 
-                n_new = len(set(predicted)) - (1 if -1 in predicted else 0)
-                is_cluster = predicted >= 0
-                is_noise = predicted == -1
-
-                if n_new > 0 and np.any(is_cluster):
-                    predicted[is_cluster] += total_clusters
-                    total_clusters += n_new
-                    if np.any(is_noise):
-                        # Reassign noise to nearest cluster (energy-conserving)
-                        nn = NearestNeighbors(n_neighbors=1, n_jobs=self.n_jobs)
-                        nn.fit(features[is_cluster])
-                        _, idx = nn.kneighbors(features[is_noise])
-                        predicted[is_noise] = predicted[is_cluster][idx.ravel()]
-                elif np.any(is_noise):
-                    # No clusters found - bundle all noise into one cluster
-                    predicted[is_noise] = total_clusters
-                    total_clusters += 1
-
-                labels[global_mask] = predicted
+            labels[global_mask] = predicted
 
         keep = labels >= 0
         kept_labels = labels[keep]

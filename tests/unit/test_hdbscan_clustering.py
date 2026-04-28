@@ -197,7 +197,7 @@ def test_hdbscan_use_time_false_ignores_time():
     assert result_without.shower.t is not None
 
 
-def test_hdbscan_requires_dd4hep_layer_extractor():
+def test_hdbscan_requires_cell_id_decoding_rule():
     with pytest.raises(ValueError, match="cell_id can be decoded"):
         HDBSCANClustering(min_cluster_size=5, min_samples=3)
 

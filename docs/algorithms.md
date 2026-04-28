@@ -56,7 +56,14 @@ Optional:
 
 - `t` (time): when used (and present), used as a third clustering feature alongside x and y
 
-This algorithm assumes a `cell_id` can be decoded to define the unmergeable points. It clusters deposits within each decoded `(system, layer)` partition. The `system` and `layer` fields are extracted from the cell ID through an explicit cell-id decoding rule, either from a supplied encoding string or derived from the compact XML for one or more readout collections. Within each partition the x/y coordinates are divided by a spatial scale (default 5 mm, roughly one cell width). If time is used (and available), it is expressed relative to the layer median and divided by a temporal scale (default 1 ns), and HDBSCAN clusters on all three scaled features (x, y, t); otherwise it clusters on (x, y) only. Deposits that HDBSCAN labels as noise (label -1) are reassigned to their nearest cluster, ensuring energy conservation.
+This algorithm assumes a `cell_id` can be decoded to define the unmergeable points. It first groups deposits according to a configurable `merge_scope`, and then runs HDBSCAN independently inside each group. The grouping fields are extracted from the cell ID through an explicit cell-id decoding rule, either from a supplied encoding string or derived from the compact XML for one or more readout collections. Within each group the x/y coordinates are divided by a spatial scale (default 5 mm, roughly one cell width). If time is used (and available), it is expressed relative to the group median and divided by a temporal scale (default 1 ns), and HDBSCAN clusters on all three scaled features (x, y, t); otherwise it clusters on (x, y) only. Deposits that HDBSCAN labels as noise (label -1) are reassigned to their nearest cluster, ensuring energy conservation.
+
+`merge_scope` defines which deposits are allowed to cluster together:
+
+- `none`: no detector boundary is enforced; all deposits are clustered together
+- `layer`: deposits can merge only within the same decoded layer
+- `system_layer`: deposits can merge only within the same decoded system and layer
+- `cell_id`: deposits can merge only within the same exact `cell_id`
 
 Parameters:
 
@@ -66,6 +73,7 @@ Parameters:
 - `xy_scale`: divide x, y coordinates by this before clustering. This normalises spatial distances so that 1.0 in scaled space corresponds to roughly one cell width. When `use_time` is True, this also ensures spatial and temporal features are on comparable magnitudes. The value is detector-specific (default: 5.0 mm, matching the ODD calorimeter cell size)
 - `t_scale`: divide time (relative to the layer median) by this before clustering. Normalises the temporal dimension so it contributes meaningfully alongside the scaled spatial features. Only used when `t` is present and `use_time` is True (default: 1.0 ns)
 - `use_time`: whether to include time as a clustering feature (default: False). When True, time must be present in the input shower or an error is raised
+- `merge_scope`: detector boundary that HDBSCAN is not allowed to cross. Supported values are `none`, `layer`, `system_layer`, and `cell_id` (default: `system_layer`)
 - `cell_id_encoding`: cell-id encoding string, or one string per input collection / system slot when clustering across multiple readout collections
 - `algorithm`: internal neighbour-search method used by scikit-learn's HDBSCAN - `"auto"` (default), `"brute"`, `"kd_tree"`, or `"ball_tree"`. Use `"brute"` for the most reproducible reference outputs across machines. `"auto"` may choose different methods depending on the environment, which can slightly change cluster boundaries and therefore the compressed output
 - `n_jobs`: number of parallel jobs for HDBSCAN and nearest-neighbour queries. `-1` uses all cores (default). `1` forces single-threaded execution, which improves reproducibility across runs
