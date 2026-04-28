@@ -37,6 +37,14 @@ jobs:
           pip install -e .[dev,test]
       - name: Run strict algorithm regression
         run: pytest -q ${{ matrix.test_file }}
+      - name: Upload strict regression outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strict-${{ matrix.algorithm }}-outputs
+          path: |
+            /tmp/pytest-of-*/pytest-*/test_*/pipeline_out_*/compressed_*.h5
+            /tmp/pytest-of-*/pytest-*/test_*/pipeline_out_*/compression_summary_*.txt
 
   strict-nondeterministic-regressions:
     strategy:
@@ -64,6 +72,14 @@ jobs:
           pip install -e .[dev,test]
       - name: Run strict algorithm regression
         run: pytest -q ${{ matrix.test_file }}
+      - name: Upload strict regression outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strict-${{ matrix.algorithm }}-outputs
+          path: |
+            /tmp/pytest-of-*/pytest-*/test_*/pipeline_out_*/compressed_*.h5
+            /tmp/pytest-of-*/pytest-*/test_*/pipeline_out_*/compression_summary_*.txt
 
   loose-regressions:
     strategy:
@@ -84,3 +100,11 @@ jobs:
           pip install -e .[dev,test]
       - name: Run loose algorithm regression
         run: pytest -q ${{ matrix.test_file }}
+      - name: Upload loose regression outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loose-${{ matrix.algorithm }}-outputs
+          path: |
+            /tmp/pytest-of-*/pytest-*/test_*/pipeline_out_*/compressed_*.h5
+            /tmp/pytest-of-*/pytest-*/test_*/pipeline_out_*/compression_summary_*.txt

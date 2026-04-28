@@ -33,6 +33,36 @@ jobs:
           name: hdf5-validation-plots
           path: outputs/ci_validation_plots/
 
+  hdbscan-validation-plots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,test]
+      - name: Generate HDBSCAN validation plots
+        run: |
+          python examples/generate_validation_plots.py \
+            --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+            --algorithm hdbscan \
+            --hdbscan-cell-id-encoding 'system:8,barrel:3,module:4,stave:1,layer:6,slice:5,x:32:-16,y:-16' \
+            --min-cluster-size 5 \
+            --min-samples 3 \
+            --merge-scope system_layer \
+            --use-time \
+            --axis 0 1 0 \
+            --origin 0 1250 0 \
+            --outdir outputs/ci_hdbscan_validation_plots
+      - name: Upload HDBSCAN validation plots
+        uses: actions/upload-artifact@v4
+        with:
+          name: hdbscan-validation-plots
+          path: outputs/ci_hdbscan_validation_plots/
+
   edm4hep-root-regression:
     runs-on: ubuntu-22.04
     steps:

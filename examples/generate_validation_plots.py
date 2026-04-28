@@ -84,6 +84,20 @@ def main():
         default="weighted",
         help="Output position within each subcell: weighted barycenter or geometric center.",
     )
+    parser.add_argument(
+        "--axis",
+        type=float,
+        nargs=3,
+        metavar=("X", "Y", "Z"),
+        help="Override the shower axis used for validation observables and profiles.",
+    )
+    parser.add_argument(
+        "--origin",
+        type=float,
+        nargs=3,
+        metavar=("X", "Y", "Z"),
+        help="Override the reference point used together with the validation axis.",
+    )
     parser.add_argument("--outdir", default="outputs/plots")
     args = parser.parse_args()
 
@@ -129,7 +143,12 @@ def main():
     for shower in reader.iter_showers():
         result = algorithm.compress(shower)
         pairs.append((shower, result.shower))
-    generate_benchmark_plots(pairs, Path(args.outdir))
+    generate_benchmark_plots(
+        pairs,
+        Path(args.outdir),
+        axis_override=args.axis,
+        origin_override=args.origin,
+    )
 
 
 if __name__ == "__main__":

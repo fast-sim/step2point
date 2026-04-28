@@ -32,10 +32,10 @@ def _safe_log10(values: np.ndarray, eps: float = 1e-12) -> np.ndarray:
 
 def _profile(values: np.ndarray, weights: np.ndarray, bins: np.ndarray) -> np.ndarray:
     sums, _ = np.histogram(values, bins=bins, weights=weights)
-    counts, _ = np.histogram(values, bins=bins)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        prof = np.divide(sums, np.maximum(counts, 1), dtype=np.float64)
-    return prof
+    total = float(np.sum(weights))
+    if total <= 0.0:
+        return np.zeros(len(bins) - 1, dtype=np.float64)
+    return sums.astype(np.float64) / total
 
 
 def _moment(coord: np.ndarray, weights: np.ndarray, order: int) -> float:
@@ -44,7 +44,23 @@ def _moment(coord: np.ndarray, weights: np.ndarray, order: int) -> float:
     return float(np.average(coord**order, weights=weights))
 
 
-def generate_benchmark_plots(pairs, outdir: str | Path) -> PlotArtifacts:
+def _longitudinal_radial_phi_with_reference(
+    shower,
+    *,
+    centroid: np.ndarray,
+    axis: np.ndarray,
+    longitudinal_origin_projection: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    long_raw, radial, phi = longitudinal_radial_phi(
+        shower,
+        centroid=centroid,
+        axis=axis,
+        longitudinal_origin="centroid",
+    )
+    return long_raw - longitudinal_origin_projection, radial, phi
+
+
+def generate_benchmark_plots(pairs, outdir: str | Path, *, axis_override=None, origin_override=None) -> PlotArtifacts:
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
@@ -82,18 +98,31 @@ def generate_benchmark_plots(pairs, outdir: str | Path) -> PlotArtifacts:
         pre_point_logs.extend(_safe_log10(pre.E))
         post_point_logs.extend(_safe_log10(post.E))
 
-        centroid, axis = estimate_shower_axis(pre)
-        long_pre, radial_pre, phi_pre = longitudinal_radial_phi(
+        centroid, axis = estimate_shower_axis(pre, axis_override=axis_override)
+        if origin_override is not None:
+            centroid = np.asarray(origin_override, dtype=np.float64)
+            if centroid.shape != (3,):
+                raise ValueError(f"origin_override must be a length-3 vector, got shape {centroid.shape}.")
+            long_origin = 0.0
+        else:
+            long_pre_raw, _, _ = longitudinal_radial_phi(
+                pre,
+                centroid=centroid,
+                axis=axis,
+                longitudinal_origin="centroid",
+            )
+            long_origin = float(np.min(long_pre_raw)) if long_pre_raw.size else 0.0
+        long_pre, radial_pre, phi_pre = _longitudinal_radial_phi_with_reference(
             pre,
             centroid=centroid,
             axis=axis,
-            longitudinal_origin="first_deposit",
+            longitudinal_origin_projection=long_origin,
         )
-        long_post, radial_post, phi_post = longitudinal_radial_phi(
+        long_post, radial_post, phi_post = _longitudinal_radial_phi_with_reference(
             post,
             centroid=centroid,
             axis=axis,
-            longitudinal_origin="first_deposit",
+            longitudinal_origin_projection=long_origin,
         )
 
         long_m1_pre.append(_moment(long_pre, pre.E, 1))
@@ -142,6 +171,7 @@ def generate_benchmark_plots(pairs, outdir: str | Path) -> PlotArtifacts:
         outdir / "longitudinal_profile_overlay.png",
         "Longitudinal profile",
         "longitudinal coordinate [mm]",
+        ylabel="Energy fraction",
     )
     plot_overlay_line(
         radial_centers,
@@ -150,6 +180,7 @@ def generate_benchmark_plots(pairs, outdir: str | Path) -> PlotArtifacts:
         outdir / "radial_profile_overlay.png",
         "Radial profile",
         "radial coordinate [mm]",
+        ylabel="Energy fraction",
     )
     plot_overlay_line(
         phi_centers,
@@ -158,6 +189,7 @@ def generate_benchmark_plots(pairs, outdir: str | Path) -> PlotArtifacts:
         outdir / "phi_profile_overlay.png",
         "Phi profile",
         "phi",
+        ylabel="Energy fraction",
     )
 
     plot_overlay_hist(long_m1_pre, long_m1_post, outdir / "longitudinal_moment_1.png", "Longitudinal first moment", "m1")
