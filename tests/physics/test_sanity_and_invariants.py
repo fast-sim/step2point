@@ -13,6 +13,7 @@ from step2point.validation.sanity import ShowerSanityValidator
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "tiny_showers.h5"
 DATA_GAMMA = Path(__file__).resolve().parents[1] / "data" / "ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5"
+ODD_BARREL_ENCODING = "system:8,barrel:3,module:4,stave:1,layer:6,slice:5,x:32:-16,y:-16"
 
 
 def _read_showers():
@@ -55,7 +56,12 @@ def test_hdbscan_preserves_total_energy_and_reduces_points():
     from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
 
     validator = ShowerSanityValidator()
-    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, use_time=True)
+    algo = HDBSCANClustering(
+        min_cluster_size=5,
+        min_samples=3,
+        use_time=True,
+        cell_id_encoding=ODD_BARREL_ENCODING,
+    )
     for shower in Step2PointHDF5Reader(str(DATA_GAMMA), shower_limit=3).iter_showers():
         out = algo.compress(shower).shower
         assert np.isclose(energy_ratio(shower, out), 1.0, rtol=1e-5)

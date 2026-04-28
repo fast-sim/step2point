@@ -1,15 +1,13 @@
 """HDBSCAN density-based clustering of calorimeter step deposits.
 
-This algorithm clusters deposits using HDBSCAN within each (subdetector,
-layer) partition. Features are scaled x, y coordinates and, is used (
-and if available), time relative to the layer median. Each cluster is
-merged into a single point: energy-weighted centroid position, summed
+This algorithm clusters deposits using HDBSCAN within each decoded
+``(system, layer)`` partition. Features are scaled x, y coordinates and,
+if enabled and available, time relative to the layer median. Each cluster
+is merged into a single point: energy-weighted centroid position, summed
 energy, minimum time.
 """
 
 from __future__ import annotations
-
-from collections.abc import Callable
 
 import numpy as np
 from sklearn.cluster import HDBSCAN as SklearnHDBSCAN
@@ -18,26 +16,17 @@ from sklearn.neighbors import NearestNeighbors
 from step2point.algorithms.base import CompressionAlgorithm
 from step2point.core.results import CompressionResult
 from step2point.core.shower import Shower
-
-
-def _default_layer_extractor(cell_ids: np.ndarray) -> np.ndarray:
-    """Extract layer number from cell_id using the ODD bit layout.
-
-    The ODD (Open Data Detector) encodes the layer in 9 bits starting at
-    bit 19 of the 64-bit cell ID.
-    """
-    return (cell_ids.astype(np.int64) >> 19) & 0x1FF
-
+from step2point.geometry.dd4hep.bitfield import extract_field
 
 
 class HDBSCANClustering(CompressionAlgorithm):
     """Density-based clustering of calorimeter step deposits.
 
-    Deposits are partitioned by (subdetector, layer) and clustered within
-    each partition using HDBSCAN on scaled (x, y) features, optionally
-    including time (t) (if ``use_time`` is True).  Each cluster is then
-    merged into a single point: energy-weighted centroid position, summed
-    energy, minimum time.
+    Deposits are partitioned by decoded ``(system, layer)`` and clustered
+    within each partition using HDBSCAN on scaled (x, y) features,
+    optionally including time (t) (if ``use_time`` is True). Each cluster
+    is then merged into a single point: energy-weighted centroid position,
+    summed energy, minimum time.
 
     Parameters
     ----------
@@ -70,11 +59,12 @@ class HDBSCANClustering(CompressionAlgorithm):
         Whether to include time as a clustering feature (default False).
         When True, time must be present in the input shower or a
         ``ValueError`` is raised.
-    layer_extractor : callable, str, or None
-        How to extract layer IDs from cell IDs.  Can be a callable
-        ``f(cell_ids: ndarray) -> ndarray``, a DD4hep ID encoding string
-        (e.g. ``"system:8,barrel:3,layer:19:9"``), or ``None`` to use
-        the ODD default ``(cell_id >> 19) & 0x1FF``.
+    cell_id_encoding : str or tuple[str, ...]
+        Cell-ID encoding string(s) used to decode fields such as
+        ``system`` and ``layer`` from each deposit `cell_id`. A single
+        string is used for all points. A tuple provides one encoding per
+        input collection / system slot, matched against
+        ``shower.metadata["subdetector"]``.
     algorithm : str
         Internal neighbour-search method used by scikit-learn's HDBSCAN:
         `"auto"` (default), `"brute"`, `"kd_tree"`, or `"ball_tree"`
@@ -98,7 +88,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         xy_scale: float = 5.0,
         t_scale: float = 1.0,
         use_time: bool = False,
-        layer_extractor: Callable[[np.ndarray], np.ndarray] | str | None = None,
+        cell_id_encoding: str | tuple[str, ...] | None = None,
         algorithm: str = "auto",
         n_jobs: int = -1,
     ) -> None:
@@ -110,37 +100,67 @@ class HDBSCANClustering(CompressionAlgorithm):
         self.use_time = use_time
         self.algorithm = algorithm
         self.n_jobs = n_jobs
-        if isinstance(layer_extractor, str):
-            from step2point.geometry.dd4hep.bitfield import extract_field
-
-            encoding = layer_extractor
-            extract_field(np.array([0], dtype=np.uint64), encoding)
-            self.layer_extractor = lambda cell_ids: extract_field(cell_ids, encoding)
+        if cell_id_encoding is None:
+            raise ValueError(
+                "HDBSCANClustering assumes a cell_id can be decoded to define the unmergeable points. "
+                "Provide cell_id_encoding directly or configure it from compact XML plus collection name(s)."
+            )
+        if isinstance(cell_id_encoding, str):
+            self.cell_id_encoding = (cell_id_encoding,)
         else:
-            self.layer_extractor = layer_extractor or _default_layer_extractor
+            self.cell_id_encoding = tuple(cell_id_encoding)
+        for encoding in self.cell_id_encoding:
+            extract_field(np.array([0], dtype=np.uint64), encoding, "layer")
+            extract_field(np.array([0], dtype=np.uint64), encoding, "system")
+
+    def _decoded_field(self, shower: Shower, field_name: str) -> np.ndarray:
+        if shower.cell_id is None:
+            raise ValueError("HDBSCANClustering requires cell_id for field decoding.")
+        cell_ids = np.asarray(shower.cell_id, dtype=np.uint64)
+        if len(self.cell_id_encoding) == 1:
+            return extract_field(cell_ids, self.cell_id_encoding[0], field_name)
+
+        subdetectors = shower.metadata.get("subdetector")
+        if subdetectors is None:
+            raise ValueError(
+                "Multiple cell_id encodings were provided, but shower.metadata['subdetector'] is absent."
+            )
+        subdetectors = np.asarray(subdetectors, dtype=np.int64)
+        decoded = np.empty(cell_ids.shape[0], dtype=np.int64)
+        unique_subdetectors = np.unique(subdetectors)
+        for subdetector in unique_subdetectors:
+            if subdetector < 0 or subdetector >= len(self.cell_id_encoding):
+                raise ValueError(
+                    f"Subdetector index {subdetector} is outside the available cell_id encodings "
+                    f"(n={len(self.cell_id_encoding)})."
+                )
+            mask = subdetectors == subdetector
+            decoded[mask] = extract_field(
+                cell_ids[mask],
+                self.cell_id_encoding[int(subdetector)],
+                field_name,
+            )
+        return decoded
 
     def compress(self, shower: Shower) -> CompressionResult:
         if shower.cell_id is None:
-            raise ValueError("HDBSCANClustering requires cell_id for layer extraction.")
+            raise ValueError("HDBSCANClustering requires cell_id to decode layer boundaries.")
         if self.use_time and shower.t is None:
             raise ValueError("use_time=True but shower has no time data.")
 
-        layers = self.layer_extractor(shower.cell_id)
-        subdetectors = shower.metadata.get("subdetector")
-        if subdetectors is None:
-            subdetectors = np.zeros(shower.n_points, dtype=np.uint8)
-        subdetectors = np.asarray(subdetectors)
+        layers = self._decoded_field(shower, "layer")
+        systems = self._decoded_field(shower, "system")
 
         labels = np.full(shower.n_points, -1, dtype=np.int64)
         total_clusters = 0
 
-        for subdet in np.unique(subdetectors):
-            subdet_mask = subdetectors == subdet
-            layers_sub = layers[subdet_mask]
+        for system in np.unique(systems):
+            system_mask = systems == system
+            layers_sub = layers[system_mask]
 
             for layer in np.unique(layers_sub):
                 layer_mask_local = layers_sub == layer
-                global_mask = np.where(subdet_mask)[0][layer_mask_local]
+                global_mask = np.where(system_mask)[0][layer_mask_local]
 
                 n_slice = len(global_mask)
                 if n_slice < max(self.min_samples, 2):

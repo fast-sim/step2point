@@ -4,6 +4,7 @@ import pytest
 
 from tests.integration.algorithm_regression_helpers import (
     DATA,
+    ODD_BARREL_ENCODING,
     assert_energy_conserved_against_input,
     assert_summary_fields,
     assert_total_points_in_range,
@@ -14,7 +15,11 @@ pytestmark = pytest.mark.loose_regression
 
 
 def test_hdbscan_clustering_output_matches_loose_regression_bounds_with_time(tmp_path):
-    outdir = run_pipeline(tmp_path, "hdbscan_clustering", extra_args=["--use-time"])
+    outdir = run_pipeline(
+        tmp_path,
+        "hdbscan_clustering",
+        extra_args=["--use-time", "--hdbscan-cell-id-encoding", ODD_BARREL_ENCODING],
+    )
 
     output_h5 = outdir / "compressed_hdbscan_clustering.h5"
     summary_path = outdir / "compression_summary_hdbscan_clustering.txt"
@@ -39,7 +44,11 @@ def test_hdbscan_clustering_output_matches_loose_regression_bounds_with_time(tmp
     assert_energy_conserved_against_input(DATA, output_h5)
 
 def test_hdbscan_clustering_output_matches_loose_regression_bounds_without_time(tmp_path):
-    outdir = run_pipeline(tmp_path, "hdbscan_clustering")
+    outdir = run_pipeline(
+        tmp_path,
+        "hdbscan_clustering",
+        extra_args=["--hdbscan-cell-id-encoding", ODD_BARREL_ENCODING],
+    )
 
     output_h5 = outdir / "compressed_hdbscan_clustering.h5"
     summary_path = outdir / "compression_summary_hdbscan_clustering.txt"

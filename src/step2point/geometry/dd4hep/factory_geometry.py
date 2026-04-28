@@ -164,6 +164,15 @@ class DD4hepResolver:
         raise KeyError(f"Detector using readout {readout_name!r} not found under {self.main_xml}")
 
 
+def get_dd4hep_cell_id_encoding(main_xml: str | Path, collection_name: str) -> str:
+    resolver = DD4hepResolver(main_xml)
+    readout_ref = resolver.find_readout(collection_name)
+    id_encoding = (readout_ref.element.findtext("id") or "").strip()
+    if not id_encoding:
+        raise ValueError(f"Readout {collection_name!r} does not define an <id> encoding")
+    return id_encoding
+
+
 def _rotation_matrix_xyz(z: float, y: float, x: float) -> np.ndarray:
     cz, sz = np.cos(z), np.sin(z)
     cy, sy = np.cos(y), np.sin(y)

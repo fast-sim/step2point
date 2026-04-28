@@ -20,6 +20,7 @@ REGULAR_SUBCELL_CENTER_REFERENCE = Path(
 HDBSCAN_REFERENCE = Path(
     "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_hdbscan_clustering_reference.h5"
 )
+ODD_BARREL_ENCODING = "system:8,barrel:3,module:4,stave:1,layer:6,slice:5,x:32:-16,y:-16"
 
 FLOAT_STRICT_RTOL = 1e-7
 FLOAT_STRICT_ATOL = 1e-10

@@ -7,6 +7,7 @@ from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
 from step2point.algorithms.identity import IdentityCompression
 from step2point.algorithms.merge_within_cell import MergeWithinCell
 from step2point.algorithms.merge_within_regular_subcell import MergeWithinRegularSubcell
+from step2point.geometry.dd4hep.factory_geometry import get_dd4hep_cell_id_encoding
 from step2point.io import EDM4hepRootReader, Step2PointHDF5Reader
 from step2point.validation.benchmark_plots import generate_benchmark_plots
 
@@ -60,6 +61,15 @@ def main():
     parser.add_argument("--n-jobs", type=int, default=1, help="Number of parallel jobs for HDBSCAN (-1 for all cores).")
     parser.add_argument("--compact-xml", help="DD4hep compact XML required by geometry-aware algorithms.")
     parser.add_argument("--collection-name", help="DD4hep readout collection name required by geometry-aware algorithms.")
+    parser.add_argument(
+        "--hdbscan-cell-id-encoding",
+        help="Cell-ID encoding string used by HDBSCAN to extract system and layer.",
+    )
+    parser.add_argument(
+        "--hdbscan-collection-name",
+        nargs="+",
+        help="Readout collection name(s) used by HDBSCAN to derive cell-id decoding from compact XML.",
+    )
     parser.add_argument("--grid-x", type=int, default=2, help="Number of regular subdivisions along local cell x.")
     parser.add_argument("--grid-y", type=int, default=2, help="Number of regular subdivisions along local cell y/z.")
     parser.add_argument(
@@ -70,6 +80,16 @@ def main():
     )
     parser.add_argument("--outdir", default="outputs/plots")
     args = parser.parse_args()
+
+    def resolve_hdbscan_cell_id_encodings() -> tuple[str, ...]:
+        if args.hdbscan_cell_id_encoding:
+            return (args.hdbscan_cell_id_encoding,)
+        if args.compact_xml and args.hdbscan_collection_name:
+            return tuple(get_dd4hep_cell_id_encoding(args.compact_xml, name) for name in args.hdbscan_collection_name)
+        raise ValueError(
+            "hdbscan_clustering assumes a cell_id can be decoded to define the unmergeable points: pass either "
+            "--hdbscan-cell-id-encoding or --compact-xml together with --hdbscan-collection-name."
+        )
 
     reader = build_reader(args.input)
     if isinstance(reader, EDM4hepRootReader):
@@ -84,6 +104,7 @@ def main():
             min_samples=args.min_samples,
             cluster_selection_epsilon=args.epsilon,
             use_time=args.use_time,
+            cell_id_encoding=resolve_hdbscan_cell_id_encodings(),
             algorithm=args.hdbscan_algorithm,
             n_jobs=args.n_jobs,
         )
