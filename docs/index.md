@@ -16,7 +16,7 @@ A library for turning detailed calorimeter shower deposits into compact point-cl
 </div>
 
 <div markdown>
-![step2point workflow](assets/images/project_flow.png){ .hero-figure }
+![step2point workflow](assets/images/landing_triptych.png){ .hero-figure }
 </div>
 
 </div>
