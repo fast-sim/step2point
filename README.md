@@ -156,6 +156,21 @@ PYTHONPATH=src python examples/run_step2point_pipeline.py \
   --output outputs/pipeline_regular_grid
 ```
 
+Write an output file with HDBSCAN clustering using cell-id decoding from a compact XML readout:
+
+```bash
+PYTHONPATH=src python examples/run_step2point_pipeline.py \
+  --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+  --algorithm hdbscan \
+  --compact-xml OpenDataDetector/xml/OpenDataDetector.xml \
+  --hdbscan-collection-name ECalBarrelCollection \
+  --min-cluster-size 5 \
+  --min-samples 3 \
+  --merge-scope system_layer \
+  --use-time \
+  --output outputs/pipeline_hdbscan
+```
+
 Each run writes:
 
 - `compressed_<algorithm>.h5`

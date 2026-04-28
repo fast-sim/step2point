@@ -42,7 +42,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - algorithm: hdbscan_clustering
+          - algorithm: hdbscan
             test_file: tests/integration/test_algorithm_hdbscan_strict_regression.py
     runs-on: ubuntu-22.04
     name: strict/${{ matrix.algorithm }}
@@ -69,7 +69,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - algorithm: hdbscan_clustering
+          - algorithm: hdbscan
             test_file: tests/integration/test_algorithm_hdbscan_loose_regression.py
     runs-on: ubuntu-latest
     name: loose/${{ matrix.algorithm }}

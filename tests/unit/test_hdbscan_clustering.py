@@ -136,7 +136,7 @@ def test_hdbscan_stats_are_populated():
     shower = _make_clustered_shower()
     algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, cell_id_encoding=DD4HEP_ENCODING)
     result = algo.compress(shower)
-    assert result.algorithm == "hdbscan_clustering"
+    assert result.algorithm == "hdbscan"
     assert result.stats["n_points_before"] == shower.n_points
     assert result.stats["n_points_after"] == result.shower.n_points
     assert result.stats["compression_ratio"] < 1.0

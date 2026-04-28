@@ -83,7 +83,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         execution, which improves reproducibility across runs.
     """
 
-    name = "hdbscan_clustering"
+    name = "hdbscan"
 
     def __init__(
         self,

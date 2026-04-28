@@ -45,7 +45,7 @@ def main():
     )
     parser.add_argument(
         "--algorithm",
-        choices=["identity", "merge_within_cell", "merge_within_regular_subcell", "hdbscan_clustering"],
+        choices=["identity", "merge_within_cell", "merge_within_regular_subcell", "hdbscan"],
         default="merge_within_cell",
     )
     parser.add_argument("--min-cluster-size", type=int, default=5, help="HDBSCAN min_cluster_size.")
@@ -58,6 +58,12 @@ def main():
         help="HDBSCAN tree-building algorithm."
     )
     parser.add_argument("--use-time", action="store_true", help="Include time as a clustering feature in HDBSCAN.")
+    parser.add_argument(
+        "--merge-scope",
+        choices=["none", "layer", "system_layer", "cell_id"],
+        default="system_layer",
+        help="Detector boundary HDBSCAN is not allowed to cross.",
+    )
     parser.add_argument("--n-jobs", type=int, default=1, help="Number of parallel jobs for HDBSCAN (-1 for all cores).")
     parser.add_argument("--compact-xml", help="DD4hep compact XML required by geometry-aware algorithms.")
     parser.add_argument("--collection-name", help="DD4hep readout collection name required by geometry-aware algorithms.")
@@ -87,7 +93,7 @@ def main():
         if args.compact_xml and args.hdbscan_collection_name:
             return tuple(get_dd4hep_cell_id_encoding(args.compact_xml, name) for name in args.hdbscan_collection_name)
         raise ValueError(
-            "hdbscan_clustering assumes a cell_id can be decoded to define the unmergeable points: pass either "
+            "hdbscan assumes a cell_id can be decoded to define the unmergeable points: pass either "
             "--hdbscan-cell-id-encoding or --compact-xml together with --hdbscan-collection-name."
         )
 
@@ -98,12 +104,13 @@ def main():
         algorithm = IdentityCompression()
     elif args.algorithm == "merge_within_cell":
         algorithm = MergeWithinCell()
-    elif args.algorithm == "hdbscan_clustering":
+    elif args.algorithm == "hdbscan":
         algorithm = HDBSCANClustering(
             min_cluster_size=args.min_cluster_size,
             min_samples=args.min_samples,
             cluster_selection_epsilon=args.epsilon,
             use_time=args.use_time,
+            merge_scope=args.merge_scope,
             cell_id_encoding=resolve_hdbscan_cell_id_encodings(),
             algorithm=args.hdbscan_algorithm,
             n_jobs=args.n_jobs,

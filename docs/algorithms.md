@@ -40,7 +40,7 @@ This algorithm first subdivides each detector cell into a regular `x/N` by `y/M`
 
 ## HDBSCAN clustering
 
-> hdbscan_clustering
+> hdbscan
 
 HDBSCAN stands for **Hierarchical Density-Based Spatial Clustering of Applications with Noise**.
 It is a density-based clustering method: instead of merging points by fixed detector bins, it groups deposits that form locally dense structures and treats sparse outliers as noise. In `step2point`, this is useful when you want compression that follows shower structure rather than only detector cell boundaries.

@@ -14,15 +14,15 @@ from tests.integration.algorithm_regression_helpers import (
 pytestmark = pytest.mark.loose_regression
 
 
-def test_hdbscan_clustering_output_matches_loose_regression_bounds_with_time(tmp_path):
+def test_hdbscan_output_matches_loose_regression_bounds_with_time(tmp_path):
     outdir = run_pipeline(
         tmp_path,
-        "hdbscan_clustering",
+        "hdbscan",
         extra_args=["--use-time", "--hdbscan-cell-id-encoding", ODD_BARREL_ENCODING],
     )
 
-    output_h5 = outdir / "compressed_hdbscan_clustering.h5"
-    summary_path = outdir / "compression_summary_hdbscan_clustering.txt"
+    output_h5 = outdir / "compressed_hdbscan.h5"
+    summary_path = outdir / "compression_summary_hdbscan.txt"
 
     assert_summary_fields(
         summary_path,
@@ -30,7 +30,7 @@ def test_hdbscan_clustering_output_matches_loose_regression_bounds_with_time(tmp
             "compression_stats": "10",
             "validation_results": "30",
             "total_n_points_before": "35820",
-            "output_hdf5": "compressed_hdbscan_clustering.h5",
+            "output_hdf5": "compressed_hdbscan.h5",
         },
         expected_numeric_ranges={
             "mean_n_points_before": (3582.0, 3582.0),
@@ -43,15 +43,15 @@ def test_hdbscan_clustering_output_matches_loose_regression_bounds_with_time(tmp
     assert_total_points_in_range(output_h5, lower=2600, upper=2750)
     assert_energy_conserved_against_input(DATA, output_h5)
 
-def test_hdbscan_clustering_output_matches_loose_regression_bounds_without_time(tmp_path):
+def test_hdbscan_output_matches_loose_regression_bounds_without_time(tmp_path):
     outdir = run_pipeline(
         tmp_path,
-        "hdbscan_clustering",
+        "hdbscan",
         extra_args=["--hdbscan-cell-id-encoding", ODD_BARREL_ENCODING],
     )
 
-    output_h5 = outdir / "compressed_hdbscan_clustering.h5"
-    summary_path = outdir / "compression_summary_hdbscan_clustering.txt"
+    output_h5 = outdir / "compressed_hdbscan.h5"
+    summary_path = outdir / "compression_summary_hdbscan.txt"
 
     assert_summary_fields(
         summary_path,
@@ -59,7 +59,7 @@ def test_hdbscan_clustering_output_matches_loose_regression_bounds_without_time(
             "compression_stats": "10",
             "validation_results": "30",
             "total_n_points_before": "35820",
-            "output_hdf5": "compressed_hdbscan_clustering.h5",
+            "output_hdf5": "compressed_hdbscan.h5",
         },
         expected_numeric_ranges={
             "mean_n_points_before": (3582.0, 3582.0),
