@@ -268,6 +268,38 @@ def _default_incident_label(shower) -> str:
     return f"{energy_label} {particle}".strip()
 
 
+def _display_origin(shower) -> np.ndarray | None:
+    primary = shower.primary or {}
+    vertex = primary.get("vertex")
+    if vertex is None:
+        return None
+    origin = np.asarray(vertex, dtype=np.float64)
+    if origin.shape != (3,) or not np.isfinite(origin).all():
+        return None
+    return origin
+
+
+def _weighted_quantile(values: np.ndarray, weights: np.ndarray, quantile: float) -> float:
+    values = np.asarray(values, dtype=np.float64)
+    weights = np.asarray(weights, dtype=np.float64)
+    if values.ndim != 1 or weights.ndim != 1 or values.size != weights.size:
+        raise ValueError("values and weights must be 1D arrays of equal length")
+    if values.size == 0:
+        raise ValueError("values must be non-empty")
+    if not (0.0 <= quantile <= 1.0):
+        raise ValueError("quantile must satisfy 0 <= quantile <= 1")
+    order = np.argsort(values, kind="stable")
+    sorted_values = values[order]
+    sorted_weights = np.clip(weights[order], 0.0, None)
+    total_weight = float(np.sum(sorted_weights))
+    if total_weight <= 0.0:
+        return float(np.quantile(sorted_values, quantile))
+    cumulative = np.cumsum(sorted_weights) / total_weight
+    index = int(np.searchsorted(cumulative, quantile, side="left"))
+    index = min(index, len(sorted_values) - 1)
+    return float(sorted_values[index])
+
+
 def _equal_3d_limits(ax, coords: np.ndarray, pad_fraction: float = 0.16) -> None:
     mins = np.min(coords, axis=0)
     maxs = np.max(coords, axis=0)
@@ -365,6 +397,20 @@ def _energy_marker_sizes(energy: np.ndarray, *, min_size: float, max_size: float
     return min_size + (max_size - min_size) * scaled
 
 
+def _energy_marker_sizes_shared(
+    energy: np.ndarray,
+    *,
+    energy_max: float,
+    min_size: float,
+    max_size: float,
+) -> np.ndarray:
+    energy = np.asarray(energy, dtype=np.float64)
+    if energy.size == 0:
+        return energy
+    scaled = np.sqrt(energy / max(float(energy_max), 1e-12))
+    return min_size + (max_size - min_size) * scaled
+
+
 def _set_display_style(fig, ax) -> None:
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
@@ -376,6 +422,90 @@ def _set_display_style(fig, ax) -> None:
     ax.xaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
     ax.yaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
     ax.zaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
+
+
+def _display_geometry_for_showers(
+    showers,
+    *,
+    axis_override=None,
+    crop_percentile: float | None = None,
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
+    zlim: tuple[float, float] | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    non_empty_coords = [np.stack([s.x, s.y, s.z], axis=1) for s in showers if s.n_points > 0]
+    if not non_empty_coords:
+        raise ValueError("At least one shower must contain points.")
+    all_coords = np.concatenate(non_empty_coords, axis=0)
+    reference = showers[0]
+    axis = _display_axis(reference, axis_override=axis_override)
+    all_energy = np.concatenate([np.asarray(s.E, dtype=np.float64) for s in showers if s.n_points > 0])
+    origin = _display_origin(reference)
+    if origin is None:
+        origin = np.average(all_coords, axis=0, weights=all_energy)
+    projected = (all_coords - origin) @ axis
+    display_coords = _crop_coordinates(
+        all_coords,
+        weights=all_energy,
+        axis=axis,
+        origin=origin,
+        energy_containment=crop_percentile,
+        xlim=xlim,
+        ylim=ylim,
+        zlim=zlim,
+    )
+    return all_coords, all_energy, origin, axis, projected, display_coords
+
+
+def _incident_line_points(
+    origin: np.ndarray,
+    axis: np.ndarray,
+    projected: np.ndarray,
+    energy: np.ndarray,
+    *,
+    line_length: float = 90.0,
+    gap: float = 10.0,
+    front_quantile: float = 0.01,
+) -> tuple[np.ndarray, np.ndarray]:
+    front_long = _weighted_quantile(projected, energy, front_quantile)
+    shower_front = origin + front_long * axis
+    line_start = shower_front - (gap + line_length) * axis
+    line_end = shower_front - gap * axis
+    return line_start, line_end
+
+
+def _draw_incident_label(fig, ax, line_start: np.ndarray, line_end: np.ndarray, text: str) -> None:
+    fig.canvas.draw()
+    projected_line = ax.get_proj() @ np.array(
+        [
+            [line_start[0], line_start[1], line_start[2], 1.0],
+            [line_end[0], line_end[1], line_end[2], 1.0],
+        ],
+        dtype=np.float64,
+    ).T
+    projected_line = projected_line[:2] / projected_line[3]
+    display_line = ax.transData.transform(projected_line.T)
+    label_delta = display_line[1] - display_line[0]
+    label_norm = np.linalg.norm(label_delta)
+    if np.isfinite(label_norm) and label_norm > 0.0:
+        normal = np.array([-label_delta[1], label_delta[0]], dtype=np.float64) / label_norm
+    else:
+        normal = np.array([0.0, 1.0], dtype=np.float64)
+    label_position = fig.transFigure.inverted().transform(np.mean(display_line, axis=0) + 15.0 * normal)
+    label_position = np.clip(label_position, 0.02, 0.98)
+    label_angle = float(np.degrees(np.arctan2(label_delta[1], label_delta[0])))
+    fig.text(
+        label_position[0],
+        label_position[1],
+        text,
+        color="#666666",
+        fontsize=7,
+        alpha=0.78,
+        rotation=label_angle,
+        rotation_mode="anchor",
+        ha="center",
+        va="center",
+    )
 
 
 def render_shower_display_3d(
@@ -403,21 +533,28 @@ def render_shower_display_3d(
     if not showers:
         raise ValueError("At least one shower is required.")
 
-    non_empty_coords = [np.stack([s.x, s.y, s.z], axis=1) for s in showers if s.n_points > 0]
-    if not non_empty_coords:
-        raise ValueError("At least one shower must contain points.")
-    all_coords = np.concatenate(non_empty_coords, axis=0)
+    all_coords, all_energy, origin, axis, projected, display_coords = _display_geometry_for_showers(
+        showers,
+        axis_override=axis_override,
+        crop_percentile=crop_percentile,
+        xlim=xlim,
+        ylim=ylim,
+        zlim=zlim,
+    )
     fig = plt.figure(figsize=figsize, dpi=dpi)
     ax = fig.add_subplot(111, projection="3d")
     _set_display_style(fig, ax)
     ax.set_position((0.0, 0.0, 1.0, 1.0))
 
     palettes = [
-        LinearSegmentedColormap.from_list("display_orange", ["#ffeb99", "#ff8f1f", "#d62828"]),
-        LinearSegmentedColormap.from_list("display_teal", ["#b8fff4", "#23c9b7", "#15616d"]),
-        LinearSegmentedColormap.from_list("display_blue", ["#d9f0ff", "#4ea8de", "#4361ee"]),
+        LinearSegmentedColormap.from_list(
+            "display_single",
+            ["#fff3d6", "#ffd166", "#ff8c42", "#ef476f", "#7b2cbf"],
+        ),
+        plt.get_cmap("turbo"),
+        LinearSegmentedColormap.from_list("display_blue", ["#e3f2ff", "#6ec5ff", "#4361ee", "#3a0ca3"]),
     ]
-    edge_colours = ["#fff0b8", "#d8fff9", "#dde9ff"]
+    edge_colours = ["#fff6de", "#fff7d6", "#e6ecff"]
 
     for index, shower in enumerate(showers):
         if shower.n_points == 0:
@@ -427,7 +564,7 @@ def render_shower_display_3d(
         colours = np.log10(np.clip(energy, 1e-12, None))
         norm = Normalize(vmin=float(np.percentile(colours, 4)), vmax=float(np.percentile(colours, 99)))
         cmap = palettes[index % len(palettes)]
-        if index == 0:
+        if len(showers) == 1:
             ax.scatter(
                 coords[:, 0],
                 coords[:, 1],
@@ -435,8 +572,22 @@ def render_shower_display_3d(
                 c=colours,
                 cmap=cmap,
                 norm=norm,
-                s=_energy_marker_sizes(energy, min_size=2.0, max_size=18.0),
-                alpha=0.20,
+                s=_energy_marker_sizes(energy, min_size=10.0, max_size=42.0),
+                alpha=0.88,
+                edgecolors="#fff7e8",
+                linewidths=0.18,
+                depthshade=False,
+            )
+        elif index == 0:
+            ax.scatter(
+                coords[:, 0],
+                coords[:, 1],
+                coords[:, 2],
+                c=colours,
+                cmap=cmap,
+                norm=norm,
+                s=_energy_marker_sizes(energy, min_size=4.0, max_size=24.0),
+                alpha=0.42,
                 linewidths=0.0,
                 depthshade=False,
             )
@@ -448,33 +599,15 @@ def render_shower_display_3d(
                 c=colours,
                 cmap=cmap,
                 norm=norm,
-                s=_energy_marker_sizes(energy, min_size=18.0, max_size=70.0),
-                alpha=0.88,
+                s=_energy_marker_sizes(energy, min_size=28.0, max_size=120.0),
+                alpha=0.96,
                 edgecolors=edge_colours[index % len(edge_colours)],
-                linewidths=0.35,
+                linewidths=0.45,
                 depthshade=False,
             )
 
     reference = showers[0]
-    axis = _display_axis(reference, axis_override=axis_override)
-    all_energy = np.concatenate([np.asarray(s.E, dtype=np.float64) for s in showers if s.n_points > 0])
-    origin = np.average(all_coords, axis=0, weights=all_energy)
-    projected = (all_coords - origin) @ axis
-    span_long = float(np.ptp(projected))
-    line_length = max(0.24 * span_long, 12.0)
-    gap = max(0.025 * span_long, 1.5)
-    front_cut = np.percentile(projected, 8.0)
-    front_mask = projected <= front_cut
-    front_coords = all_coords[front_mask]
-    front_energy = all_energy[front_mask]
-    if front_coords.size and float(np.sum(front_energy)) > 0.0:
-        front_anchor = np.average(front_coords, axis=0, weights=front_energy)
-    else:
-        front_anchor = all_coords[int(np.argmin(projected))]
-    front_long = float((front_anchor - origin) @ axis)
-    shower_front = front_anchor + (float(np.min(projected)) - front_long) * axis
-    line_start = shower_front - (gap + line_length) * axis
-    line_end = shower_front - gap * axis
+    line_start, line_end = _incident_line_points(origin, axis, projected, all_energy)
     ax.plot(
         [line_start[0], line_end[0]],
         [line_start[1], line_end[1]],
@@ -485,16 +618,6 @@ def render_shower_display_3d(
         alpha=0.72,
     )
 
-    display_coords = _crop_coordinates(
-        all_coords,
-        weights=all_energy,
-        axis=axis,
-        origin=origin,
-        energy_containment=crop_percentile,
-        xlim=xlim,
-        ylim=ylim,
-        zlim=zlim,
-    )
     _equal_3d_limits(ax, display_coords, pad_fraction=0.05)
     if xlim is not None:
         ax.set_xlim(*xlim)
@@ -507,39 +630,404 @@ def render_shower_display_3d(
         ax.set_box_aspect((1.0, 1.0, 1.0))
     except AttributeError:  # pragma: no cover - older matplotlib fallback
         pass
-    fig.canvas.draw()
-    projected_line = ax.get_proj() @ np.array(
-        [
-            [line_start[0], line_start[1], line_start[2], 1.0],
-            [line_end[0], line_end[1], line_end[2], 1.0],
-        ],
-        dtype=np.float64,
-    ).T
-    projected_line = projected_line[:2] / projected_line[3]
-    display_line = ax.transData.transform(projected_line.T)
-    label_delta = display_line[1] - display_line[0]
-    label_norm = np.linalg.norm(label_delta)
-    if np.isfinite(label_norm) and label_norm > 0.0:
-        normal = np.array([-label_delta[1], label_delta[0]], dtype=np.float64) / label_norm
-    else:
-        normal = np.array([0.0, 1.0], dtype=np.float64)
-    label_position = fig.transFigure.inverted().transform(np.mean(display_line, axis=0) + 15.0 * normal)
-    label_position = np.clip(label_position, 0.02, 0.98)
-    label_angle = float(np.degrees(np.arctan2(label_delta[1], label_delta[0])))
-    fig.text(
-        label_position[0],
-        label_position[1],
-        incident_label if incident_label is not None else _default_incident_label(reference),
-        color="#666666",
-        fontsize=7,
-        alpha=0.78,
-        rotation=label_angle,
-        rotation_mode="anchor",
-        ha="center",
-        va="center",
-    )
+    _draw_incident_label(fig, ax, line_start, line_end, incident_label if incident_label is not None else _default_incident_label(reference))
     fig.subplots_adjust(left=0.0, right=1.0, bottom=0.0, top=1.0)
     fig.savefig(outpath, facecolor=fig.get_facecolor(), pad_inches=0.0)
+    plt.close(fig)
+    if outpath.suffix.lower() == ".png":
+        _trim_near_white_png(outpath)
+    return outpath
+
+
+def render_shower_display_triptych_3d(
+    showers,
+    outpath,
+    *,
+    panel_titles: list[str] | tuple[str, str, str] | None = None,
+    panel_subtitles: list[str] | tuple[str, str, str] | None = None,
+    axis_override=None,
+    incident_label: str | None = None,
+    view: tuple[float, float] = (20.0, -58.0),
+    figsize: tuple[float, float] = (20.0, 10.5),
+    dpi: int = 240,
+    crop_percentile: float | None = None,
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
+    zlim: tuple[float, float] | None = None,
+) -> Path:
+    outpath = _prepare_outpath(outpath)
+    showers = list(showers)
+    if len(showers) != 3:
+        raise ValueError("Triptych display expects exactly three showers.")
+
+    all_coords, all_energy, origin, axis, projected, display_coords = _display_geometry_for_showers(
+        showers,
+        axis_override=axis_override,
+        crop_percentile=crop_percentile,
+        xlim=xlim,
+        ylim=ylim,
+        zlim=zlim,
+    )
+    fig = plt.figure(figsize=figsize, dpi=dpi)
+    fig.patch.set_facecolor("white")
+    gs = fig.add_gridspec(2, 3, height_ratios=[20.0, 4.5], hspace=0.0, wspace=0.02)
+    axes = [fig.add_subplot(gs[0, i], projection="3d") for i in range(3)]
+
+    colour_values = np.log10(np.clip(all_energy, 1e-12, None))
+    global_norm = Normalize(
+        vmin=float(np.percentile(colour_values, 2)),
+        vmax=float(np.percentile(colour_values, 99.5)),
+    )
+    palette = LinearSegmentedColormap.from_list(
+        "display_triptych",
+        ["#fff4db", "#ffd166", "#ff8c42", "#ff4d1a", "#d81b60", "#7b2cbf"],
+    )
+    energy_max = float(np.max(all_energy))
+    line_start, line_end = _incident_line_points(origin, axis, projected, all_energy)
+    label_text = incident_label if incident_label is not None else _default_incident_label(showers[0])
+
+    counts = [shower.n_points for shower in showers]
+    if panel_titles is None:
+        panel_titles = ["Detailed Shower", "Intermediate Representation", "Compressed Shower"]
+    if panel_subtitles is None:
+        panel_subtitles = []
+        base = max(counts[0], 1)
+        for count in counts:
+            if count == counts[0]:
+                panel_subtitles.append(f"{count:,} points")
+            else:
+                panel_subtitles.append(f"{count:,} points   ({base / max(count, 1):.1f}x reduction)")
+
+    for idx, (ax, shower) in enumerate(zip(axes, showers, strict=True)):
+        _set_display_style(fig, ax)
+        ax.set_position(ax.get_position())
+        coords = np.stack([shower.x, shower.y, shower.z], axis=1)
+        energy = np.asarray(shower.E, dtype=np.float64)
+        colours = np.log10(np.clip(energy, 1e-12, None))
+        ax.scatter(
+            coords[:, 0],
+            coords[:, 1],
+            coords[:, 2],
+            c=colours,
+            cmap=palette,
+            norm=global_norm,
+            s=_energy_marker_sizes_shared(energy, energy_max=energy_max, min_size=3.0, max_size=340.0),
+            alpha=0.9,
+            edgecolors="#fff8ef",
+            linewidths=0.15 if idx == 0 else 0.2,
+            depthshade=False,
+        )
+        ax.plot(
+            [line_start[0], line_end[0]],
+            [line_start[1], line_end[1]],
+            [line_start[2], line_end[2]],
+            color="#7a7a7a",
+            linewidth=0.9,
+            linestyle=(0, (1.7, 2.0)),
+            alpha=0.72,
+        )
+        _equal_3d_limits(ax, display_coords, pad_fraction=0.02)
+        if xlim is not None:
+            ax.set_xlim(*xlim)
+        if ylim is not None:
+            ax.set_ylim(*ylim)
+        if zlim is not None:
+            ax.set_zlim(*zlim)
+        ax.view_init(elev=view[0], azim=view[1])
+        try:
+            ax.set_box_aspect((1.0, 1.0, 1.0))
+        except AttributeError:  # pragma: no cover
+            pass
+
+    for ax, title, subtitle in zip(axes, panel_titles, panel_subtitles, strict=True):
+        bbox = ax.get_position()
+        fig.text(
+            0.5 * (bbox.x0 + bbox.x1),
+            bbox.y1 + 0.02,
+            title.upper(),
+            ha="center",
+            va="bottom",
+            fontsize=16,
+            fontweight="bold",
+            color="#222222",
+        )
+        fig.text(
+            0.5 * (bbox.x0 + bbox.x1),
+            bbox.y1 - 0.006,
+            subtitle,
+            ha="center",
+            va="bottom",
+            fontsize=11,
+            color="#555555",
+        )
+    legend_ax = fig.add_subplot(gs[1, :])
+    legend_ax.axis("off")
+    legend_ax.set_facecolor("white")
+
+    from matplotlib.patches import FancyBboxPatch
+
+    left_box = FancyBboxPatch(
+        (0.02, 0.16),
+        0.56,
+        0.68,
+        boxstyle="round,pad=0.01,rounding_size=0.015",
+        linewidth=1.2,
+        edgecolor="#d0d0d0",
+        facecolor="white",
+        transform=legend_ax.transAxes,
+    )
+    right_box = FancyBboxPatch(
+        (0.79, 0.20),
+        0.18,
+        0.60,
+        boxstyle="round,pad=0.01,rounding_size=0.015",
+        linewidth=1.2,
+        edgecolor="#d0d0d0",
+        facecolor="white",
+        transform=legend_ax.transAxes,
+    )
+    legend_ax.add_patch(left_box)
+    legend_ax.add_patch(right_box)
+
+    legend_ax.text(0.06, 0.68, "Color = deposited energy", transform=legend_ax.transAxes, fontsize=10, color="#333333", weight="bold")
+    gradient_ax = legend_ax.inset_axes([0.06, 0.38, 0.22, 0.16])
+    gradient = np.linspace(0.0, 1.0, 256).reshape(1, -1)
+    gradient_ax.imshow(gradient, aspect="auto", cmap=palette, origin="lower")
+    gradient_ax.set_axis_off()
+    legend_ax.text(0.06, 0.28, "low", transform=legend_ax.transAxes, fontsize=9, color="#666666")
+    legend_ax.text(0.26, 0.28, "high", transform=legend_ax.transAxes, fontsize=9, color="#666666", ha="right")
+
+    legend_ax.text(0.34, 0.68, "Size = deposited energy", transform=legend_ax.transAxes, fontsize=10, color="#333333", weight="bold")
+    size_ax = legend_ax.inset_axes([0.34, 0.30, 0.18, 0.28])
+    size_ax.axis("off")
+    size_energies = np.linspace(0.05, 1.0, 5) * energy_max
+    size_values = _energy_marker_sizes_shared(size_energies, energy_max=energy_max, min_size=3.0, max_size=340.0)
+    xs = np.linspace(0.12, 0.88, len(size_values))
+    size_ax.scatter(xs, np.full_like(xs, 0.5), s=size_values, c="#ff9f1c", edgecolors="#fff5eb", linewidths=0.2)
+    size_ax.set_xlim(0.0, 1.0)
+    size_ax.set_ylim(0.0, 1.0)
+    legend_ax.text(0.34, 0.28, "low", transform=legend_ax.transAxes, fontsize=9, color="#666666")
+    legend_ax.text(0.52, 0.28, "high", transform=legend_ax.transAxes, fontsize=9, color="#666666", ha="right")
+
+    primary = showers[0].primary or {}
+    info_lines = [
+        "Shower information",
+        f"Incident particle: {_particle_label_from_pdg(int(primary.get('pdg', 0)))}",
+        f"Energy: {_format_energy_gev(np.linalg.norm(np.asarray(primary.get('momentum', (np.nan, np.nan, np.nan)), dtype=np.float64)))}",
+        "Detector: Open Data Detector",
+    ]
+    y = 0.67
+    for i, line in enumerate(info_lines):
+        legend_ax.text(
+            0.80,
+            y,
+            line,
+            transform=legend_ax.transAxes,
+            fontsize=10 if i else 11,
+            color="#333333",
+            weight="bold" if i == 0 else None,
+        )
+        y -= 0.16 if i == 0 else 0.15
+
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.90, bottom=0.15)
+    fig.savefig(outpath, facecolor=fig.get_facecolor(), pad_inches=0.02)
+    plt.close(fig)
+    if outpath.suffix.lower() == ".png":
+        _trim_near_white_png(outpath)
+    return outpath
+
+
+def render_shower_display_comparison_3d(
+    showers,
+    outpath,
+    *,
+    panel_titles: list[str] | tuple[str, str] | None = None,
+    panel_subtitles: list[str] | tuple[str, str] | None = None,
+    axis_override=None,
+    incident_label: str | None = None,
+    view: tuple[float, float] = (20.0, -58.0),
+    figsize: tuple[float, float] = (14.5, 10.5),
+    dpi: int = 240,
+    crop_percentile: float | None = None,
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
+    zlim: tuple[float, float] | None = None,
+) -> Path:
+    outpath = _prepare_outpath(outpath)
+    showers = list(showers)
+    if len(showers) != 2:
+        raise ValueError("Comparison display expects exactly two showers.")
+
+    all_coords, all_energy, origin, axis, projected, display_coords = _display_geometry_for_showers(
+        showers,
+        axis_override=axis_override,
+        crop_percentile=crop_percentile,
+        xlim=xlim,
+        ylim=ylim,
+        zlim=zlim,
+    )
+    fig = plt.figure(figsize=figsize, dpi=dpi)
+    fig.patch.set_facecolor("white")
+    gs = fig.add_gridspec(2, 2, height_ratios=[20.0, 4.8], hspace=0.0, wspace=0.03)
+    axes = [fig.add_subplot(gs[0, i], projection="3d") for i in range(2)]
+
+    colour_values = np.log10(np.clip(all_energy, 1e-12, None))
+    global_norm = Normalize(
+        vmin=float(np.percentile(colour_values, 2)),
+        vmax=float(np.percentile(colour_values, 99.5)),
+    )
+    palette = LinearSegmentedColormap.from_list(
+        "display_comparison",
+        ["#fff4db", "#ffd166", "#ff8c42", "#ff4d1a", "#d81b60", "#7b2cbf"],
+    )
+    energy_max = float(np.max(all_energy))
+    line_start, line_end = _incident_line_points(origin, axis, projected, all_energy)
+
+    counts = [shower.n_points for shower in showers]
+    if panel_titles is None:
+        panel_titles = ["Detailed Shower", "Compressed Shower"]
+    if panel_subtitles is None:
+        panel_subtitles = []
+        base = max(counts[0], 1)
+        for count in counts:
+            if count == counts[0]:
+                panel_subtitles.append(f"{count:,} points")
+            else:
+                panel_subtitles.append(f"{count:,} points   ({base / max(count, 1):.1f}x reduction)")
+
+    for ax, shower in zip(axes, showers, strict=True):
+        _set_display_style(fig, ax)
+        coords = np.stack([shower.x, shower.y, shower.z], axis=1)
+        energy = np.asarray(shower.E, dtype=np.float64)
+        colours = np.log10(np.clip(energy, 1e-12, None))
+        ax.scatter(
+            coords[:, 0],
+            coords[:, 1],
+            coords[:, 2],
+            c=colours,
+            cmap=palette,
+            norm=global_norm,
+            s=_energy_marker_sizes_shared(energy, energy_max=energy_max, min_size=3.0, max_size=340.0),
+            alpha=0.9,
+            edgecolors="#fff8ef",
+            linewidths=0.18,
+            depthshade=False,
+        )
+        ax.plot(
+            [line_start[0], line_end[0]],
+            [line_start[1], line_end[1]],
+            [line_start[2], line_end[2]],
+            color="#7a7a7a",
+            linewidth=0.9,
+            linestyle=(0, (1.7, 2.0)),
+            alpha=0.72,
+        )
+        _equal_3d_limits(ax, display_coords, pad_fraction=0.02)
+        if xlim is not None:
+            ax.set_xlim(*xlim)
+        if ylim is not None:
+            ax.set_ylim(*ylim)
+        if zlim is not None:
+            ax.set_zlim(*zlim)
+        ax.view_init(elev=view[0], azim=view[1])
+        try:
+            ax.set_box_aspect((1.0, 1.0, 1.0))
+        except AttributeError:  # pragma: no cover
+            pass
+
+    for ax, title, subtitle in zip(axes, panel_titles, panel_subtitles, strict=True):
+        bbox = ax.get_position()
+        fig.text(
+            0.5 * (bbox.x0 + bbox.x1),
+            bbox.y1 + 0.02,
+            title.upper(),
+            ha="center",
+            va="bottom",
+            fontsize=16,
+            fontweight="bold",
+            color="#222222",
+        )
+        fig.text(
+            0.5 * (bbox.x0 + bbox.x1),
+            bbox.y1 - 0.006,
+            subtitle,
+            ha="center",
+            va="bottom",
+            fontsize=11,
+            color="#555555",
+        )
+
+    footer_ax = fig.add_subplot(gs[1, :])
+    footer_ax.axis("off")
+    footer_ax.set_facecolor("white")
+
+    from matplotlib.patches import FancyBboxPatch
+
+    footer_box = FancyBboxPatch(
+        (0.03, 0.14),
+        0.62,
+        0.70,
+        boxstyle="round,pad=0.01,rounding_size=0.015",
+        linewidth=1.2,
+        edgecolor="#d0d0d0",
+        facecolor="white",
+        transform=footer_ax.transAxes,
+    )
+    info_box = FancyBboxPatch(
+        (0.79, 0.20),
+        0.18,
+        0.60,
+        boxstyle="round,pad=0.01,rounding_size=0.015",
+        linewidth=1.2,
+        edgecolor="#d0d0d0",
+        facecolor="white",
+        transform=footer_ax.transAxes,
+    )
+    footer_ax.add_patch(footer_box)
+    footer_ax.add_patch(info_box)
+
+    footer_ax.text(0.06, 0.64, "Color = deposited energy", transform=footer_ax.transAxes, fontsize=10, color="#333333", weight="bold")
+    gradient_ax = footer_ax.inset_axes([0.06, 0.36, 0.24, 0.16])
+    gradient = np.linspace(0.0, 1.0, 256).reshape(1, -1)
+    gradient_ax.imshow(gradient, aspect="auto", cmap=palette, origin="lower")
+    gradient_ax.set_axis_off()
+    footer_ax.text(0.06, 0.26, "low", transform=footer_ax.transAxes, fontsize=9, color="#666666")
+    footer_ax.text(0.30, 0.26, "high", transform=footer_ax.transAxes, fontsize=9, color="#666666", ha="right")
+
+    footer_ax.text(0.34, 0.68, "Size = deposited energy", transform=footer_ax.transAxes, fontsize=10, color="#333333", weight="bold")
+    size_ax = footer_ax.inset_axes([0.34, 0.30, 0.18, 0.28])
+    size_ax.axis("off")
+    size_energies = np.linspace(0.05, 1.0, 5) * energy_max
+    size_values = _energy_marker_sizes_shared(size_energies, energy_max=energy_max, min_size=3.0, max_size=340.0)
+    xs = np.linspace(0.12, 0.88, len(size_values))
+    size_ax.scatter(xs, np.full_like(xs, 0.5), s=size_values, c="#ff9f1c", edgecolors="#fff5eb", linewidths=0.2)
+    size_ax.set_xlim(0.0, 1.0)
+    size_ax.set_ylim(0.0, 1.0)
+    footer_ax.text(0.34, 0.28, "low", transform=footer_ax.transAxes, fontsize=9, color="#666666")
+    footer_ax.text(0.52, 0.28, "high", transform=footer_ax.transAxes, fontsize=9, color="#666666", ha="right")
+
+    primary = showers[0].primary or {}
+    info_lines = [
+        "Shower information",
+        f"Incident particle: {_particle_label_from_pdg(int(primary.get('pdg', 0)))}",
+        f"Energy: {_format_energy_gev(np.linalg.norm(np.asarray(primary.get('momentum', (np.nan, np.nan, np.nan)), dtype=np.float64)))}",
+        "Detector: Open Data Detector",
+    ]
+    y = 0.67
+    for i, line in enumerate(info_lines):
+        footer_ax.text(
+            0.80,
+            y,
+            line,
+            transform=footer_ax.transAxes,
+            fontsize=10 if i else 11,
+            color="#333333",
+            weight="bold" if i == 0 else None,
+        )
+        y -= 0.16 if i == 0 else 0.15
+
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.90, bottom=0.15)
+    fig.savefig(outpath, facecolor=fig.get_facecolor(), pad_inches=0.02)
     plt.close(fig)
     if outpath.suffix.lower() == ".png":
         _trim_near_white_png(outpath)

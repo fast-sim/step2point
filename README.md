@@ -265,6 +265,46 @@ python examples/inspect_showers.py \
   --outdir outputs/inspect_root
 ```
 
+### Presentation-style shower displays
+
+Use [examples/render_shower_display.py](/home/anna/Workspace/step2point/examples/render_shower_display.py:1) for publication/PR-style 3D renders. The same script now handles:
+
+- `1` input: single-shower display
+- `2` inputs: side-by-side comparison
+- `3` inputs: triptych comparison
+
+Single shower:
+
+```bash
+python examples/render_shower_display.py \
+  --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+  --shower-index 0 \
+  --out outputs/gamma_display.png \
+  --crop-percentile 70
+```
+
+Two-shower comparison:
+
+```bash
+python examples/render_shower_display.py \
+  --input full.h5 compressed.h5 \
+  --panel-title "Detailed Geant4 Steps" "Final Compressed Cloud" \
+  --shower-index 0 \
+  --out outputs/gamma_comparison.png \
+  --crop-percentile 70
+```
+
+Three-shower comparison:
+
+```bash
+python examples/render_shower_display.py \
+  --input full.h5 subcell.h5 compressed.h5 \
+  --panel-title "Detailed Geant4 Steps" "Sub-cell Clustering" "Final Compressed Cloud" \
+  --shower-index 0 \
+  --out outputs/gamma_triptych.png \
+  --crop-percentile 70
+```
+
 
 Typical outputs are:
 - `dataset_observables.png`

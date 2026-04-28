@@ -223,6 +223,51 @@ The views below are all `XY` projections:
 
 ![detector cells sensitive xy](assets/images/detector_cells/ecalbarrelcollection_merged_within_cell_module_10_all_layers_cells_sensitive_xy.png){ width="30%" }
 
+## Presentation-style 3D shower displays
+
+For publication or PR-style 3D renders, use `examples/render_shower_display.py`. The same script supports one, two, or three inputs and chooses the appropriate layout automatically.
+
+Single shower:
+
+```bash
+python examples/render_shower_display.py \
+  --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+  --shower-index 0 \
+  --out outputs/gamma_display.png \
+  --crop-percentile 70
+```
+
+Two-shower comparison:
+
+```bash
+python examples/render_shower_display.py \
+  --input full.h5 compressed.h5 \
+  --panel-title "Detailed Geant4 Steps" "Final Compressed Cloud" \
+  --shower-index 0 \
+  --out outputs/gamma_comparison.png \
+  --crop-percentile 70
+```
+
+Three-shower comparison:
+
+```bash
+python examples/render_shower_display.py \
+  --input full.h5 subcell.h5 compressed.h5 \
+  --panel-title "Detailed Geant4 Steps" "Sub-cell Clustering" "Final Compressed Cloud" \
+  --shower-index 0 \
+  --out outputs/gamma_triptych.png \
+  --crop-percentile 70
+```
+
+Useful options:
+
+- `--crop-percentile 70`
+  tightens the view to the shower core using cylindrical energy containment around the shower axis
+- `--panel-title ...`
+  sets explicit captions for the 2- and 3-panel layouts
+- `--axis AX AY AZ`
+  overrides the incident direction when you do not want to infer it from primary momentum
+
 ## Units used in the plots
 
 The example HDF5 files in this repository are produced by [step2point dataset repository](https://gitlab.cern.ch/fastsim/step2point/-/tree/v1.1.0?ref_type=tags), which preserves the EDM4hep values directly:

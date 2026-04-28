@@ -4,7 +4,14 @@ import numpy as np
 
 from step2point.core.shower import Shower
 from step2point.validation.benchmark_plots import generate_observables_matrix
-from step2point.vis import plot_shower_distributions, plot_shower_overview, plot_shower_projections, render_shower_display_3d
+from step2point.vis import (
+    plot_shower_distributions,
+    plot_shower_overview,
+    plot_shower_projections,
+    render_shower_display_comparison_3d,
+    render_shower_display_3d,
+    render_shower_display_triptych_3d,
+)
 
 
 def _toy_shower() -> Shower:
@@ -26,9 +33,21 @@ def test_visualization_helpers_write_png_files(tmp_path: Path):
     plot_shower_distributions(shower, tmp_path / "distributions.png")
     plot_shower_overview(shower, tmp_path / "overview.png", axis_override=[0.0, 0.0, 1.0])
     render_shower_display_3d([shower], tmp_path / "display.png", axis_override=[0.0, 0.0, 1.0])
+    render_shower_display_comparison_3d(
+        [shower, shower.copy()],
+        tmp_path / "comparison.png",
+        axis_override=[0.0, 0.0, 1.0],
+    )
+    render_shower_display_triptych_3d(
+        [shower, shower.copy(), shower.copy()],
+        tmp_path / "triptych.png",
+        axis_override=[0.0, 0.0, 1.0],
+    )
     generate_observables_matrix([shower, shower.copy()], tmp_path / "matrix.png", selected_index=0)
     assert (tmp_path / "projections.png").exists()
     assert (tmp_path / "distributions.png").exists()
     assert (tmp_path / "overview.png").exists()
     assert (tmp_path / "display.png").exists()
+    assert (tmp_path / "comparison.png").exists()
+    assert (tmp_path / "triptych.png").exists()
     assert (tmp_path / "matrix.png").exists()
