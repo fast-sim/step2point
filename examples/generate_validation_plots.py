@@ -9,7 +9,10 @@ from step2point.algorithms.merge_within_cell import MergeWithinCell
 from step2point.algorithms.merge_within_regular_subcell import MergeWithinRegularSubcell
 from step2point.geometry.dd4hep.factory_geometry import get_dd4hep_cell_id_encoding
 from step2point.io import EDM4hepRootReader, Step2PointHDF5Reader
-from step2point.validation.benchmark_plots import generate_benchmark_plots
+from step2point.validation.benchmark_plots import (
+    generate_benchmark_comparison_plots,
+    generate_benchmark_plots,
+)
 
 DEFAULT_ROOT_COLLECTIONS = (
     "ECalBarrelCollection",
@@ -61,6 +64,11 @@ def pair_showers(reference_showers, compared_showers, *, reference_label: str, c
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True, nargs="+")
+    parser.add_argument(
+        "--label",
+        nargs="+",
+        help="Human-readable labels for input files. Required when comparing three or more inputs.",
+    )
     parser.add_argument(
         "--collections",
         nargs="+",
@@ -131,6 +139,9 @@ def main():
     args = parser.parse_args()
     collections = parse_collections(args.collections)
 
+    if args.label is not None and len(args.label) != len(args.input):
+        raise ValueError("--label must provide exactly one label per --input file.")
+
     def resolve_hdbscan_cell_id_encodings() -> tuple[str, ...]:
         if args.hdbscan_cell_id_encoding:
             return (args.hdbscan_cell_id_encoding,)
@@ -143,27 +154,30 @@ def main():
 
     if len(args.input) > 1:
         reference_path = args.input[0]
+        if len(args.input) > 2 and args.label is None:
+            raise ValueError("Comparison mode with three or more --input files requires --label for each input.")
+        reference_label = "pre" if args.label is None else args.label[0]
         reference_showers = load_showers(reference_path, collections)
-        base_outdir = Path(args.outdir)
-        for index, compared_path in enumerate(args.input[1:], start=1):
+        compared_labels = (
+            ["post"] if len(args.input) == 2 and args.label is None else args.label[1:]
+        )
+        comparisons = []
+        for compared_path, compared_label in zip(args.input[1:], compared_labels, strict=True):
             compared_showers = load_showers(compared_path, collections)
             pairs = pair_showers(
                 reference_showers,
                 compared_showers,
-                reference_label=reference_path,
-                compared_label=compared_path,
+                reference_label=reference_label,
+                compared_label=compared_label,
             )
-            comparison_outdir = (
-                base_outdir
-                if len(args.input) == 2
-                else base_outdir / f"{index:02d}_{Path(compared_path).stem}"
-            )
-            generate_benchmark_plots(
-                pairs,
-                comparison_outdir,
-                axis_override=args.axis,
-                origin_override=args.origin,
-            )
+            comparisons.append((compared_label, pairs))
+        generate_benchmark_comparison_plots(
+            comparisons,
+            Path(args.outdir),
+            axis_override=args.axis,
+            origin_override=args.origin,
+            pre_label=reference_label,
+        )
         return
 
     input_path = args.input[0]
