@@ -22,7 +22,7 @@ jobs:
             test_file: tests/integration/test_algorithm_merge_within_regular_subcell_center_strict_regression.py
             needs_odd_geometry: true
           - algorithm: cluster_within_cell
-            test_file: tests/integration/test_algorithm_cluster_within_cell_regression.py
+            test_file: tests/integration/test_algorithm_cluster_within_cell_strict_regression.py
             needs_odd_geometry: false
     runs-on: ubuntu-22.04
     name: strict/${{ matrix.algorithm }}
