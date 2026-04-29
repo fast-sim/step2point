@@ -183,7 +183,7 @@ def test_hdbscan_use_time_true_requires_time():
 
 
 def test_hdbscan_use_time_false_ignores_time():
-    """use_time=False clusters on (x, y) only even when time is present."""
+    """use_time=False clusters on (x, y, z) only even when time is present."""
     shower = _make_clustered_shower()
     assert shower.t is not None
     algo_with_t = HDBSCANClustering(min_cluster_size=5, min_samples=3, use_time=True, cell_id_encoding=DD4HEP_ENCODING)

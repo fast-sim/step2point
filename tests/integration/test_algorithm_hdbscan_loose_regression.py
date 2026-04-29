@@ -34,13 +34,13 @@ def test_hdbscan_output_matches_loose_regression_bounds_with_time(tmp_path):
         },
         expected_numeric_ranges={
             "mean_n_points_before": (3582.0, 3582.0),
-            "mean_n_points_after": (260.0, 275.0),
-            "mean_compression_ratio": (0.072, 0.077),
-            "total_n_points_after": (2600.0, 2750.0),
-            "total_compression_ratio": (0.072, 0.077),
+            "mean_n_points_after": (260.0, 280.0),
+            "mean_compression_ratio": (0.072, 0.078),
+            "total_n_points_after": (2600.0, 2800.0),
+            "total_compression_ratio": (0.072, 0.078),
         },
     )
-    assert_total_points_in_range(output_h5, lower=2600, upper=2750)
+    assert_total_points_in_range(output_h5, lower=2600, upper=2800)
     assert_energy_conserved_against_input(DATA, output_h5)
 
 def test_hdbscan_output_matches_loose_regression_bounds_without_time(tmp_path):
@@ -63,11 +63,11 @@ def test_hdbscan_output_matches_loose_regression_bounds_without_time(tmp_path):
         },
         expected_numeric_ranges={
             "mean_n_points_before": (3582.0, 3582.0),
-            "mean_n_points_after": (260.0, 275.0),
-            "mean_compression_ratio": (0.072, 0.077),
-            "total_n_points_after": (2600.0, 2750.0),
-            "total_compression_ratio": (0.072, 0.077),
+            "mean_n_points_after": (260.0, 280.0),
+            "mean_compression_ratio": (0.072, 0.078),
+            "total_n_points_after": (2600.0, 2800.0),
+            "total_compression_ratio": (0.072, 0.078),
         },
     )
-    assert_total_points_in_range(output_h5, lower=2600, upper=2750)
+    assert_total_points_in_range(output_h5, lower=2600, upper=2800)
     assert_energy_conserved_against_input(DATA, output_h5)

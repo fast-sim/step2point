@@ -1,7 +1,7 @@
 """HDBSCAN density-based clustering of calorimeter step deposits.
 
 This algorithm clusters deposits using HDBSCAN within each configured
-merge scope. Features are scaled x, y coordinates and,
+merge scope. Features are scaled x, y, z coordinates and,
 if enabled and available, time relative to the layer median. Each cluster
 is merged into a single point: energy-weighted centroid position, summed
 energy, minimum time.
@@ -23,7 +23,7 @@ class HDBSCANClustering(CompressionAlgorithm):
     """Density-based clustering of calorimeter step deposits.
 
     Deposits are partitioned by the configured merge scope and clustered
-    within each partition using HDBSCAN on scaled (x, y) features,
+    within each partition using HDBSCAN on scaled (x, y, z) features,
     optionally including time (t) (if ``use_time`` is True). Each cluster
     is then merged into a single point: energy-weighted centroid position,
     summed energy, minimum time.
@@ -44,7 +44,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         over-fragmenting dense shower cores while still separating
         genuinely distinct deposits.
     xy_scale : float
-        Divide x, y coordinates by this value before clustering (mm).
+        Divide x, y, z coordinates by this value before clustering (mm).
         Normalises spatial distances so that 1.0 in scaled space
         corresponds to roughly one cell width.  When ``use_time`` is
         True, this also ensures spatial and temporal features are on
@@ -195,16 +195,19 @@ class HDBSCANClustering(CompressionAlgorithm):
                 total_clusters += n_slice
                 continue
 
-            xy = np.stack([shower.x[global_mask], shower.y[global_mask]], axis=1).astype(np.float32)
-            xy_scaled = xy / self.xy_scale
+            xyz = np.stack(
+                [shower.x[global_mask], shower.y[global_mask], shower.z[global_mask]],
+                axis=1,
+            ).astype(np.float32)
+            xyz_scaled = xyz / self.xy_scale
 
             if self.use_time and shower.t is not None:
                 t_layer = shower.t[global_mask].astype(np.float32)
                 t_median = np.median(t_layer)
                 t_scaled = ((t_layer - t_median) / self.t_scale).reshape(-1, 1)
-                features = np.hstack([xy_scaled, t_scaled]).astype(np.float32)
+                features = np.hstack([xyz_scaled, t_scaled]).astype(np.float32)
             else:
-                features = xy_scaled
+                features = xyz_scaled
 
             model = SklearnHDBSCAN(
                 min_cluster_size=self.min_cluster_size,
