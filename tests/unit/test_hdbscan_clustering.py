@@ -3,14 +3,21 @@ import pytest
 
 from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
 from step2point.core.shower import Shower
+from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
 from step2point.metrics.energy import energy_ratio
 from step2point.validation.sanity import ShowerSanityValidator
 
 DD4HEP_ENCODING = "system:8,layer:6,hit:50"
+NEIGHBOUR_ENCODING = "system:8,layer:6,x:8,y:8"
+ODD_ECALBARREL_ENCODING = "system:8,barrel:3,module:4,stave:1,layer:6,slice:5,x:32:-16,y:-16"
 
 
 def _encode_cell_id(system: int, layer: int, hit_index: int) -> np.uint64:
     return np.uint64(system | (layer << 8) | (hit_index << 14))
+
+
+def _encode_neighbour_cell_id(system: int, layer: int, x_bin: int, y_bin: int) -> np.uint64:
+    return np.uint64(system | (layer << 8) | (np.uint64(x_bin) << 14) | (np.uint64(y_bin) << 22))
 
 
 def _make_clustered_shower(n_per_cluster=30, seed=42):
@@ -40,6 +47,21 @@ def _make_clustered_shower(n_per_cluster=30, seed=42):
         E=np.concatenate([ea, eb]),
         t=np.concatenate([ta, tb]),
         cell_id=np.concatenate([cida, cidb]),
+    )
+
+
+def _make_clustered_shower_with_outlier(seed=123):
+    shower = _make_clustered_shower(seed=seed)
+    return Shower(
+        shower_id=shower.shower_id,
+        x=np.concatenate([shower.x, np.array([500.0], dtype=np.float32)]),
+        y=np.concatenate([shower.y, np.array([500.0], dtype=np.float32)]),
+        z=np.concatenate([shower.z, np.array([900.0], dtype=np.float32)]),
+        E=np.concatenate([shower.E, np.array([0.25], dtype=np.float32)]),
+        t=np.concatenate([shower.t, np.array([50.0], dtype=np.float32)]),
+        cell_id=np.concatenate([shower.cell_id, np.array([_encode_cell_id(3, 1, 999)], dtype=np.uint64)]),
+        metadata=dict(shower.metadata),
+        primary=dict(shower.primary),
     )
 
 
@@ -122,6 +144,75 @@ def test_hdbscan_compresses_and_preserves_energy():
     result = algo.compress(shower)
     assert result.shower.n_points < shower.n_points
     assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
+
+
+def test_hdbscan_assigns_representative_cell_id_to_each_cluster():
+    shower = _make_clustered_shower()
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, cell_id_encoding=DD4HEP_ENCODING)
+    result = algo.compress(shower)
+    assert result.shower.cell_id is not None
+    assert len(result.shower.cell_id) == result.shower.n_points
+    assert result.shower.metadata["approximate_cell_id"] is True
+    assert set(np.asarray(result.shower.cell_id, dtype=np.uint64)).issubset(set(np.asarray(shower.cell_id, dtype=np.uint64)))
+
+
+def test_hdbscan_standalone_outlier_policy_keeps_outlier_separate():
+    shower = _make_clustered_shower_with_outlier()
+    nearest = HDBSCANClustering(
+        min_cluster_size=5,
+        min_samples=3,
+        outlier_policy="nearest_cluster",
+        cell_id_encoding=DD4HEP_ENCODING,
+    ).compress(shower).shower
+    standalone = HDBSCANClustering(
+        min_cluster_size=5,
+        min_samples=3,
+        outlier_policy="standalone",
+        cell_id_encoding=DD4HEP_ENCODING,
+    ).compress(shower).shower
+    assert standalone.n_points >= nearest.n_points + 1
+    assert np.isclose(energy_ratio(shower, nearest), 1.0, rtol=1e-6)
+    assert np.isclose(energy_ratio(shower, standalone), 1.0, rtol=1e-6)
+
+
+def test_hdbscan_cell_id_neighbour_scope_partitions_disconnected_cells():
+    rng = np.random.default_rng(11)
+    # Cells (0,0) and (1,0) are neighbours; (5,5) is disconnected.
+    x = np.concatenate(
+        [
+            rng.normal(0.0, 0.05, 10),
+            rng.normal(1.0, 0.05, 10),
+            rng.normal(10.0, 0.05, 10),
+        ]
+    ).astype(np.float32)
+    y = np.concatenate(
+        [
+            rng.normal(0.0, 0.05, 10),
+            rng.normal(0.0, 0.05, 10),
+            rng.normal(10.0, 0.05, 10),
+        ]
+    ).astype(np.float32)
+    z = rng.normal(100.0, 0.05, 30).astype(np.float32)
+    E = (rng.exponential(0.5, 30) + 0.01).astype(np.float32)
+    t = rng.normal(5.0, 0.1, 30).astype(np.float32)
+    cell_id = np.concatenate(
+        [
+            np.full(10, _encode_neighbour_cell_id(3, 1, 0, 0), dtype=np.uint64),
+            np.full(10, _encode_neighbour_cell_id(3, 1, 1, 0), dtype=np.uint64),
+            np.full(10, _encode_neighbour_cell_id(3, 1, 5, 5), dtype=np.uint64),
+        ]
+    )
+    shower = Shower(shower_id=0, x=x, y=y, z=z, E=E, t=t, cell_id=cell_id)
+
+    algo = HDBSCANClustering(
+        min_cluster_size=5,
+        min_samples=3,
+        merge_scope="cell_id_neighbour",
+        cell_id_encoding=NEIGHBOUR_ENCODING,
+    )
+    partitions = algo._partition_indices(shower)
+    partition_sizes = sorted(len(partition) for partition in partitions)
+    assert partition_sizes == [10, 20]
 
 
 def test_hdbscan_output_passes_sanity():
@@ -272,6 +363,23 @@ def test_hdbscan_multiple_cell_id_encodings():
         min_cluster_size=5,
         min_samples=3,
         cell_id_encoding=(DD4HEP_ENCODING, second_encoding),
+    ).compress(shower)
+    assert result.shower.n_points > 0
+    assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
+
+
+def test_hdbscan_nonzero_epsilon_handles_near_degenerate_partition():
+    shower = next(
+        Step2PointHDF5Reader(
+            "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5"
+        ).iter_showers()
+    )
+    result = HDBSCANClustering(
+        min_cluster_size=5,
+        min_samples=3,
+        cluster_selection_epsilon=0.5,
+        use_time=True,
+        cell_id_encoding=ODD_ECALBARREL_ENCODING,
     ).compress(shower)
     assert result.shower.n_points > 0
     assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)

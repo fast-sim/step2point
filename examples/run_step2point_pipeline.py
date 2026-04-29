@@ -48,23 +48,28 @@ def parse_args():
     )
     parser.add_argument("--use-time", action="store_true", help="Include time as a clustering feature in HDBSCAN.")
     parser.add_argument(
+        "--outlier-policy",
+        choices=["nearest_cluster", "standalone"],
+        default="nearest_cluster",
+        help="How HDBSCAN outlier points are handled.",
+    )
+    parser.add_argument(
         "--merge-scope",
-        choices=["none", "layer", "system_layer", "cell_id"],
+        choices=["none", "layer", "system_layer", "cell_id", "cell_id_neighbour"],
         default="system_layer",
         help="Detector boundary HDBSCAN is not allowed to cross.",
     )
     parser.add_argument("--n-jobs", type=int, default=1, help="Number of parallel jobs for HDBSCAN (-1 for all cores).")
     parser.add_argument("--distance-threshold", type=float, default=1.0, help="ClusterWithinCell distance threshold (mm).")
     parser.add_argument("--compact-xml", help="DD4hep compact XML required by geometry-aware algorithms.")
-    parser.add_argument("--collection-name", help="DD4hep readout collection name required by geometry-aware algorithms.")
+    parser.add_argument(
+        "--collection-name",
+        nargs="+",
+        help="Readout collection name(s) required by geometry-aware algorithms.",
+    )
     parser.add_argument(
         "--hdbscan-cell-id-encoding",
         help="Cell-ID encoding string used by HDBSCAN to extract system and layer.",
-    )
-    parser.add_argument(
-        "--hdbscan-collection-name",
-        nargs="+",
-        help="Readout collection name(s) used by HDBSCAN to derive cell-id decoding from compact XML.",
     )
     parser.add_argument("--grid-x", type=int, default=2, help="Number of regular subdivisions along local cell x.")
     parser.add_argument("--grid-y", type=int, default=2, help="Number of regular subdivisions along local cell y/z.")
@@ -117,11 +122,11 @@ def _fallback_debug_labels(algorithm_name: str, shower) -> np.ndarray:
 def _resolve_hdbscan_cell_id_encodings(args) -> tuple[str, ...]:
     if args.hdbscan_cell_id_encoding:
         return (args.hdbscan_cell_id_encoding,)
-    if args.compact_xml and args.hdbscan_collection_name:
-        return tuple(get_dd4hep_cell_id_encoding(args.compact_xml, name) for name in args.hdbscan_collection_name)
+    if args.compact_xml and args.collection_name:
+        return tuple(get_dd4hep_cell_id_encoding(args.compact_xml, name) for name in args.collection_name)
     raise ValueError(
         "hdbscan assumes a cell_id can be decoded to define the unmergeable points: pass either "
-        "--hdbscan-cell-id-encoding or --compact-xml together with --hdbscan-collection-name."
+        "--hdbscan-cell-id-encoding or --compact-xml together with --collection-name."
     )
 
 
@@ -140,6 +145,7 @@ def main():
             min_samples=args.min_samples,
             cluster_selection_epsilon=args.epsilon,
             use_time=args.use_time,
+            outlier_policy=args.outlier_policy,
             merge_scope=args.merge_scope,
             cell_id_encoding=_resolve_hdbscan_cell_id_encodings(args),
             algorithm=args.hdbscan_algorithm,
@@ -153,14 +159,16 @@ def main():
             n_jobs=args.n_jobs,
         )
     else:
-        if args.compact_xml is None or args.collection_name is None:
+        if args.compact_xml is None or not args.collection_name:
             raise ValueError("--compact-xml and --collection-name are required for merge_within_regular_subcell.")
+        if len(args.collection_name) != 1:
+            raise ValueError("merge_within_regular_subcell requires exactly one --collection-name.")
         algorithm = MergeWithinRegularSubcell(
             x_bins=args.grid_x,
             y_bins=args.grid_y,
             position_mode=args.position_mode,
             compact_xml=args.compact_xml,
-            collection_name=args.collection_name,
+            collection_name=args.collection_name[0],
         )
     validators = [EnergyConservationValidator(), CellCountRatioValidator(), ShowerMomentsValidator()]
     debug_event_indices = set(args.debug_events or [])
