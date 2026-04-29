@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from step2point.algorithms.cluster_within_cell import ClusterWithinCell
 from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
 from step2point.algorithms.identity import IdentityCompression
 from step2point.algorithms.merge_within_cell import MergeWithinCell
@@ -69,7 +70,7 @@ def main():
     )
     parser.add_argument(
         "--algorithm",
-        choices=["identity", "merge_within_cell", "merge_within_regular_subcell", "hdbscan"],
+        choices=["identity", "merge_within_cell", "merge_within_regular_subcell", "hdbscan", "cluster_within_cell"],
         default="merge_within_cell",
     )
     parser.add_argument("--min-cluster-size", type=int, default=5, help="HDBSCAN min_cluster_size.")
@@ -89,6 +90,7 @@ def main():
         help="Detector boundary HDBSCAN is not allowed to cross.",
     )
     parser.add_argument("--n-jobs", type=int, default=1, help="Number of parallel jobs for HDBSCAN (-1 for all cores).")
+    parser.add_argument("--distance-threshold", type=float, default=1.0, help="ClusterWithinCell distance threshold (mm).")
     parser.add_argument("--compact-xml", help="DD4hep compact XML required by geometry-aware algorithms.")
     parser.add_argument("--collection-name", help="DD4hep readout collection name required by geometry-aware algorithms.")
     parser.add_argument(
@@ -178,6 +180,13 @@ def main():
             merge_scope=args.merge_scope,
             cell_id_encoding=resolve_hdbscan_cell_id_encodings(),
             algorithm=args.hdbscan_algorithm,
+            n_jobs=args.n_jobs,
+        )
+    elif args.algorithm == "cluster_within_cell":
+        from sklearn.cluster import AgglomerativeClustering
+
+        algorithm = ClusterWithinCell(
+            clusterer=AgglomerativeClustering(n_clusters=None, distance_threshold=args.distance_threshold),
             n_jobs=args.n_jobs,
         )
     else:

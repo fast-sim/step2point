@@ -15,6 +15,9 @@
   - cell-id decoding rule:
     `system:8,barrel:3,module:4,stave:1,layer:6,slice:5,x:32:-16,y:-16`
   - loose regressions cover both `with_time` and `without_time`
+- `ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_cluster_within_cell_reference.h5` is the committed reference output for `cluster_within_cell` on the ODD gamma sample with:
+  - `AgglomerativeClustering`
+    - `distance_threshold=1.`
 - `ODD_pionM_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5` is the corresponding ODD pion HDF5 sample.
 - `ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_edm4hep.root` is the matching ODD gamma EDM4hep ROOT sample.
 - `ODD_pionM_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_edm4hep.root` is the matching ODD pion EDM4hep ROOT sample.

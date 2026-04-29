@@ -21,6 +21,9 @@ HDBSCAN_REFERENCE = Path(
     "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_hdbscan_reference.h5"
 )
 ODD_BARREL_ENCODING = "system:8,barrel:3,module:4,stave:1,layer:6,slice:5,x:32:-16,y:-16"
+CLUSTER_WITHIN_CELL_REFERENCE = Path(
+    "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_cluster_within_cell_reference.h5"
+)
 
 FLOAT_STRICT_RTOL = 1e-7
 FLOAT_STRICT_ATOL = 1e-10
@@ -144,6 +147,17 @@ def assert_summary_equals(summary_path: Path, case: str) -> None:
             "total_n_points_after=2755\n"
             "total_compression_ratio=0.076912\n"
             "output_hdf5=compressed_hdbscan.h5\n"
+        ),
+        "cluster_within_cell": (
+            "compression_stats=10\n"
+            "validation_results=30\n"
+            "mean_n_points_before=3582.000000\n"
+            "mean_n_points_after=783.500000\n"
+            "mean_compression_ratio=0.219064\n"
+            "total_n_points_before=35820\n"
+            "total_n_points_after=7835\n"
+            "total_compression_ratio=0.218733\n"
+            "output_hdf5=compressed_cluster_within_cell.h5\n"
         ),
     }
     expected = expected_by_case[case]
