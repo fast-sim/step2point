@@ -39,10 +39,10 @@ class HDBSCANClustering(CompressionAlgorithm):
         levels and by default (epsilon=0) picks the most persistent ones,
         which can produce many small, high-density clusters.  When
         epsilon > 0, clusters separated by a distance below this threshold
-        are merged rather than split, producing fewer, larger clusters.
+        are merged, producing fewer, larger clusters.
         A small value (e.g. 0.5 - 1.0 in scaled feature space) prevents
         over-fragmenting dense shower cores while still separating
-        genuinely distinct deposits.
+        genuinely distinct clusters.
     xy_scale : float
         Divide x, y, z coordinates by this value before clustering (mm).
         Normalises spatial distances so that 1.0 in scaled space
@@ -87,9 +87,9 @@ class HDBSCANClustering(CompressionAlgorithm):
 
     def __init__(
         self,
-        min_cluster_size: int,
-        min_samples: int,
-        cluster_selection_epsilon: float = 0.0,
+        min_cluster_size: int = 10,
+        min_samples: int = 8,
+        cluster_selection_epsilon: float = 0.,
         xy_scale: float = 5.0,
         t_scale: float = 1.0,
         use_time: bool = False,
