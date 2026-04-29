@@ -54,7 +54,7 @@ def parse_args():
     )
     parser.add_argument(
         "--merge-scope",
-        choices=["none", "layer", "system_layer", "cell_id"],
+        choices=["none", "layer", "system_layer", "cell_id", "cell_id_neighbour"],
         default="system_layer",
         help="Detector boundary HDBSCAN is not allowed to cross.",
     )

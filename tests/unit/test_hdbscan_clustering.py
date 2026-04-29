@@ -7,10 +7,15 @@ from step2point.metrics.energy import energy_ratio
 from step2point.validation.sanity import ShowerSanityValidator
 
 DD4HEP_ENCODING = "system:8,layer:6,hit:50"
+NEIGHBOUR_ENCODING = "system:8,layer:6,x:8,y:8"
 
 
 def _encode_cell_id(system: int, layer: int, hit_index: int) -> np.uint64:
     return np.uint64(system | (layer << 8) | (hit_index << 14))
+
+
+def _encode_neighbour_cell_id(system: int, layer: int, x_bin: int, y_bin: int) -> np.uint64:
+    return np.uint64(system | (layer << 8) | (np.uint64(x_bin) << 14) | (np.uint64(y_bin) << 22))
 
 
 def _make_clustered_shower(n_per_cluster=30, seed=42):
@@ -166,6 +171,46 @@ def test_hdbscan_standalone_outlier_policy_keeps_outlier_separate():
     assert standalone.n_points >= nearest.n_points + 1
     assert np.isclose(energy_ratio(shower, nearest), 1.0, rtol=1e-6)
     assert np.isclose(energy_ratio(shower, standalone), 1.0, rtol=1e-6)
+
+
+def test_hdbscan_cell_id_neighbour_scope_partitions_disconnected_cells():
+    rng = np.random.default_rng(11)
+    # Cells (0,0) and (1,0) are neighbours; (5,5) is disconnected.
+    x = np.concatenate(
+        [
+            rng.normal(0.0, 0.05, 10),
+            rng.normal(1.0, 0.05, 10),
+            rng.normal(10.0, 0.05, 10),
+        ]
+    ).astype(np.float32)
+    y = np.concatenate(
+        [
+            rng.normal(0.0, 0.05, 10),
+            rng.normal(0.0, 0.05, 10),
+            rng.normal(10.0, 0.05, 10),
+        ]
+    ).astype(np.float32)
+    z = rng.normal(100.0, 0.05, 30).astype(np.float32)
+    E = (rng.exponential(0.5, 30) + 0.01).astype(np.float32)
+    t = rng.normal(5.0, 0.1, 30).astype(np.float32)
+    cell_id = np.concatenate(
+        [
+            np.full(10, _encode_neighbour_cell_id(3, 1, 0, 0), dtype=np.uint64),
+            np.full(10, _encode_neighbour_cell_id(3, 1, 1, 0), dtype=np.uint64),
+            np.full(10, _encode_neighbour_cell_id(3, 1, 5, 5), dtype=np.uint64),
+        ]
+    )
+    shower = Shower(shower_id=0, x=x, y=y, z=z, E=E, t=t, cell_id=cell_id)
+
+    algo = HDBSCANClustering(
+        min_cluster_size=5,
+        min_samples=3,
+        merge_scope="cell_id_neighbour",
+        cell_id_encoding=NEIGHBOUR_ENCODING,
+    )
+    partitions = algo._partition_indices(shower)
+    partition_sizes = sorted(len(partition) for partition in partitions)
+    assert partition_sizes == [10, 20]
 
 
 def test_hdbscan_output_passes_sanity():

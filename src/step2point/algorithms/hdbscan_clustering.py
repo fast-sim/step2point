@@ -72,7 +72,7 @@ class HDBSCANClustering(CompressionAlgorithm):
     merge_scope : str
         Defines which detector boundaries HDBSCAN is not allowed to cross.
         Supported values are ``"none"``, ``"layer"``,
-        ``"system_layer"``, and ``"cell_id"``. The default is
+        ``"system_layer"``, ``"cell_id"``, and ``"cell_id_neighbour"``. The default is
         ``"system_layer"``.
     cell_id_encoding : str or tuple[str, ...]
         Cell-ID encoding string(s) used to decode fields such as
@@ -119,7 +119,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         self.merge_scope = merge_scope
         self.algorithm = algorithm
         self.n_jobs = n_jobs
-        valid_merge_scopes = {"none", "layer", "system_layer", "cell_id"}
+        valid_merge_scopes = {"none", "layer", "system_layer", "cell_id", "cell_id_neighbour"}
         valid_outlier_policies = {"nearest_cluster", "standalone"}
         if self.merge_scope not in valid_merge_scopes:
             raise ValueError(f"Unsupported merge_scope {merge_scope!r}. Expected one of {sorted(valid_merge_scopes)}.")
@@ -129,7 +129,7 @@ class HDBSCANClustering(CompressionAlgorithm):
             )
 
         self.cell_id_encoding: tuple[str, ...] | None
-        if self.merge_scope in {"layer", "system_layer"} and cell_id_encoding is None:
+        if self.merge_scope in {"layer", "system_layer", "cell_id_neighbour"} and cell_id_encoding is None:
             raise ValueError(
                 "HDBSCANClustering assumes a cell_id can be decoded to define the unmergeable points. "
                 "Provide cell_id_encoding directly or configure it from compact XML plus collection name(s)."
@@ -144,6 +144,14 @@ class HDBSCANClustering(CompressionAlgorithm):
             for encoding in self.cell_id_encoding:
                 extract_field(np.array([0], dtype=np.uint64), encoding, "layer")
                 extract_field(np.array([0], dtype=np.uint64), encoding, "system")
+
+    @staticmethod
+    def _encoding_has_field(encoding: str, field_name: str) -> bool:
+        try:
+            extract_field(np.array([0], dtype=np.uint64), encoding, field_name)
+            return True
+        except ValueError:
+            return False
 
     def _decoded_field(self, shower: Shower, field_name: str) -> np.ndarray:
         if shower.cell_id is None:
@@ -176,6 +184,92 @@ class HDBSCANClustering(CompressionAlgorithm):
             )
         return decoded
 
+    def _decoded_neighbour_axis_field(self, shower: Shower) -> np.ndarray:
+        if shower.cell_id is None:
+            raise ValueError("HDBSCANClustering requires cell_id for neighbour decoding.")
+        if self.cell_id_encoding is None:
+            raise ValueError("HDBSCANClustering has no cell_id_encoding configured for neighbour decoding.")
+        cell_ids = np.asarray(shower.cell_id, dtype=np.uint64)
+        if len(self.cell_id_encoding) == 1:
+            encoding = self.cell_id_encoding[0]
+            field_name = "y" if self._encoding_has_field(encoding, "y") else "z"
+            return extract_field(cell_ids, encoding, field_name)
+
+        subdetectors = shower.metadata.get("subdetector")
+        if subdetectors is None:
+            raise ValueError(
+                "Multiple cell_id encodings were provided, but shower.metadata['subdetector'] is absent."
+            )
+        subdetectors = np.asarray(subdetectors, dtype=np.int64)
+        decoded = np.empty(cell_ids.shape[0], dtype=np.int64)
+        unique_subdetectors = np.unique(subdetectors)
+        for subdetector in unique_subdetectors:
+            if subdetector < 0 or subdetector >= len(self.cell_id_encoding):
+                raise ValueError(
+                    f"Subdetector index {subdetector} is outside the available cell_id encodings "
+                    f"(n={len(self.cell_id_encoding)})."
+                )
+            encoding = self.cell_id_encoding[int(subdetector)]
+            field_name = "y" if self._encoding_has_field(encoding, "y") else "z"
+            mask = subdetectors == subdetector
+            decoded[mask] = extract_field(cell_ids[mask], encoding, field_name)
+        return decoded
+
+    @staticmethod
+    def _connected_components_from_cell_neighbours(
+        systems: np.ndarray,
+        layers: np.ndarray,
+        x_bins: np.ndarray,
+        secondary_bins: np.ndarray,
+    ) -> np.ndarray:
+        key_dtype = np.dtype(
+            [("system", np.int64), ("layer", np.int64), ("x", np.int64), ("second", np.int64)]
+        )
+        keys = np.empty(len(systems), dtype=key_dtype)
+        keys["system"] = systems
+        keys["layer"] = layers
+        keys["x"] = x_bins
+        keys["second"] = secondary_bins
+        unique_keys, inverse = np.unique(keys, return_inverse=True)
+
+        key_to_index = {
+            (
+                int(unique_keys["system"][idx]),
+                int(unique_keys["layer"][idx]),
+                int(unique_keys["x"][idx]),
+                int(unique_keys["second"][idx]),
+            ): idx
+            for idx in range(len(unique_keys))
+        }
+        component_by_unique = np.full(len(unique_keys), -1, dtype=np.int64)
+        current_component = 0
+
+        for start_idx in range(len(unique_keys)):
+            if component_by_unique[start_idx] != -1:
+                continue
+            stack = [start_idx]
+            component_by_unique[start_idx] = current_component
+            while stack:
+                idx = stack.pop()
+                system = int(unique_keys["system"][idx])
+                layer = int(unique_keys["layer"][idx])
+                x_bin = int(unique_keys["x"][idx])
+                second_bin = int(unique_keys["second"][idx])
+                neighbours = (
+                    (system, layer, x_bin - 1, second_bin),
+                    (system, layer, x_bin + 1, second_bin),
+                    (system, layer, x_bin, second_bin - 1),
+                    (system, layer, x_bin, second_bin + 1),
+                )
+                for neighbour in neighbours:
+                    neighbour_idx = key_to_index.get(neighbour)
+                    if neighbour_idx is None or component_by_unique[neighbour_idx] != -1:
+                        continue
+                    component_by_unique[neighbour_idx] = current_component
+                    stack.append(neighbour_idx)
+            current_component += 1
+        return component_by_unique[inverse]
+
     def _partition_indices(self, shower: Shower) -> list[np.ndarray]:
         if shower.n_points == 0:
             return []
@@ -185,6 +279,13 @@ class HDBSCANClustering(CompressionAlgorithm):
             raise ValueError(f"HDBSCANClustering with merge_scope={self.merge_scope!r} requires cell_id.")
         if self.merge_scope == "cell_id":
             _, inverse = np.unique(np.asarray(shower.cell_id, dtype=np.uint64), return_inverse=True)
+        elif self.merge_scope == "cell_id_neighbour":
+            inverse = self._connected_components_from_cell_neighbours(
+                self._decoded_field(shower, "system"),
+                self._decoded_field(shower, "layer"),
+                self._decoded_field(shower, "x"),
+                self._decoded_neighbour_axis_field(shower),
+            )
         elif self.merge_scope == "layer":
             _, inverse = np.unique(self._decoded_field(shower, "layer"), return_inverse=True)
         else:

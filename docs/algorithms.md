@@ -64,6 +64,7 @@ This algorithm assumes a `cell_id` can be decoded to define the unmergeable poin
 - `layer`: deposits can merge only within the same decoded layer
 - `system_layer`: deposits can merge only within the same decoded system and layer
 - `cell_id`: deposits can merge only within the same exact `cell_id`
+- `cell_id_neighbour`: deposits can merge only within connected occupied-cell neighbourhoods built from decoded `cell_id` bins. Neighbours are cells with the same decoded system/layer and either `x` or `y` differing by `+-1` (or `x` and `z` when that is the available second cell-bin field). Wider groups can still form through chains of such neighbouring cells.
 
 Parameters:
 
@@ -73,7 +74,7 @@ Parameters:
 - `xy_scale`: divide x, y, z coordinates by this before clustering. This normalises spatial distances so that 1.0 in scaled space corresponds to roughly one cell width. When `use_time` is True, this also ensures spatial and temporal coordinates are on comparable magnitudes. The value is detector-specific (default: 5.0 mm, matching the ODD calorimeter cell size)
 - `t_scale`: divide time (relative to the layer median) by this before clustering. Normalises the temporal dimension so it contributes meaningfully alongside the scaled spatial coordinates. Only used when `t` is present and `use_time` is True (default: 1.0 ns)
 - `use_time`: whether to include time as a clustering feature (default: False). When True, time must be present in the input shower or an error is raised
-- `merge_scope`: detector boundary that HDBSCAN is not allowed to cross. Supported values are `none`, `layer`, `system_layer`, and `cell_id` (default: `system_layer`)
+- `merge_scope`: detector boundary that HDBSCAN is not allowed to cross. Supported values are `none`, `layer`, `system_layer`, `cell_id`, and `cell_id_neighbour` (default: `system_layer`)
 - `cell_id_encoding`: cell-id encoding string, or one string per input collection / system slot when clustering across multiple readout collections
 - `algorithm`: internal neighbour-search method used by scikit-learn's HDBSCAN - `"auto"` (default), `"brute"`, `"kd_tree"`, or `"ball_tree"`. Use `"brute"` for the most reproducible reference outputs across machines. `"auto"` may choose different methods depending on the environment, which can slightly change cluster boundaries and therefore the compressed output
 - `n_jobs`: number of parallel jobs for HDBSCAN and nearest-neighbour queries. `-1` uses all cores (default). `1` forces single-threaded execution, which improves reproducibility across runs
