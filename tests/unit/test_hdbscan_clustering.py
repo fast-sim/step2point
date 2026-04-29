@@ -3,11 +3,13 @@ import pytest
 
 from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
 from step2point.core.shower import Shower
+from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
 from step2point.metrics.energy import energy_ratio
 from step2point.validation.sanity import ShowerSanityValidator
 
 DD4HEP_ENCODING = "system:8,layer:6,hit:50"
 NEIGHBOUR_ENCODING = "system:8,layer:6,x:8,y:8"
+ODD_ECALBARREL_ENCODING = "system:8,barrel:3,module:4,stave:1,layer:6,slice:5,x:32:-16,y:-16"
 
 
 def _encode_cell_id(system: int, layer: int, hit_index: int) -> np.uint64:
@@ -361,6 +363,23 @@ def test_hdbscan_multiple_cell_id_encodings():
         min_cluster_size=5,
         min_samples=3,
         cell_id_encoding=(DD4HEP_ENCODING, second_encoding),
+    ).compress(shower)
+    assert result.shower.n_points > 0
+    assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
+
+
+def test_hdbscan_nonzero_epsilon_handles_near_degenerate_partition():
+    shower = next(
+        Step2PointHDF5Reader(
+            "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5"
+        ).iter_showers()
+    )
+    result = HDBSCANClustering(
+        min_cluster_size=5,
+        min_samples=3,
+        cluster_selection_epsilon=0.5,
+        use_time=True,
+        cell_id_encoding=ODD_ECALBARREL_ENCODING,
     ).compress(shower)
     assert result.shower.n_points > 0
     assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)

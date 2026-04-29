@@ -94,6 +94,8 @@ class HDBSCANClustering(CompressionAlgorithm):
     """
 
     name = "hdbscan"
+    _EPSILON_DEGENERATE_RELATIVE_SPREAD = 0.05
+    _EPSILON_DEGENERATE_ABSOLUTE_SPREAD = 1e-6
 
     def __init__(
         self,
@@ -298,6 +300,63 @@ class HDBSCANClustering(CompressionAlgorithm):
             _, inverse = np.unique(keys, return_inverse=True)
         return [np.where(inverse == idx)[0] for idx in range(int(np.max(inverse)) + 1)]
 
+    def _prepare_features(self, shower: Shower, global_mask: np.ndarray) -> np.ndarray:
+        xyz = np.stack(
+            [shower.x[global_mask], shower.y[global_mask], shower.z[global_mask]],
+            axis=1,
+        ).astype(np.float32)
+        xyz_scaled = xyz / self.xy_scale
+
+        if self.use_time and shower.t is not None:
+            t_layer = shower.t[global_mask].astype(np.float32)
+            t_median = np.median(t_layer)
+            t_scaled = ((t_layer - t_median) / self.t_scale).reshape(-1, 1)
+            features = np.hstack([xyz_scaled, t_scaled]).astype(np.float32)
+        else:
+            features = xyz_scaled
+
+        if self.cluster_selection_epsilon <= 0.0 or features.shape[1] <= 1:
+            return features
+
+        spreads = np.ptp(features, axis=0)
+        max_spread = float(np.max(spreads))
+        if max_spread <= 0.0:
+            return features[:, :1]
+
+        relative_threshold = self._EPSILON_DEGENERATE_RELATIVE_SPREAD * max_spread
+        threshold = max(self._EPSILON_DEGENERATE_ABSOLUTE_SPREAD, relative_threshold)
+        keep_mask = spreads > threshold
+        if np.any(keep_mask):
+            return features[:, keep_mask]
+        return features[:, [int(np.argmax(spreads))]]
+
+    def _fit_predict_partition(self, features: np.ndarray) -> np.ndarray:
+        model = SklearnHDBSCAN(
+            min_cluster_size=self.min_cluster_size,
+            min_samples=self.min_samples,
+            cluster_selection_epsilon=self.cluster_selection_epsilon,
+            algorithm=self.algorithm,
+            n_jobs=self.n_jobs,
+            copy=False,
+        )
+        try:
+            return model.fit_predict(features)
+        except TypeError:
+            if self.cluster_selection_epsilon <= 0.0:
+                raise
+            # Non-zero epsilon can still trigger sklearn failures on some
+            # near-degenerate detector slices. Fall back to epsilon=0 for
+            # that partition rather than failing the full shower.
+            fallback_model = SklearnHDBSCAN(
+                min_cluster_size=self.min_cluster_size,
+                min_samples=self.min_samples,
+                cluster_selection_epsilon=0.0,
+                algorithm=self.algorithm,
+                n_jobs=self.n_jobs,
+                copy=False,
+            )
+            return fallback_model.fit_predict(features)
+
     def compress(self, shower: Shower) -> CompressionResult:
         if self.use_time and shower.t is None:
             raise ValueError("use_time=True but shower has no time data.")
@@ -313,29 +372,8 @@ class HDBSCANClustering(CompressionAlgorithm):
                 total_clusters += n_slice
                 continue
 
-            xyz = np.stack(
-                [shower.x[global_mask], shower.y[global_mask], shower.z[global_mask]],
-                axis=1,
-            ).astype(np.float32)
-            xyz_scaled = xyz / self.xy_scale
-
-            if self.use_time and shower.t is not None:
-                t_layer = shower.t[global_mask].astype(np.float32)
-                t_median = np.median(t_layer)
-                t_scaled = ((t_layer - t_median) / self.t_scale).reshape(-1, 1)
-                features = np.hstack([xyz_scaled, t_scaled]).astype(np.float32)
-            else:
-                features = xyz_scaled
-
-            model = SklearnHDBSCAN(
-                min_cluster_size=self.min_cluster_size,
-                min_samples=self.min_samples,
-                cluster_selection_epsilon=self.cluster_selection_epsilon,
-                algorithm=self.algorithm,
-                n_jobs=self.n_jobs,
-                copy=False,
-            )
-            predicted = model.fit_predict(features)
+            features = self._prepare_features(shower, global_mask)
+            predicted = self._fit_predict_partition(features)
 
             n_new = len(set(predicted)) - (1 if -1 in predicted else 0)
             is_cluster = predicted >= 0
