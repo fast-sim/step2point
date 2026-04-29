@@ -34,9 +34,33 @@ def parse_collections(collections: list[str] | None) -> tuple[str, ...] | None:
     return tuple(collections)
 
 
+def load_showers(input_path: str, collections: tuple[str, ...] | None):
+    reader = build_reader(input_path)
+    if isinstance(reader, EDM4hepRootReader):
+        reader.collections = collections
+    return list(reader.iter_showers())
+
+
+def pair_showers(reference_showers, compared_showers, *, reference_label: str, compared_label: str):
+    if len(reference_showers) != len(compared_showers):
+        raise ValueError(
+            f"Cannot compare {reference_label} to {compared_label}: "
+            f"{len(reference_showers)} showers vs {len(compared_showers)} showers."
+        )
+    pairs = []
+    for pre, post in zip(reference_showers, compared_showers, strict=True):
+        if pre.shower_id != post.shower_id:
+            raise ValueError(
+                f"Cannot compare {reference_label} to {compared_label}: shower_id mismatch "
+                f"{pre.shower_id} vs {post.shower_id}."
+            )
+        pairs.append((pre, post))
+    return pairs
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", required=True)
+    parser.add_argument("--input", required=True, nargs="+")
     parser.add_argument(
         "--collections",
         nargs="+",
@@ -100,6 +124,7 @@ def main():
     )
     parser.add_argument("--outdir", default="outputs/plots")
     args = parser.parse_args()
+    collections = parse_collections(args.collections)
 
     def resolve_hdbscan_cell_id_encodings() -> tuple[str, ...]:
         if args.hdbscan_cell_id_encoding:
@@ -111,9 +136,35 @@ def main():
             "--hdbscan-cell-id-encoding or --compact-xml together with --hdbscan-collection-name."
         )
 
-    reader = build_reader(args.input)
+    if len(args.input) > 1:
+        reference_path = args.input[0]
+        reference_showers = load_showers(reference_path, collections)
+        base_outdir = Path(args.outdir)
+        for index, compared_path in enumerate(args.input[1:], start=1):
+            compared_showers = load_showers(compared_path, collections)
+            pairs = pair_showers(
+                reference_showers,
+                compared_showers,
+                reference_label=reference_path,
+                compared_label=compared_path,
+            )
+            comparison_outdir = (
+                base_outdir
+                if len(args.input) == 2
+                else base_outdir / f"{index:02d}_{Path(compared_path).stem}"
+            )
+            generate_benchmark_plots(
+                pairs,
+                comparison_outdir,
+                axis_override=args.axis,
+                origin_override=args.origin,
+            )
+        return
+
+    input_path = args.input[0]
+    reader = build_reader(input_path)
     if isinstance(reader, EDM4hepRootReader):
-        reader.collections = parse_collections(args.collections)
+        reader.collections = collections
     if args.algorithm == "identity":
         algorithm = IdentityCompression()
     elif args.algorithm == "merge_within_cell":

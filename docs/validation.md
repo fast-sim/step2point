@@ -342,6 +342,34 @@ Useful options:
 - `--axis AX AY AZ`
   overrides the incident direction when you do not want to infer it from primary momentum
 
+## Validation plot generation
+
+Use `examples/generate_validation_plots.py` in two auto-detected modes:
+
+- one `--input` file:
+  the script reruns the chosen compression algorithm and compares original vs compressed
+- two or more `--input` files:
+  the script assumes the later files are already produced outputs, uses the first file as the reference, and only makes comparison plots
+
+Example: recompress and validate in one step
+
+```bash
+python examples/generate_validation_plots.py \
+  --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+  --algorithm merge_within_cell \
+  --outdir outputs/plots_merge_within_cell
+```
+
+Example: compare an existing compressed output without recompressing
+
+```bash
+python examples/generate_validation_plots.py \
+  --input \
+    tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+    outputs/pipeline_merge_within_cell/compressed_merge_within_cell.h5 \
+  --outdir outputs/plots_compare_merge_within_cell
+```
+
 ## Units used in the plots
 
 The example HDF5 files in this repository are produced by [step2point dataset repository](https://gitlab.cern.ch/fastsim/step2point/-/tree/v1.1.0?ref_type=tags), which preserves the EDM4hep values directly:

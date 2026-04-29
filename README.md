@@ -239,6 +239,34 @@ pytest -q
 
 An example basic inspection of shower observables can be done with [examples/inspect_showers.py](examples/inspect_showers.py) which produces plots for manual validation.
 
+### Validation plots
+
+Use [examples/generate_validation_plots.py](examples/generate_validation_plots.py) in two modes:
+
+- one input file:
+  the script compresses internally and compares original vs compressed
+- two or more input files:
+  the script assumes compression is already done, treats the first file as the reference, and compares each later file against it
+
+Compress and validate in one step:
+
+```bash
+PYTHONPATH=src python examples/generate_validation_plots.py \
+  --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+  --algorithm merge_within_cell \
+  --outdir outputs/plots_merge_within_cell
+```
+
+Compare an existing compressed file against the original without recompressing:
+
+```bash
+PYTHONPATH=src python examples/generate_validation_plots.py \
+  --input \
+    tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+    outputs/pipeline_merge_within_cell/compressed_merge_within_cell.h5 \
+  --outdir outputs/plots_compare_merge_within_cell
+```
+
 Note:
 `PYTHONPATH=src` is only needed when running directly from a source checkout without installing the package first. If you already ran `pip install -e .[dev]`, you can drop that prefix and use `python ...` directly.
 
