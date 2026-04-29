@@ -117,13 +117,14 @@ def plot_barrel_wireframe(
 
     line_width = 1.2 if modules_only else (0.55 if draw_cells and module_index is not None else (0.35 if draw_cells else 0.6))
     cell_face = (0.121, 0.466, 0.705, 0.10)
+    cell_edge = (0.121, 0.466, 0.705, 0.28)
     if xy_polygons:
         ax_xy.add_collection(
             PolyCollection(
                 xy_polygons,
                 facecolors=cell_face,
-                edgecolors=cell_face,
-                linewidths=0.40 if draw_cells and module_index is not None else 0.25,
+                edgecolors=cell_edge,
+                linewidths=0.60 if draw_cells and module_index is not None else 0.35,
             )
         )
     if xz_polygons:
@@ -131,8 +132,8 @@ def plot_barrel_wireframe(
             PolyCollection(
                 xz_polygons,
                 facecolors=cell_face,
-                edgecolors=cell_face,
-                linewidths=0.50 if draw_cells and module_index is not None else 0.30,
+                edgecolors=cell_edge,
+                linewidths=0.70 if draw_cells and module_index is not None else 0.40,
             )
         )
     if zy_polygons:
@@ -140,8 +141,8 @@ def plot_barrel_wireframe(
             PolyCollection(
                 zy_polygons,
                 facecolors=cell_face,
-                edgecolors=cell_face,
-                linewidths=0.50 if draw_cells and module_index is not None else 0.30,
+                edgecolors=cell_edge,
+                linewidths=0.70 if draw_cells and module_index is not None else 0.40,
             )
         )
     ax_xy.add_collection(LineCollection(xy_segments, colors="tab:blue", linewidths=line_width))
