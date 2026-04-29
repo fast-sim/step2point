@@ -84,7 +84,11 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                     "y_bins": self.y_bins,
                 },
             )
-            return CompressionResult(shower=out, algorithm=self.name)
+            return CompressionResult(
+                shower=out,
+                algorithm=self.name,
+                debug_data={"cluster_label": np.empty(0, dtype=np.int64)},
+            )
         return self._compress_barrel_xy(shower)
 
     def _compress_barrel_xy(self, shower: Shower) -> CompressionResult:
@@ -197,4 +201,5 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                 "energy_before": shower.total_energy,
                 "energy_after": out.total_energy,
             },
+            debug_data={"cluster_label": inverse.astype(np.int64, copy=False)},
         )

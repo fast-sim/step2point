@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import numpy as np
+
 from step2point.algorithms.base import CompressionAlgorithm
 from step2point.core.results import CompressionResult
 from step2point.core.shower import Shower
@@ -24,4 +26,5 @@ class IdentityCompression(CompressionAlgorithm):
                 "energy_before": shower.total_energy,
                 "energy_after": shower.total_energy,
             },
+            debug_data={"cluster_label": np.arange(shower.n_points, dtype=np.int64)},
         )

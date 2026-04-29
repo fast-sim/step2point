@@ -16,62 +16,18 @@ from step2point.geometry.dd4hep.factory_geometry import (
     module_envelope_outline_xy_xz_zy,
     module_layer_outline_xy_xz_zy,
 )
-
-
-def _segment_bounds(segments: list[np.ndarray]) -> tuple[float, float, float, float]:
-    points = np.concatenate(segments, axis=0)
-    return (
-        float(np.min(points[:, 0])),
-        float(np.max(points[:, 0])),
-        float(np.min(points[:, 1])),
-        float(np.max(points[:, 1])),
-    )
-
-
-def _polygon_bounds(polygons: list[np.ndarray]) -> tuple[float, float, float, float]:
-    points = np.concatenate(polygons, axis=0)
-    return (
-        float(np.min(points[:, 0])),
-        float(np.max(points[:, 0])),
-        float(np.min(points[:, 1])),
-        float(np.max(points[:, 1])),
-    )
-
-
-def _collection_bounds(
-    segments: list[np.ndarray],
-    polygons: list[np.ndarray],
-) -> tuple[float, float, float, float]:
-    if segments:
-        return _segment_bounds(segments)
-    if polygons:
-        return _polygon_bounds(polygons)
-    raise ValueError("No drawable geometry available to determine plot bounds.")
-
-
-def _expand_bounds(
-    xmin: float,
-    xmax: float,
-    ymin: float,
-    ymax: float,
-    frac: float = 0.05,
-    min_pad: float = 2.0,
-) -> tuple[float, float, float, float]:
-    xpad = max((xmax - xmin) * frac, min_pad)
-    ypad = max((ymax - ymin) * frac, min_pad)
-    return xmin - xpad, xmax + xpad, ymin - ypad, ymax + ypad
-
-
-def _scatter_area_from_data_diameter(
-    ax: plt.Axes,
-    fig: plt.Figure,
-    data_diameter_x: float,
-) -> float:
-    p0 = ax.transData.transform((0.0, 0.0))
-    p1 = ax.transData.transform((data_diameter_x, 0.0))
-    diameter_px = max(float(abs(p1[0] - p0[0])), 1.0)
-    diameter_pt = diameter_px * 72.0 / fig.dpi
-    return diameter_pt * diameter_pt
+from step2point.vis.detector_layout_utils import (
+    PROJECTIONS,
+    WorldBounds,
+    collection_bounds,
+    expand_bounds,
+    filter_geometry_to_bounds,
+    layer_intersects_ylim,
+    overlay_color_spec,
+    scatter_area_from_data_diameter,
+    x_bins_intersect_limits,
+    z_bins_intersect_limits,
+)
 
 
 def plot_barrel_wireframe(
@@ -87,10 +43,8 @@ def plot_barrel_wireframe(
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
     zlim: tuple[float, float] | None = None,
-    xlim_points: tuple[float, float] | None = None,
-    ylim_points: tuple[float, float] | None = None,
-    zlim_points: tuple[float, float] | None = None,
 ) -> tuple[Path, Path, Path]:
+    bounds = WorldBounds(xlim=xlim, ylim=ylim, zlim=zlim)
     if modules_only:
         xy_segments, xz_segments, zy_segments = module_envelope_outline_xy_xz_zy(layout)
         xy_polygons: list[np.ndarray] = []
@@ -106,30 +60,34 @@ def plot_barrel_wireframe(
         zy_polygons = []
         for selected in selected_layers:
             if draw_cells:
-                xz_polygons.extend(
-                    module_cell_strip_polygons_xz(
-                        layout,
-                        selected,
-                        module_index=module_index,
-                        sensitive_only=sensitive_only,
+                layer = layout.layers[selected - 1]
+                if z_bins_intersect_limits(layer, zlim):
+                    xy_polygons.extend(
+                        module_cell_strip_polygons_xy(
+                            layout,
+                            selected,
+                            module_index=module_index,
+                            sensitive_only=sensitive_only,
+                        )
                     )
-                )
-                xy_polygons.extend(
-                    module_cell_strip_polygons_xy(
-                        layout,
-                        selected,
-                        module_index=module_index,
-                        sensitive_only=sensitive_only,
+                if layer_intersects_ylim(layout, layer, int(module_index), sensitive_only, ylim):
+                    xz_polygons.extend(
+                        module_cell_strip_polygons_xz(
+                            layout,
+                            selected,
+                            module_index=module_index,
+                            sensitive_only=sensitive_only,
+                        )
                     )
-                )
-                zy_polygons.extend(
-                    module_cell_strip_polygons_zy(
-                        layout,
-                        selected,
-                        module_index=module_index,
-                        sensitive_only=sensitive_only,
+                if x_bins_intersect_limits(layout, layer, int(module_index), sensitive_only, xlim):
+                    zy_polygons.extend(
+                        module_cell_strip_polygons_zy(
+                            layout,
+                            selected,
+                            module_index=module_index,
+                            sensitive_only=sensitive_only,
+                        )
                     )
-                )
             else:
                 outline_xy, outline_xz, outline_zy = module_layer_outline_xy_xz_zy(
                     layout,
@@ -152,32 +110,38 @@ def plot_barrel_wireframe(
         fig_xy, ax_xy = plt.subplots(figsize=(8, 8))
         fig_xz, ax_xz = plt.subplots(figsize=(10, 8))
         fig_zy, ax_zy = plt.subplots(figsize=(10, 8))
+
+    xy_segments, xy_polygons = filter_geometry_to_bounds(xy_segments, xy_polygons, bounds, PROJECTIONS["xy"])
+    xz_segments, xz_polygons = filter_geometry_to_bounds(xz_segments, xz_polygons, bounds, PROJECTIONS["xz"])
+    zy_segments, zy_polygons = filter_geometry_to_bounds(zy_segments, zy_polygons, bounds, PROJECTIONS["zy"])
+
     line_width = 1.2 if modules_only else (0.55 if draw_cells and module_index is not None else (0.35 if draw_cells else 0.6))
+    cell_face = (0.121, 0.466, 0.705, 0.10)
     if xy_polygons:
         ax_xy.add_collection(
             PolyCollection(
                 xy_polygons,
-                facecolors=(0.121, 0.466, 0.705, 0.08),
-                edgecolors="tab:blue",
-                linewidths=0.45 if draw_cells and module_index is not None else 0.25,
+                facecolors=cell_face,
+                edgecolors=cell_face,
+                linewidths=0.40 if draw_cells and module_index is not None else 0.25,
             )
         )
     if xz_polygons:
         ax_xz.add_collection(
             PolyCollection(
                 xz_polygons,
-                facecolors=(0.121, 0.466, 0.705, 0.08),
-                edgecolors="tab:blue",
-                linewidths=0.45 if draw_cells and module_index is not None else 0.25,
+                facecolors=cell_face,
+                edgecolors=cell_face,
+                linewidths=0.50 if draw_cells and module_index is not None else 0.30,
             )
         )
     if zy_polygons:
         ax_zy.add_collection(
             PolyCollection(
                 zy_polygons,
-                facecolors=(0.121, 0.466, 0.705, 0.08),
-                edgecolors="tab:blue",
-                linewidths=0.45 if draw_cells and module_index is not None else 0.25,
+                facecolors=cell_face,
+                edgecolors=cell_face,
+                linewidths=0.50 if draw_cells and module_index is not None else 0.30,
             )
         )
     ax_xy.add_collection(LineCollection(xy_segments, colors="tab:blue", linewidths=line_width))
@@ -204,35 +168,24 @@ def plot_barrel_wireframe(
 
     if overlay_shower is not None and overlay_shower.n_points > 0:
         energy = np.asarray(overlay_shower.E, dtype=np.float64)
-        colors = np.log10(np.clip(energy, 1e-12, None))
-        xy_auto_bounds = _expand_bounds(*_collection_bounds(xy_segments, xy_polygons))
-        xz_auto_bounds = _expand_bounds(*_collection_bounds(xz_segments, xz_polygons))
-        zy_auto_bounds = _expand_bounds(*_collection_bounds(zy_segments, zy_polygons))
-        x_bounds = (
-            xlim_points
-            if xlim_points is not None
-            else (
+        xy_auto_bounds = expand_bounds(*collection_bounds(xy_segments, xy_polygons))
+        xz_auto_bounds = expand_bounds(*collection_bounds(xz_segments, xz_polygons))
+        zy_auto_bounds = expand_bounds(*collection_bounds(zy_segments, zy_polygons))
+        resolved_bounds = WorldBounds.resolved(
+            xlim=xlim,
+            ylim=ylim,
+            zlim=zlim,
+            fallback_x=(
                 min(xy_auto_bounds[0], xz_auto_bounds[0]),
                 max(xy_auto_bounds[1], xz_auto_bounds[1]),
-            )
-        )
-        y_bounds = (
-            ylim_points
-            if ylim_points is not None
-            else (
+            ),
+            fallback_y=(
                 min(xy_auto_bounds[2], zy_auto_bounds[2]),
                 max(xy_auto_bounds[3], zy_auto_bounds[3]),
-            )
+            ),
+            fallback_z=(zy_auto_bounds[0], zy_auto_bounds[1]),
         )
-        z_bounds = zlim_points if zlim_points is not None else (zy_auto_bounds[0], zy_auto_bounds[1])
-        point_mask = (
-            (overlay_shower.x >= x_bounds[0])
-            & (overlay_shower.x <= x_bounds[1])
-            & (overlay_shower.y >= y_bounds[0])
-            & (overlay_shower.y <= y_bounds[1])
-            & (overlay_shower.z >= z_bounds[0])
-            & (overlay_shower.z <= z_bounds[1])
-        )
+        point_mask = resolved_bounds.point_mask(overlay_shower)
         if annotate_cell_id and module_index is not None and overlay_shower.cell_id is not None:
             module_mask = np.array(
                 [
@@ -246,9 +199,9 @@ def plot_barrel_wireframe(
             reference_layer_index = layer_index if layer_index is not None else 1
             sensor_thickness = 2.0 * layout.layers[reference_layer_index - 1].sensitive_half_thickness_mm
             fraction = 0.35 if sensitive_only else 0.5
-            xy_area = _scatter_area_from_data_diameter(ax_xy, fig_xy, sensor_thickness * fraction)
-            xz_area = _scatter_area_from_data_diameter(ax_xz, fig_xz, sensor_thickness * fraction)
-            zy_area = _scatter_area_from_data_diameter(ax_zy, fig_zy, sensor_thickness * fraction)
+            xy_area = scatter_area_from_data_diameter(ax_xy, fig_xy, sensor_thickness * fraction)
+            xz_area = scatter_area_from_data_diameter(ax_xz, fig_xz, sensor_thickness * fraction)
+            zy_area = scatter_area_from_data_diameter(ax_zy, fig_zy, sensor_thickness * fraction)
             xy_sizes = np.full_like(energy, xy_area, dtype=np.float64)
             xz_sizes = np.full_like(energy, xz_area, dtype=np.float64)
             zy_sizes = np.full_like(energy, zy_area, dtype=np.float64)
@@ -256,12 +209,13 @@ def plot_barrel_wireframe(
             xy_sizes = 1.0 + 6.0 * np.sqrt(energy / max(float(np.max(energy)), 1e-12))
             xz_sizes = xy_sizes
             zy_sizes = xy_sizes
+        color_values, cmap = overlay_color_spec(overlay_shower, point_mask)
         ax_xy.scatter(
             overlay_shower.x[point_mask],
             overlay_shower.y[point_mask],
             s=xy_sizes[point_mask],
-            c=colors[point_mask],
-            cmap="inferno",
+            c=color_values,
+            cmap=cmap,
             alpha=0.75 if draw_cells and module_index is not None else 0.8,
             linewidths=0.0,
             zorder=3,
@@ -270,8 +224,8 @@ def plot_barrel_wireframe(
             overlay_shower.x[point_mask],
             overlay_shower.z[point_mask],
             s=xz_sizes[point_mask],
-            c=colors[point_mask],
-            cmap="inferno",
+            c=color_values,
+            cmap=cmap,
             alpha=0.75 if draw_cells and module_index is not None else 0.8,
             linewidths=0.0,
             zorder=3,
@@ -280,8 +234,8 @@ def plot_barrel_wireframe(
             overlay_shower.z[point_mask],
             overlay_shower.y[point_mask],
             s=zy_sizes[point_mask],
-            c=colors[point_mask],
-            cmap="inferno",
+            c=color_values,
+            cmap=cmap,
             alpha=0.75 if draw_cells and module_index is not None else 0.8,
             linewidths=0.0,
             zorder=3,
@@ -331,12 +285,12 @@ def plot_barrel_wireframe(
                     alpha=0.8,
                     zorder=4,
                 )
-    ax_xy.set_xlabel("x (mm)")
-    ax_xy.set_ylabel("y (mm)")
-    ax_xz.set_xlabel("x (mm)")
-    ax_xz.set_ylabel("z (mm)")
-    ax_zy.set_xlabel("z (mm)")
-    ax_zy.set_ylabel("y (mm)")
+    ax_xy.set_xlabel(PROJECTIONS["xy"].xlabel)
+    ax_xy.set_ylabel(PROJECTIONS["xy"].ylabel)
+    ax_xz.set_xlabel(PROJECTIONS["xz"].xlabel)
+    ax_xz.set_ylabel(PROJECTIONS["xz"].ylabel)
+    ax_zy.set_xlabel(PROJECTIONS["zy"].xlabel)
+    ax_zy.set_ylabel(PROJECTIONS["zy"].ylabel)
     module_label = f" module {module_index}" if module_index is not None else ""
     if modules_only:
         title_kind = "module envelopes"
@@ -360,9 +314,9 @@ def plot_barrel_wireframe(
     output_xz = output.with_name(f"{output.stem}_xz{output.suffix}")
     output_zy = output.with_name(f"{output.stem}_zy{output.suffix}")
     if output.suffix.lower() == ".png" and draw_cells and module_index is not None and sensitive_only:
-        save_dpi = 1000
-    elif output.suffix.lower() == ".png" and draw_cells and module_index is not None:
         save_dpi = 300
+    elif output.suffix.lower() == ".png" and draw_cells and module_index is not None:
+        save_dpi = 150
     else:
         save_dpi = None
     fig_xy.savefig(output_xy, bbox_inches="tight", dpi=save_dpi)

@@ -24,6 +24,7 @@ class Step2PointHDF5Reader(ShowerReader):
             time = np.asarray(steps["time"], dtype=np.float32) if "time" in steps else None
             cell_id = np.asarray(steps["cell_id"], dtype=np.uint64) if "cell_id" in steps else None
             pdg = np.asarray(steps["pdg"], dtype=np.int32) if "pdg" in steps else None
+            cluster_label = np.asarray(steps["cluster_label"], dtype=np.int64) if "cluster_label" in steps else None
             unique_ids = np.unique(event_ids)
             if self.shower_limit is not None:
                 unique_ids = unique_ids[: self.shower_limit]
@@ -41,8 +42,17 @@ class Step2PointHDF5Reader(ShowerReader):
                         "momentum": tuple(map(float, p_mom[i])),
                     }
 
+            file_metadata = {"source": "hdf5"}
+            if "algorithm" in h5.attrs:
+                file_metadata["algorithm"] = str(h5.attrs["algorithm"])
+            if "debug_output" in h5.attrs:
+                file_metadata["debug_output"] = bool(h5.attrs["debug_output"])
+
             for shower_id in unique_ids:
                 mask = event_ids == shower_id
+                metadata = dict(file_metadata)
+                if cluster_label is not None:
+                    metadata["cluster_label"] = cluster_label[mask]
                 yield Shower(
                     shower_id=int(shower_id),
                     x=position[mask, 0],
@@ -53,5 +63,5 @@ class Step2PointHDF5Reader(ShowerReader):
                     cell_id=None if cell_id is None else cell_id[mask],
                     pdg=None if pdg is None else pdg[mask],
                     primary=primary_map.get(int(shower_id), {}),
-                    metadata={"source": "hdf5"},
+                    metadata=metadata,
                 )

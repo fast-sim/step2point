@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
 from tests.integration.algorithm_regression_helpers import (
     DATA,
@@ -7,6 +9,8 @@ from tests.integration.algorithm_regression_helpers import (
     assert_summary_equals,
     run_pipeline,
 )
+
+pytestmark = pytest.mark.strict_regression
 
 
 def test_run_step2point_pipeline_writes_identity_hdf5(tmp_path):

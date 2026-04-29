@@ -40,27 +40,41 @@ This algorithm first subdivides each detector cell into a regular `x/N` by `y/M`
 
 ## HDBSCAN clustering
 
-> hdbscan_clustering
+> hdbscan
+
+HDBSCAN stands for **Hierarchical Density-Based Spatial Clustering of Applications with Noise**.
+It is a density-based clustering method: instead of merging points by fixed detector bins, it groups deposits that form locally dense structures and treats sparse outliers as noise. In `step2point`, this is useful when you want compression that follows shower structure rather than only detector cell boundaries.
 
 Requires:
 
-- `cell_id` defined for each deposit (for layer extraction)
+- `cell_id` defined for each deposit
+- a cell-id decoding rule that can be provided as either:
+  - a cell-id encoding string
+  - or a compact XML plus one or more readout collection names
 
 Optional:
 
 - `t` (time): when used (and present), used as a third clustering feature alongside x and y
 
-This algorithm clusters deposits using HDBSCAN within each (subdetector, layer) partition. Deposits are first partitioned by (subdetector, layer) where the layer is extracted from the cell ID using a bit-extraction function (defaulting to the ODD layout: 9 bits at bit 19). Within each partition the x/y coordinates are divided by a spatial scale (default 5 mm, roughly one cell width). If time is used (and available), it is expressed relative to the layer median and divided by a temporal scale (default 1 ns), and HDBSCAN clusters on all three scaled features (x, y, t); otherwise it clusters on (x, y) only. Deposits that HDBSCAN labels as noise (label -1) are reassigned to their nearest cluster, ensuring energy conservation.
+This algorithm assumes a `cell_id` can be decoded to define the unmergeable points. It first groups deposits according to a configurable `merge_scope`, and then runs HDBSCAN independently inside each group. The grouping fields are extracted from the cell ID through an explicit cell-id decoding rule, either from a supplied encoding string or derived from the compact XML for one or more readout collections. Within each group the x/y/z coordinates are divided by a spatial scale (default 5 mm, roughly one cell width). If time is used (and available), it is expressed relative to the group median and divided by a temporal scale (default 1 ns), and HDBSCAN clusters on the four scaled coordinates `(x, y, z, t)`; otherwise it clusters on `(x, y, z)` only. Deposits that HDBSCAN labels as noise (label -1) are reassigned to their nearest cluster, ensuring energy conservation.
+
+`merge_scope` defines which deposits are allowed to cluster together:
+
+- `none`: no detector boundary is enforced; all deposits are clustered together
+- `layer`: deposits can merge only within the same decoded layer
+- `system_layer`: deposits can merge only within the same decoded system and layer
+- `cell_id`: deposits can merge only within the same exact `cell_id`
 
 Parameters:
 
 - `min_cluster_size`: HDBSCAN minimum cluster size (required)
 - `min_samples`: HDBSCAN minimum samples for core points (required)
 - `cluster_selection_epsilon`: HDBSCAN builds a hierarchy of clusters at different density levels and by default (epsilon=0) picks the most persistent ones, which can produce many small, high-density clusters. When epsilon > 0, clusters separated by a distance below this threshold are merged rather than split, producing fewer, larger clusters. A small value (e.g. 0.5 - 1.0 in scaled feature space) prevents over-fragmenting dense shower cores while still separating distinct deposits (default: 0)
-- `xy_scale`: divide x, y coordinates by this before clustering. This normalises spatial distances so that 1.0 in scaled space corresponds to roughly one cell width. When `use_time` is True, this also ensures spatial and temporal features are on comparable magnitudes. The value is detector-specific (default: 5.0 mm, matching the ODD calorimeter cell size)
-- `t_scale`: divide time (relative to the layer median) by this before clustering. Normalises the temporal dimension so it contributes meaningfully alongside the scaled spatial features. Only used when `t` is present and `use_time` is True (default: 1.0 ns)
+- `xy_scale`: divide x, y, z coordinates by this before clustering. This normalises spatial distances so that 1.0 in scaled space corresponds to roughly one cell width. When `use_time` is True, this also ensures spatial and temporal coordinates are on comparable magnitudes. The value is detector-specific (default: 5.0 mm, matching the ODD calorimeter cell size)
+- `t_scale`: divide time (relative to the layer median) by this before clustering. Normalises the temporal dimension so it contributes meaningfully alongside the scaled spatial coordinates. Only used when `t` is present and `use_time` is True (default: 1.0 ns)
 - `use_time`: whether to include time as a clustering feature (default: False). When True, time must be present in the input shower or an error is raised
-- `layer_extractor`: how to extract layer IDs from cell IDs. Can be a callable `f(cell_ids) -> layers`, a DD4hep ID encoding string (e.g. `"system:8,barrel:3,layer:19:9"`), or `None` to use the ODD default `(cell_id >> 19) & 0x1FF`
+- `merge_scope`: detector boundary that HDBSCAN is not allowed to cross. Supported values are `none`, `layer`, `system_layer`, and `cell_id` (default: `system_layer`)
+- `cell_id_encoding`: cell-id encoding string, or one string per input collection / system slot when clustering across multiple readout collections
 - `algorithm`: internal neighbour-search method used by scikit-learn's HDBSCAN - `"auto"` (default), `"brute"`, `"kd_tree"`, or `"ball_tree"`. Use `"brute"` for the most reproducible reference outputs across machines. `"auto"` may choose different methods depending on the environment, which can slightly change cluster boundaries and therefore the compressed output
 - `n_jobs`: number of parallel jobs for HDBSCAN and nearest-neighbour queries. `-1` uses all cores (default). `1` forces single-threaded execution, which improves reproducibility across runs
 

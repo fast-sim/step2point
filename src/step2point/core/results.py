@@ -12,6 +12,7 @@ class CompressionResult:
     algorithm: str
     parameters: dict[str, Any] = field(default_factory=dict)
     stats: dict[str, Any] = field(default_factory=dict)
+    debug_data: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)

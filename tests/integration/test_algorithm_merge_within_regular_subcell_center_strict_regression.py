@@ -10,7 +10,7 @@ from tests.integration.algorithm_regression_helpers import (
     run_pipeline,
 )
 
-pytestmark = pytest.mark.odd_geometry
+pytestmark = [pytest.mark.odd_geometry, pytest.mark.strict_regression]
 
 
 def test_merge_within_regular_subcell_center_3x3_output_matches_reference(tmp_path):

@@ -107,7 +107,7 @@ step2point/
 └── .github/workflows/
 ```
 
-Contribution guidelines for common extension tasks are in [CONTRIBUTING.md](/home/anna/Workspace/step2point/CONTRIBUTING.md:1).
+Contribution guidelines for common extension tasks are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Quick start
 
@@ -119,7 +119,7 @@ pip install -e .[dev]
 
 ### Produce Output HDF5
 
-If you want to turn an input shower file into a new output HDF5 file with a chosen algorithm, use [examples/run_step2point_pipeline.py](/home/anna/Workspace/step2point/examples/run_step2point_pipeline.py:1).
+If you want to turn an input shower file into a new output HDF5 file with a chosen algorithm, use [examples/run_step2point_pipeline.py](examples/run_step2point_pipeline.py).
 
 Note:
 `PYTHONPATH=src` is only needed when running directly from a source checkout without installing the package first. If you already ran `pip install -e .[dev]`, you can drop that prefix and use `python ...` directly.
@@ -148,12 +148,27 @@ Write an output file with a regular `2x2` subgrid inside each detector cell:
 PYTHONPATH=src python examples/run_step2point_pipeline.py \
   --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
   --algorithm merge_within_regular_subcell \
-  --compact-xml ../OpenDataDetector/xml/OpenDataDetector.xml \
+  --compact-xml OpenDataDetector/xml/OpenDataDetector.xml \
   --collection-name ECalBarrelCollection \
   --grid-x 2 \
   --grid-y 2 \
   --position-mode weighted \
   --output outputs/pipeline_regular_grid
+```
+
+Write an output file with HDBSCAN clustering using cell-id decoding from a compact XML readout:
+
+```bash
+PYTHONPATH=src python examples/run_step2point_pipeline.py \
+  --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+  --algorithm hdbscan \
+  --compact-xml OpenDataDetector/xml/OpenDataDetector.xml \
+  --hdbscan-collection-name ECalBarrelCollection \
+  --min-cluster-size 5 \
+  --min-samples 3 \
+  --merge-scope system_layer \
+  --use-time \
+  --output outputs/pipeline_hdbscan
 ```
 
 Each run writes:
@@ -222,7 +237,35 @@ pytest -q
 
 ## Inspection and visualization
 
-An example basic inspection of shower observables can be done with [examples/inspect_showers.py](/home/anna/Workspace/step2point/examples/inspect_showers.py:1) which produces plots for manual validation.
+An example basic inspection of shower observables can be done with [examples/inspect_showers.py](examples/inspect_showers.py) which produces plots for manual validation.
+
+### Validation plots
+
+Use [examples/generate_validation_plots.py](examples/generate_validation_plots.py) in two modes:
+
+- one input file:
+  the script compresses internally and compares original vs compressed
+- two or more input files:
+  the script assumes compression is already done, treats the first file as the reference, and compares each later file against it
+
+Compress and validate in one step:
+
+```bash
+PYTHONPATH=src python examples/generate_validation_plots.py \
+  --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+  --algorithm merge_within_cell \
+  --outdir outputs/plots_merge_within_cell
+```
+
+Compare an existing compressed file against the original without recompressing:
+
+```bash
+PYTHONPATH=src python examples/generate_validation_plots.py \
+  --input \
+    tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+    outputs/pipeline_merge_within_cell/compressed_merge_within_cell.h5 \
+  --outdir outputs/plots_compare_merge_within_cell
+```
 
 Note:
 `PYTHONPATH=src` is only needed when running directly from a source checkout without installing the package first. If you already ran `pip install -e .[dev]`, you can drop that prefix and use `python ...` directly.
@@ -263,6 +306,46 @@ python examples/inspect_showers.py \
   --shower-index 5 \
   --axis 0 1 0 \
   --outdir outputs/inspect_root
+```
+
+### Presentation-style shower displays
+
+Use [examples/render_shower_display.py](examples/render_shower_display.py) for publication/PR-style 3D renders. The same script now handles:
+
+- `1` input: single-shower display
+- `2` inputs: side-by-side comparison
+- `3` inputs: triptych comparison
+
+Single shower:
+
+```bash
+python examples/render_shower_display.py \
+  --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+  --shower-index 0 \
+  --out outputs/gamma_display.png \
+  --crop-percentile 70
+```
+
+Two-shower comparison:
+
+```bash
+python examples/render_shower_display.py \
+  --input full.h5 compressed.h5 \
+  --panel-title "Detailed Geant4 Steps" "Final Compressed Cloud" \
+  --shower-index 0 \
+  --out outputs/gamma_comparison.png \
+  --crop-percentile 70
+```
+
+Three-shower comparison:
+
+```bash
+python examples/render_shower_display.py \
+  --input full.h5 subcell.h5 compressed.h5 \
+  --panel-title "Detailed Geant4 Steps" "Sub-cell Clustering" "Final Compressed Cloud" \
+  --shower-index 0 \
+  --out outputs/gamma_triptych.png \
+  --crop-percentile 70
 ```
 
 

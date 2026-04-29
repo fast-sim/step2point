@@ -16,22 +16,64 @@ jobs:
       - name: Install package
         run: |
           python -m pip install --upgrade pip
-          pip install -e .[dev]
+          pip install -e .[dev,test]
       - name: Run integration tests
         run: pytest -q tests/integration/test_pipeline_tiny.py
       - name: Run physics sanity suite
         run: pytest -q tests/physics
+      - name: Produce merge_within_cell output
+        run: |
+          python examples/run_step2point_pipeline.py \
+            --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+            --algorithm merge_within_cell \
+            --output outputs/ci_pipeline_merge_within_cell
       - name: Generate validation plots
         run: |
           python examples/generate_validation_plots.py \
-            --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
-            --algorithm merge_within_cell \
+            --input \
+              tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+              outputs/ci_pipeline_merge_within_cell/compressed_merge_within_cell.h5 \
             --outdir outputs/ci_validation_plots
       - name: Upload validation plots
         uses: actions/upload-artifact@v4
         with:
           name: hdf5-validation-plots
           path: outputs/ci_validation_plots/
+
+  hdbscan-validation-plots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev,test]
+      - name: Generate HDBSCAN validation plots
+        run: |
+          python examples/run_step2point_pipeline.py \
+            --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+            --algorithm hdbscan \
+            --hdbscan-cell-id-encoding 'system:8,barrel:3,module:4,stave:1,layer:6,slice:5,x:32:-16,y:-16' \
+            --min-cluster-size 5 \
+            --min-samples 3 \
+            --merge-scope system_layer \
+            --use-time \
+            --output outputs/ci_pipeline_hdbscan
+          python examples/generate_validation_plots.py \
+            --input \
+              tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+              outputs/ci_pipeline_hdbscan/compressed_hdbscan.h5 \
+            --axis 0 1 0 \
+            --origin 0 1250 0 \
+            --outdir outputs/ci_hdbscan_validation_plots
+      - name: Upload HDBSCAN validation plots
+        uses: actions/upload-artifact@v4
+        with:
+          name: hdbscan-validation-plots
+          path: outputs/ci_hdbscan_validation_plots/
 
   edm4hep-root-regression:
     runs-on: ubuntu-22.04
@@ -89,9 +131,14 @@ jobs:
             cd /workspace
             source /cvmfs/sw.hsf.org/key4hep/setup.sh
             source .venv-key4hep/bin/activate
-            python examples/generate_validation_plots.py \
+            python examples/run_step2point_pipeline.py \
               --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_edm4hep.root \
               --algorithm merge_within_cell \
+              --output outputs/ci_root_pipeline_merge_within_cell
+            python examples/generate_validation_plots.py \
+              --input \
+                tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_edm4hep.root \
+                outputs/ci_root_pipeline_merge_within_cell/compressed_merge_within_cell.h5 \
               --outdir outputs/ci_root_validation_plots
           '
       - name: Generate detector cell plots from ROOT overlay

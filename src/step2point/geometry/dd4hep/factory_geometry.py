@@ -164,6 +164,15 @@ class DD4hepResolver:
         raise KeyError(f"Detector using readout {readout_name!r} not found under {self.main_xml}")
 
 
+def get_dd4hep_cell_id_encoding(main_xml: str | Path, collection_name: str) -> str:
+    resolver = DD4hepResolver(main_xml)
+    readout_ref = resolver.find_readout(collection_name)
+    id_encoding = (readout_ref.element.findtext("id") or "").strip()
+    if not id_encoding:
+        raise ValueError(f"Readout {collection_name!r} does not define an <id> encoding")
+    return id_encoding
+
+
 def _rotation_matrix_xyz(z: float, y: float, x: float) -> np.ndarray:
     cz, sz = np.cos(z), np.sin(z)
     cy, sy = np.cos(y), np.sin(y)
@@ -528,6 +537,8 @@ def module_cell_strip_polygons_xz(
 
     max_x_index = int(np.ceil(layer.half_tangent_mm / layer.pitch_tangent_mm - 0.5))
     x_centers = np.arange(-max_x_index, max_x_index + 1, dtype=np.int32) * layer.pitch_tangent_mm
+    max_z_index = int(np.ceil(layer.half_z_mm / layer.pitch_z_mm - 0.5))
+    z_centers = np.arange(-max_z_index, max_z_index + 1, dtype=np.int32) * layer.pitch_z_mm
 
     for _, raw_center_xy in module_pairs:
         center_xy = envelope_rotation @ np.array(raw_center_xy, dtype=np.float64)
@@ -539,34 +550,31 @@ def module_cell_strip_polygons_xz(
             else center_xy + (layer.layer_center_radius_mm - layout.sect_center_radius_mm) * radial
         )
 
-        corners_xy = np.array(
-            [
-                radial_center_xy - layer.half_tangent_mm * tangent - radial_half_extent * radial,
-                radial_center_xy + layer.half_tangent_mm * tangent - radial_half_extent * radial,
-                radial_center_xy + layer.half_tangent_mm * tangent + radial_half_extent * radial,
-                radial_center_xy - layer.half_tangent_mm * tangent + radial_half_extent * radial,
-            ],
-            dtype=np.float64,
-        )
-        xmin = float(np.min(corners_xy[:, 0]))
-        xmax = float(np.max(corners_xy[:, 0]))
-
         for x_center in x_centers:
             x0 = max(float(x_center - 0.5 * layer.pitch_tangent_mm), -layer.half_tangent_mm)
             x1 = min(float(x_center + 0.5 * layer.pitch_tangent_mm), layer.half_tangent_mm)
             if x1 <= x0:
                 continue
-            polygons.append(
-                np.array(
-                    [
-                        [xmin, x0],
-                        [xmax, x0],
-                        [xmax, x1],
-                        [xmin, x1],
-                    ],
-                    dtype=np.float64,
+            p00 = radial_center_xy + x0 * tangent - radial_half_extent * radial
+            p01 = radial_center_xy + x1 * tangent - radial_half_extent * radial
+            p11 = radial_center_xy + x1 * tangent + radial_half_extent * radial
+            p10 = radial_center_xy + x0 * tangent + radial_half_extent * radial
+            for z_center in z_centers:
+                z0 = max(float(z_center - 0.5 * layer.pitch_z_mm), -layer.half_z_mm)
+                z1 = min(float(z_center + 0.5 * layer.pitch_z_mm), layer.half_z_mm)
+                if z1 <= z0:
+                    continue
+                polygons.append(
+                    np.array(
+                        [
+                            [p00[0], z0],
+                            [p01[0], z0],
+                            [p11[0], z1],
+                            [p10[0], z1],
+                        ],
+                        dtype=np.float64,
+                    )
                 )
-            )
 
     return polygons
 

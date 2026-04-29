@@ -105,3 +105,32 @@ def write_step2point_hdf5(
             primary.create_dataset("momentum", data=np.asarray(primary_momentum, dtype=np.float32))
 
     return output
+
+
+def write_step2point_debug_hdf5(
+    showers: Iterable[Shower],
+    cluster_labels: Iterable[np.ndarray],
+    output_path: str | Path,
+    *,
+    algorithm: str | None = None,
+    source_input: str | None = None,
+    debug_event_indices: Iterable[int] | None = None,
+) -> Path:
+    output = write_step2point_hdf5(
+        showers,
+        output_path,
+        algorithm=algorithm,
+        source_input=source_input,
+    )
+
+    labels = [np.ascontiguousarray(np.asarray(item), dtype=np.int64) for item in cluster_labels]
+    with h5py.File(output, "a") as h5:
+        h5.attrs["debug_output"] = True
+        if debug_event_indices is not None:
+            h5.attrs["debug_event_indices"] = np.asarray(list(debug_event_indices), dtype=np.int32)
+        steps = h5["steps"]
+        steps.create_dataset(
+            "cluster_label",
+            data=np.concatenate(labels) if labels else np.empty(0, dtype=np.int64),
+        )
+    return output
