@@ -43,6 +43,21 @@ def _make_clustered_shower(n_per_cluster=30, seed=42):
     )
 
 
+def _make_clustered_shower_with_outlier(seed=123):
+    shower = _make_clustered_shower(seed=seed)
+    return Shower(
+        shower_id=shower.shower_id,
+        x=np.concatenate([shower.x, np.array([500.0], dtype=np.float32)]),
+        y=np.concatenate([shower.y, np.array([500.0], dtype=np.float32)]),
+        z=np.concatenate([shower.z, np.array([900.0], dtype=np.float32)]),
+        E=np.concatenate([shower.E, np.array([0.25], dtype=np.float32)]),
+        t=np.concatenate([shower.t, np.array([50.0], dtype=np.float32)]),
+        cell_id=np.concatenate([shower.cell_id, np.array([_encode_cell_id(3, 1, 999)], dtype=np.uint64)]),
+        metadata=dict(shower.metadata),
+        primary=dict(shower.primary),
+    )
+
+
 def test_hdbscan_does_not_mutate_input():
     shower = _make_clustered_shower()
     x_orig = shower.x.copy()
@@ -132,6 +147,25 @@ def test_hdbscan_assigns_representative_cell_id_to_each_cluster():
     assert len(result.shower.cell_id) == result.shower.n_points
     assert result.shower.metadata["approximate_cell_id"] is True
     assert set(np.asarray(result.shower.cell_id, dtype=np.uint64)).issubset(set(np.asarray(shower.cell_id, dtype=np.uint64)))
+
+
+def test_hdbscan_standalone_outlier_policy_keeps_outlier_separate():
+    shower = _make_clustered_shower_with_outlier()
+    nearest = HDBSCANClustering(
+        min_cluster_size=5,
+        min_samples=3,
+        outlier_policy="nearest_cluster",
+        cell_id_encoding=DD4HEP_ENCODING,
+    ).compress(shower).shower
+    standalone = HDBSCANClustering(
+        min_cluster_size=5,
+        min_samples=3,
+        outlier_policy="standalone",
+        cell_id_encoding=DD4HEP_ENCODING,
+    ).compress(shower).shower
+    assert standalone.n_points >= nearest.n_points + 1
+    assert np.isclose(energy_ratio(shower, nearest), 1.0, rtol=1e-6)
+    assert np.isclose(energy_ratio(shower, standalone), 1.0, rtol=1e-6)
 
 
 def test_hdbscan_output_passes_sanity():

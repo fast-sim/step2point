@@ -47,6 +47,12 @@ def parse_args():
     )
     parser.add_argument("--use-time", action="store_true", help="Include time as a clustering feature in HDBSCAN.")
     parser.add_argument(
+        "--outlier-policy",
+        choices=["nearest_cluster", "standalone"],
+        default="nearest_cluster",
+        help="How HDBSCAN outlier points are handled.",
+    )
+    parser.add_argument(
         "--merge-scope",
         choices=["none", "layer", "system_layer", "cell_id"],
         default="system_layer",
@@ -137,6 +143,7 @@ def main():
             min_samples=args.min_samples,
             cluster_selection_epsilon=args.epsilon,
             use_time=args.use_time,
+            outlier_policy=args.outlier_policy,
             merge_scope=args.merge_scope,
             cell_id_encoding=_resolve_hdbscan_cell_id_encodings(args),
             algorithm=args.hdbscan_algorithm,

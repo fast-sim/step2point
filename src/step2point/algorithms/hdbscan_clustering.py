@@ -62,6 +62,13 @@ class HDBSCANClustering(CompressionAlgorithm):
         Whether to include time as a clustering feature (default False).
         When True, time must be present in the input shower or a
         ``ValueError`` is raised.
+    outlier_policy : str
+        How HDBSCAN outlier points are handled within each
+        partition. ``"nearest_cluster"`` (default) reassigns noise to the
+        nearest existing cluster in feature space when at least one cluster
+        exists. ``"standalone"`` keeps each noise point as its own singleton
+        cluster. In HDBSCAN terminology these outliers are the points with
+        label ``-1`` (called ``noise`` by the library).
     merge_scope : str
         Defines which detector boundaries HDBSCAN is not allowed to cross.
         Supported values are ``"none"``, ``"layer"``,
@@ -96,6 +103,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         xy_scale: float = 5.0,
         t_scale: float = 1.0,
         use_time: bool = False,
+        outlier_policy: str = "nearest_cluster",
         merge_scope: str = "system_layer",
         cell_id_encoding: str | tuple[str, ...] | None = None,
         algorithm: str = "auto",
@@ -107,12 +115,18 @@ class HDBSCANClustering(CompressionAlgorithm):
         self.xy_scale = xy_scale
         self.t_scale = t_scale
         self.use_time = use_time
+        self.outlier_policy = outlier_policy
         self.merge_scope = merge_scope
         self.algorithm = algorithm
         self.n_jobs = n_jobs
         valid_merge_scopes = {"none", "layer", "system_layer", "cell_id"}
+        valid_outlier_policies = {"nearest_cluster", "standalone"}
         if self.merge_scope not in valid_merge_scopes:
             raise ValueError(f"Unsupported merge_scope {merge_scope!r}. Expected one of {sorted(valid_merge_scopes)}.")
+        if self.outlier_policy not in valid_outlier_policies:
+            raise ValueError(
+                f"Unsupported outlier_policy {outlier_policy!r}. Expected one of {sorted(valid_outlier_policies)}."
+            )
 
         self.cell_id_encoding: tuple[str, ...] | None
         if self.merge_scope in {"layer", "system_layer"} and cell_id_encoding is None:
@@ -230,15 +244,25 @@ class HDBSCANClustering(CompressionAlgorithm):
                 predicted[is_cluster] += total_clusters
                 total_clusters += n_new
                 if np.any(is_noise):
-                    # Reassign noise to nearest cluster (energy-conserving)
-                    nn = NearestNeighbors(n_neighbors=1, n_jobs=self.n_jobs)
-                    nn.fit(features[is_cluster])
-                    _, idx = nn.kneighbors(features[is_noise])
-                    predicted[is_noise] = predicted[is_cluster][idx.ravel()]
+                    if self.outlier_policy == "nearest_cluster":
+                        # Reassign HDBSCAN noise points to the nearest real cluster (energy-conserving).
+                        nn = NearestNeighbors(n_neighbors=1, n_jobs=self.n_jobs)
+                        nn.fit(features[is_cluster])
+                        _, idx = nn.kneighbors(features[is_noise])
+                        predicted[is_noise] = predicted[is_cluster][idx.ravel()]
+                    else:
+                        n_noise = int(np.count_nonzero(is_noise))
+                        predicted[is_noise] = np.arange(total_clusters, total_clusters + n_noise, dtype=np.int64)
+                        total_clusters += n_noise
             elif np.any(is_noise):
-                # No clusters found - bundle all noise into one cluster
-                predicted[is_noise] = total_clusters
-                total_clusters += 1
+                if self.outlier_policy == "nearest_cluster":
+                    # No clusters found - bundle all HDBSCAN noise into one fallback cluster.
+                    predicted[is_noise] = total_clusters
+                    total_clusters += 1
+                else:
+                    n_noise = int(np.count_nonzero(is_noise))
+                    predicted[is_noise] = np.arange(total_clusters, total_clusters + n_noise, dtype=np.int64)
+                    total_clusters += n_noise
 
             labels[global_mask] = predicted
 
