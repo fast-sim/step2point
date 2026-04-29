@@ -488,9 +488,9 @@ def plot_barrel_wireframe(
     output_xz = output.with_name(f"{output.stem}_xz{output.suffix}")
     output_zy = output.with_name(f"{output.stem}_zy{output.suffix}")
     if output.suffix.lower() == ".png" and draw_cells and module_index is not None and sensitive_only:
-        save_dpi = 500
-    elif output.suffix.lower() == ".png" and draw_cells and module_index is not None:
         save_dpi = 300
+    elif output.suffix.lower() == ".png" and draw_cells and module_index is not None:
+        save_dpi = 150
     else:
         save_dpi = None
     fig_xy.savefig(output_xy, bbox_inches="tight", dpi=save_dpi)
