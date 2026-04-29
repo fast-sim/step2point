@@ -124,6 +124,16 @@ def test_hdbscan_compresses_and_preserves_energy():
     assert np.isclose(energy_ratio(shower, result.shower), 1.0, rtol=1e-6)
 
 
+def test_hdbscan_assigns_representative_cell_id_to_each_cluster():
+    shower = _make_clustered_shower()
+    algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, cell_id_encoding=DD4HEP_ENCODING)
+    result = algo.compress(shower)
+    assert result.shower.cell_id is not None
+    assert len(result.shower.cell_id) == result.shower.n_points
+    assert result.shower.metadata["approximate_cell_id"] is True
+    assert set(np.asarray(result.shower.cell_id, dtype=np.uint64)).issubset(set(np.asarray(shower.cell_id, dtype=np.uint64)))
+
+
 def test_hdbscan_output_passes_sanity():
     shower = _make_clustered_shower()
     algo = HDBSCANClustering(min_cluster_size=5, min_samples=3, cell_id_encoding=DD4HEP_ENCODING)

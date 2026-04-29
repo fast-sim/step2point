@@ -4,7 +4,8 @@ This algorithm clusters deposits using HDBSCAN within each configured
 merge scope. Features are scaled x, y, z coordinates and,
 if enabled and available, time relative to the layer median. Each cluster
 is merged into a single point: energy-weighted centroid position, summed
-energy, minimum time.
+energy, minimum time, and an approximate representative cell_id when
+available.
 """
 
 from __future__ import annotations
@@ -26,7 +27,9 @@ class HDBSCANClustering(CompressionAlgorithm):
     within each partition using HDBSCAN on scaled (x, y, z) features,
     optionally including time (t) (if ``use_time`` is True). Each cluster
     is then merged into a single point: energy-weighted centroid position,
-    summed energy, minimum time.
+    summed energy, minimum time, and an approximate representative
+    ``cell_id`` chosen from the cluster member closest to the cluster
+    barycentre.
 
     Parameters
     ----------
@@ -258,6 +261,7 @@ class HDBSCANClustering(CompressionAlgorithm):
             kept_y = shower.y[keep].astype(np.float64)
             kept_z = shower.z[keep].astype(np.float64)
             kept_E = shower.E[keep].astype(np.float64)
+            kept_cell_id = None if shower.cell_id is None else np.asarray(shower.cell_id[keep], dtype=np.uint64)
 
             _, inverse = np.unique(kept_labels, return_inverse=True)
             n = len(_)
@@ -276,6 +280,18 @@ class HDBSCANClustering(CompressionAlgorithm):
             else:
                 out_t = None
 
+            if kept_cell_id is not None:
+                out_cell_id = np.empty(n, dtype=np.uint64)
+                for cluster_idx in range(n):
+                    cluster_mask = inverse == cluster_idx
+                    cluster_dx = kept_x[cluster_mask] - out_x[cluster_idx]
+                    cluster_dy = kept_y[cluster_mask] - out_y[cluster_idx]
+                    cluster_dz = kept_z[cluster_mask] - out_z[cluster_idx]
+                    nearest_index = int(np.argmin(cluster_dx * cluster_dx + cluster_dy * cluster_dy + cluster_dz * cluster_dz))
+                    out_cell_id[cluster_idx] = kept_cell_id[cluster_mask][nearest_index]
+            else:
+                out_cell_id = None
+
             out = Shower(
                 shower_id=shower.shower_id,
                 x=out_x.astype(np.float32),
@@ -283,8 +299,9 @@ class HDBSCANClustering(CompressionAlgorithm):
                 z=out_z.astype(np.float32),
                 E=e_sum.astype(np.float32),
                 t=out_t,
+                cell_id=out_cell_id,
                 primary=shower.primary,
-                metadata={**shower.metadata, "algorithm": self.name},
+                metadata={**shower.metadata, "algorithm": self.name, "approximate_cell_id": out_cell_id is not None},
             )
         return CompressionResult(
             shower=out,

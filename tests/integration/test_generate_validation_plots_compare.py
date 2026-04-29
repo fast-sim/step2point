@@ -2,7 +2,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 DATA = Path(__file__).resolve().parents[1] / "data" / "tiny_showers.h5"
 
 
