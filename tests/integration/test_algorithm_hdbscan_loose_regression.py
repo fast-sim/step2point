@@ -34,10 +34,10 @@ def test_hdbscan_output_matches_loose_regression_bounds_with_time(tmp_path):
         },
         expected_numeric_ranges={
             "mean_n_points_before": (3582.0, 3582.0),
-            "mean_n_points_after": (260.0, 280.0),
-            "mean_compression_ratio": (0.072, 0.078),
-            "total_n_points_after": (2600.0, 2800.0),
-            "total_compression_ratio": (0.072, 0.078),
+            "mean_n_points_after": (265.0, 280.0),
+            "mean_compression_ratio": (0.073, 0.078),
+            "total_n_points_after": (2650.0, 2800.0),
+            "total_compression_ratio": (0.073, 0.078),
         },
     )
     assert_total_points_in_range(output_h5, lower=2600, upper=2800)

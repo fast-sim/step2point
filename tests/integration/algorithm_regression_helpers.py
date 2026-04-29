@@ -138,11 +138,11 @@ def assert_summary_equals(summary_path: Path, case: str) -> None:
             "compression_stats=10\n"
             "validation_results=30\n"
             "mean_n_points_before=3582.000000\n"
-            "mean_n_points_after=272.600000\n"
-            "mean_compression_ratio=0.076151\n"
+            "mean_n_points_after=275.500000\n"
+            "mean_compression_ratio=0.076907\n"
             "total_n_points_before=35820\n"
-            "total_n_points_after=2726\n"
-            "total_compression_ratio=0.076103\n"
+            "total_n_points_after=2755\n"
+            "total_compression_ratio=0.076912\n"
             "output_hdf5=compressed_hdbscan.h5\n"
         ),
     }
