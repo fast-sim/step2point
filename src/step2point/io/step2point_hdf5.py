@@ -58,6 +58,12 @@ class Step2PointHDF5Reader(ShowerReader):
                 file_metadata["algorithm"] = str(h5.attrs["algorithm"])
             if "debug_output" in h5.attrs:
                 file_metadata["debug_output"] = bool(h5.attrs["debug_output"])
+            for key in ("position_mode", "collection_name", "backend"):
+                if key in h5.attrs:
+                    file_metadata[key] = str(h5.attrs[key])
+            for key in ("x_bins", "y_bins"):
+                if key in h5.attrs:
+                    file_metadata[key] = int(h5.attrs[key])
 
             for shower_id in unique_ids:
                 mask = event_ids == shower_id
