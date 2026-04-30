@@ -355,6 +355,158 @@ def barrel_cell_center(
     return np.array([xy[0], xy[1], z], dtype=np.float64)
 
 
+def barrel_cell_polygon_xy(
+    layout: BarrelLayout,
+    layer_index: int,
+    module_index: int,
+    cell_x: int,
+    *,
+    sensitive_only: bool = False,
+) -> np.ndarray:
+    layer = layout.layers[layer_index - 1]
+    center_xy, radial, tangent = barrel_module_basis(layout, layer_index, module_index)
+    radial_center_xy = (
+        center_xy + (layer.sensitive_radius_mm - layout.sect_center_radius_mm) * radial
+        if sensitive_only
+        else center_xy + (layer.layer_center_radius_mm - layout.sect_center_radius_mm) * radial
+    )
+    radial_half_extent = layer.sensitive_half_thickness_mm if sensitive_only else layer.half_thickness_mm
+    x0 = float(cell_x) * layer.pitch_tangent_mm - 0.5 * layer.pitch_tangent_mm
+    x1 = float(cell_x) * layer.pitch_tangent_mm + 0.5 * layer.pitch_tangent_mm
+    return np.array(
+        [
+            radial_center_xy + x0 * tangent - radial_half_extent * radial,
+            radial_center_xy + x1 * tangent - radial_half_extent * radial,
+            radial_center_xy + x1 * tangent + radial_half_extent * radial,
+            radial_center_xy + x0 * tangent + radial_half_extent * radial,
+        ],
+        dtype=np.float64,
+    )
+
+
+def barrel_cell_polygon_xz(
+    layout: BarrelLayout,
+    layer_index: int,
+    module_index: int,
+    cell_x: int,
+    cell_y: int,
+    *,
+    sensitive_only: bool = False,
+) -> np.ndarray:
+    layer = layout.layers[layer_index - 1]
+    xy_polygon = barrel_cell_polygon_xy(
+        layout,
+        layer_index,
+        module_index,
+        cell_x,
+        sensitive_only=sensitive_only,
+    )
+    z0 = float(cell_y) * layer.pitch_z_mm - 0.5 * layer.pitch_z_mm
+    z1 = float(cell_y) * layer.pitch_z_mm + 0.5 * layer.pitch_z_mm
+    return np.array(
+        [
+            [xy_polygon[0, 0], z0],
+            [xy_polygon[1, 0], z0],
+            [xy_polygon[2, 0], z1],
+            [xy_polygon[3, 0], z1],
+        ],
+        dtype=np.float64,
+    )
+
+
+def barrel_cell_polygon_zy(
+    layout: BarrelLayout,
+    layer_index: int,
+    module_index: int,
+    cell_x: int,
+    cell_y: int,
+    *,
+    sensitive_only: bool = False,
+) -> np.ndarray:
+    xy_polygon = barrel_cell_polygon_xy(
+        layout,
+        layer_index,
+        module_index,
+        cell_x,
+        sensitive_only=sensitive_only,
+    )
+    z0 = float(cell_y) * layout.layers[layer_index - 1].pitch_z_mm - 0.5 * layout.layers[layer_index - 1].pitch_z_mm
+    z1 = float(cell_y) * layout.layers[layer_index - 1].pitch_z_mm + 0.5 * layout.layers[layer_index - 1].pitch_z_mm
+    ymin = float(np.min(xy_polygon[:, 1]))
+    ymax = float(np.max(xy_polygon[:, 1]))
+    return np.array(
+        [
+            [z0, ymin],
+            [z1, ymin],
+            [z1, ymax],
+            [z0, ymax],
+        ],
+        dtype=np.float64,
+    )
+
+
+def barrel_subcell_polygons_xy_xz_zy(
+    layout: BarrelLayout,
+    layer_index: int,
+    module_index: int,
+    cell_x: int,
+    cell_y: int,
+    sub_x: int,
+    sub_y: int,
+    *,
+    x_bins: int,
+    y_bins: int,
+    sensitive_only: bool = False,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    layer = layout.layers[layer_index - 1]
+    center_xy, radial, tangent = barrel_module_basis(layout, layer_index, module_index)
+    radial_center_xy = (
+        center_xy + (layer.sensitive_radius_mm - layout.sect_center_radius_mm) * radial
+        if sensitive_only
+        else center_xy + (layer.layer_center_radius_mm - layout.sect_center_radius_mm) * radial
+    )
+    radial_half_extent = layer.sensitive_half_thickness_mm if sensitive_only else layer.half_thickness_mm
+
+    x_sub_pitch = layer.pitch_tangent_mm / float(x_bins)
+    z_sub_pitch = layer.pitch_z_mm / float(y_bins)
+
+    x0 = float(cell_x) * layer.pitch_tangent_mm - 0.5 * layer.pitch_tangent_mm + sub_x * x_sub_pitch
+    x1 = x0 + x_sub_pitch
+    z0 = float(cell_y) * layer.pitch_z_mm - 0.5 * layer.pitch_z_mm + sub_y * z_sub_pitch
+    z1 = z0 + z_sub_pitch
+
+    xy = np.array(
+        [
+            radial_center_xy + x0 * tangent - radial_half_extent * radial,
+            radial_center_xy + x1 * tangent - radial_half_extent * radial,
+            radial_center_xy + x1 * tangent + radial_half_extent * radial,
+            radial_center_xy + x0 * tangent + radial_half_extent * radial,
+        ],
+        dtype=np.float64,
+    )
+    xz = np.array(
+        [
+            [xy[0, 0], z0],
+            [xy[1, 0], z0],
+            [xy[2, 0], z1],
+            [xy[3, 0], z1],
+        ],
+        dtype=np.float64,
+    )
+    ymin = float(np.min(xy[:, 1]))
+    ymax = float(np.max(xy[:, 1]))
+    zy = np.array(
+        [
+            [z0, ymin],
+            [z1, ymin],
+            [z1, ymax],
+            [z0, ymax],
+        ],
+        dtype=np.float64,
+    )
+    return xy, xz, zy
+
+
 def module_grid_lines_xy_zy(
     layout: BarrelLayout,
     layer_index: int,

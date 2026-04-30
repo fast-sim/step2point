@@ -109,6 +109,18 @@ def parse_args():
         help="Optional HDF5 or EDM4hep ROOT shower source to overlay as xyzE points. Debug HDF5 files with "
         "steps/cluster_label are colored by cluster label automatically.",
     )
+    parser.add_argument(
+        "--overlay-render",
+        choices=("points", "geometry"),
+        default="points",
+        help="Render overlay as point markers or geometry-backed cell/subcell shapes when supported.",
+    )
+    parser.add_argument(
+        "--overlay-size-scale",
+        type=float,
+        default=1.0,
+        help="Scale factor for overlay point-marker size. Useful when plotting the full detector.",
+    )
     parser.add_argument("--overlay-shower-index", type=int, default=0, help="Shower index used with --overlay-input.")
     parser.add_argument(
         "--overlay-collections",
@@ -161,6 +173,8 @@ def main():
         module_index=selected_module,
         modules_only=draw_modules,
         overlay_shower=overlay_shower,
+        overlay_render=args.overlay_render,
+        overlay_size_scale=args.overlay_size_scale,
         annotate_cell_id=args.debug,
         xlim=tuple(args.xlim) if args.xlim else None,
         ylim=tuple(args.ylim) if args.ylim else None,
