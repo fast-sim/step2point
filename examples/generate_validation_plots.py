@@ -135,6 +135,11 @@ def main():
         metavar=("X", "Y", "Z"),
         help="Override the reference point used together with the validation axis.",
     )
+    parser.add_argument(
+        "--summary-only",
+        action="store_true",
+        help="Write validation_summary.json but skip PNG plot generation.",
+    )
     parser.add_argument("--outdir", default="outputs/plots")
     args = parser.parse_args()
     collections = parse_collections(args.collections)
@@ -177,6 +182,7 @@ def main():
             axis_override=args.axis,
             origin_override=args.origin,
             pre_label=reference_label,
+            generate_plots=not args.summary_only,
         )
         return
 
@@ -221,6 +227,7 @@ def main():
         Path(args.outdir),
         axis_override=args.axis,
         origin_override=args.origin,
+        generate_plots=not args.summary_only,
     )
 
 
