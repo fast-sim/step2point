@@ -48,6 +48,45 @@ def test_generate_validation_plots_compare_mode(tmp_path):
     assert "n_points_post" in summary["comparisons"][0]["distributions"]
 
 
+def test_generate_validation_plots_summary_only(tmp_path):
+    repo_root = Path(__file__).resolve().parents[2]
+    pipeline_out = tmp_path / "pipeline_out"
+    compare_out = tmp_path / "compare_summary_only"
+
+    subprocess.run(
+        [
+            sys.executable,
+            "examples/run_step2point_pipeline.py",
+            "--input",
+            str(DATA),
+            "--algorithm",
+            "identity",
+            "--output",
+            str(pipeline_out),
+        ],
+        check=True,
+        cwd=repo_root,
+    )
+
+    subprocess.run(
+        [
+            sys.executable,
+            "examples/generate_validation_plots.py",
+            "--input",
+            str(DATA),
+            str(pipeline_out / "compressed_identity.h5"),
+            "--summary-only",
+            "--outdir",
+            str(compare_out),
+        ],
+        check=True,
+        cwd=repo_root,
+    )
+
+    assert (compare_out / "validation_summary.json").exists()
+    assert not (compare_out / "energy_ratio.png").exists()
+
+
 def test_generate_validation_plots_multi_compare_mode(tmp_path):
     repo_root = Path(__file__).resolve().parents[2]
     identity_out = tmp_path / "identity_out"
