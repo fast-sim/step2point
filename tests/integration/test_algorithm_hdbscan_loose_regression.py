@@ -18,7 +18,7 @@ def test_hdbscan_output_matches_loose_regression_bounds_with_time(tmp_path):
     outdir = run_pipeline(
         tmp_path,
         "hdbscan",
-        extra_args=["--use-time", "--hdbscan-cell-id-encoding", ODD_BARREL_ENCODING],
+        extra_args=["--use-time", "--cell-id-encoding", ODD_BARREL_ENCODING],
     )
 
     output_h5 = outdir / "compressed_hdbscan.h5"
@@ -47,7 +47,7 @@ def test_hdbscan_output_matches_loose_regression_bounds_without_time(tmp_path):
     outdir = run_pipeline(
         tmp_path,
         "hdbscan",
-        extra_args=["--hdbscan-cell-id-encoding", ODD_BARREL_ENCODING],
+        extra_args=["--cell-id-encoding", ODD_BARREL_ENCODING],
     )
 
     output_h5 = outdir / "compressed_hdbscan.h5"

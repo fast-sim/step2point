@@ -66,8 +66,8 @@ def parse_args():
         help="Readout collection name(s) required by geometry-aware algorithms.",
     )
     parser.add_argument(
-        "--hdbscan-cell-id-encoding",
-        help="Cell-ID encoding string used by HDBSCAN to extract system and layer.",
+        "--cell-id-encoding",
+        help="Cell-ID encoding string used by clustering algorithms to extract fields such as system and layer.",
     )
     parser.add_argument("--grid-x", type=int, default=2, help="Number of regular subdivisions along local cell x.")
     parser.add_argument("--grid-y", type=int, default=2, help="Number of regular subdivisions along local cell y/z.")
@@ -117,14 +117,14 @@ def _fallback_debug_labels(algorithm_name: str, shower) -> np.ndarray:
     raise ValueError(f"Algorithm '{algorithm_name}' did not provide debug cluster labels.")
 
 
-def _resolve_hdbscan_cell_id_encodings(args) -> tuple[str, ...]:
-    if args.hdbscan_cell_id_encoding:
-        return (args.hdbscan_cell_id_encoding,)
+def _resolve_cell_id_encodings(args) -> tuple[str, ...]:
+    if args.cell_id_encoding:
+        return (args.cell_id_encoding,)
     if args.compact_xml and args.collection_name:
         return tuple(get_dd4hep_cell_id_encoding(args.compact_xml, name) for name in args.collection_name)
     raise ValueError(
-        "hdbscan assumes a cell_id can be decoded to define the unmergeable points: pass either "
-        "--hdbscan-cell-id-encoding or --compact-xml together with --collection-name."
+        "This clustering mode assumes a cell_id can be decoded to define the unmergeable points: pass either "
+        "--cell-id-encoding or --compact-xml together with --collection-name."
     )
 
 
@@ -145,7 +145,7 @@ def main():
             use_time=args.use_time,
             outlier_policy=args.outlier_policy,
             merge_scope=args.merge_scope,
-            cell_id_encoding=_resolve_hdbscan_cell_id_encodings(args),
+            cell_id_encoding=_resolve_cell_id_encodings(args),
             algorithm=args.hdbscan_algorithm,
             n_jobs=args.n_jobs,
         )
