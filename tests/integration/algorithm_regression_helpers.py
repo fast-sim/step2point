@@ -148,7 +148,7 @@ def assert_summary_equals(summary_path: Path, case: str) -> None:
             "total_compression_ratio=0.076912\n"
             "output_hdf5=compressed_hdbscan.h5\n"
         ),
-        "cluster_within_cell": (
+        "cluster_within_cell_agglomerative": (
             "compression_stats=10\n"
             "validation_results=30\n"
             "mean_n_points_before=3582.000000\n"
@@ -157,7 +157,7 @@ def assert_summary_equals(summary_path: Path, case: str) -> None:
             "total_n_points_before=35820\n"
             "total_n_points_after=7835\n"
             "total_compression_ratio=0.218733\n"
-            "output_hdf5=compressed_cluster_within_cell.h5\n"
+            "output_hdf5=compressed_cluster_within_cell_agglomerative.h5\n"
         ),
     }
     expected = expected_by_case[case]

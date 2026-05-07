@@ -34,7 +34,7 @@ def parse_args():
     )
     parser.add_argument(
         "--algorithm",
-        choices=["identity", "merge_within_cell", "merge_within_regular_subcell", "hdbscan", "cluster_within_cell"],
+        choices=["identity", "merge_within_cell", "merge_within_regular_subcell", "hdbscan", "cluster_within_cell_agglomerative"],
         default="identity",
     )
     parser.add_argument("--min-cluster-size", type=int, default=5, help="HDBSCAN min_cluster_size.")
@@ -151,7 +151,7 @@ def main():
             algorithm=args.hdbscan_algorithm,
             n_jobs=args.n_jobs,
         )
-    elif args.algorithm == "cluster_within_cell":
+    elif args.algorithm == "cluster_within_cell_agglomerative":
         from sklearn.cluster import AgglomerativeClustering
 
         algorithm = ClusterWithinCell(
