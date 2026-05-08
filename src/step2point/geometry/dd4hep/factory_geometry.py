@@ -5,6 +5,7 @@ import operator
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
+import os
 
 import numpy as np
 
@@ -126,7 +127,15 @@ class DD4hepResolver:
         for include in root.findall(".//include"):
             ref = include.attrib.get("ref")
             if ref:
-                self._load_recursive((path.parent / ref).resolve())
+                # Check if the path is already speficied via an environment
+                # variable if loading via key4hep stack
+                parts = Path(ref).parts
+
+                if any(part.startswith("$") for part in parts):
+                    expanded_path = os.path.expandvars(ref)
+                    self._load_recursive((Path(expanded_path)))
+                else:
+                    self._load_recursive((path.parent / ref).resolve())
 
     def _collect_all(self) -> dict[str, float]:
         self._load_recursive(self.main_xml)
