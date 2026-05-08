@@ -178,7 +178,11 @@ def main():
     compressed_showers = []
     debug_showers = []
     debug_labels = []
+    count_empty_events = 0
     for shower_index, shower in enumerate(reader.iter_showers()):
+        if shower.n_points == 0:
+            count_empty_events +=1
+            continue
         result = algorithm.compress(shower)
         compressed_showers.append(result.shower)
         compression_stats.append(result.stats)
@@ -197,7 +201,7 @@ def main():
         for validator in validators:
             vr = validator.run(shower, result.shower)
             validation_results.append({"validator": vr.name, "shower_id": shower.shower_id, **vr.metrics})
-
+    print(f"Found {count_empty_events} empty events")
     outdir = Path(args.output)
     outdir.mkdir(parents=True, exist_ok=True)
     output_h5 = write_step2point_hdf5(
