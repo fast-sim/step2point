@@ -7,7 +7,7 @@ name = "step2point"
 version = "0.1.0"
 description = "Physics-aware calorimeter shower compression library"
 readme = "README.md"
-requires-python = "==3.13.*"
+requires-python = ">=3.10"
 authors = [{name = "OpenAI scaffold"}]
 dependencies = [
   "numpy>=1.24",
