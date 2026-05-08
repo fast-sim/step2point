@@ -201,6 +201,17 @@ source .venv-key4hep/bin/activate
 
 The helper script installs `step2point` in editable mode with the `dev` extras into `.venv-key4hep`.
 
+#### Geometry requirements: ODD
+Some features and tests require an installation of the Open Data Detector geometry:
+
+```bash
+git clone git@github.com:OpenDataDetector/OpenDataDetector.git
+cd OpenDataDetector/
+mkdir build && cd build
+cmake ..
+make -j8 install
+```
+
 Run the ROOT integration test:
 
 ```bash
