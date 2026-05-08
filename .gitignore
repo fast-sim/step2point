@@ -4,6 +4,8 @@ __pycache__/
 *.pyd
 *.so
 *.egg-info/
+*.h5
+martina_test/*.sh
 .venv/
 venv/
 .pytest_cache/
@@ -12,7 +14,6 @@ venv/
 build/
 dist/
 outputs/
-martina_test/
 uv.lock
 ILD_l5_o1_v02.xml
 .DS_Store
