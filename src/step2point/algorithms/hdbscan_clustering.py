@@ -40,7 +40,7 @@ class HDBSCANClustering(CompressionAlgorithm):
     cluster_selection_epsilon : float
         HDBSCAN builds a hierarchy of clusters at different density
         levels and by default (epsilon=0) picks the most persistent ones,
-        which can produce many small, high-density clusters.  When
+        which can produce many small, high-density clusters. When
         epsilon > 0, clusters separated by a distance below this threshold
         are merged, producing fewer, larger clusters.
         A small value (e.g. 0.5 - 1.0 in scaled feature space) prevents
@@ -49,14 +49,14 @@ class HDBSCANClustering(CompressionAlgorithm):
     xy_scale : float
         Divide x, y, z coordinates by this value before clustering (mm).
         Normalises spatial distances so that 1.0 in scaled space
-        corresponds to roughly one cell width.  When ``use_time`` is
+        corresponds to roughly one cell width. When ``use_time`` is
         True, this also ensures spatial and temporal features are on
-        comparable magnitudes.  The value is detector-specific
+        comparable magnitudes. The value is detector-specific
         (default 5.0 mm matches ODD calorimeter cells).
     t_scale : float
         Divide (t - layer median) by this value before clustering (ns).
         Normalises the temporal dimension so it contributes meaningfully
-        alongside the scaled spatial features.  Only used when time is
+        alongside the scaled spatial features. Only used when time is
         present and ``use_time`` is True.
     use_time : bool
         Whether to include time as a clustering feature (default False).
@@ -89,7 +89,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         cluster boundaries and therefore the compressed output.
     n_jobs : int
         Number of parallel jobs for HDBSCAN and nearest-neighbour queries.
-        ``-1`` uses all cores (default).  ``1`` forces single-threaded
+        ``-1`` uses all cores (default). ``1`` forces single-threaded
         execution, which improves reproducibility across runs.
     """
 

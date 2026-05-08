@@ -67,3 +67,19 @@ def test_hdbscan_preserves_total_energy_and_reduces_points():
         assert np.isclose(energy_ratio(shower, out), 1.0, rtol=1e-5)
         assert out.n_points <= shower.n_points
         assert validator.run(shower, out).metrics["passed"]
+
+
+def test_cluster_within_cell_preserves_total_energy():
+    from sklearn.cluster import AgglomerativeClustering
+
+    from step2point.algorithms.cluster_within_cell import ClusterWithinCell
+
+    validator = ShowerSanityValidator()
+    algo = ClusterWithinCell(
+        clusterer=AgglomerativeClustering(n_clusters=None, distance_threshold=1.0),
+    )
+    for shower in Step2PointHDF5Reader(str(DATA_GAMMA), shower_limit=3).iter_showers():
+        out = algo.compress(shower).shower
+        assert np.isclose(energy_ratio(shower, out), 1.0, rtol=1e-5)
+        assert out.n_points <= shower.n_points
+        assert validator.run(shower, out).metrics["passed"]
