@@ -164,12 +164,8 @@ def main():
             ["post"] if len(args.input) == 2 and args.label is None else args.label[1:]
         )
         comparisons = []
-        count_empty_events = 0
         for compared_path, compared_label in zip(args.input[1:], compared_labels, strict=True):
             compared_showers = load_showers(compared_path, collections)
-            if compared_showers.n_points == 0:
-                count_empty_events +=1
-                continue
             pairs = pair_showers(
                 reference_showers,
                 compared_showers,
