@@ -20,7 +20,6 @@ def convert(input_path: str):
         p_evt = np.asarray(h5["primary"]["event_id"], dtype=np.int32)
         p_mom = np.asarray(h5["primary"]["momentum"], dtype=np.float32)  # (N, 3)
         p_vertex = np.asarray(h5["primary"]["vertex"], dtype=np.float32)  # (N, 3)
-        p_pdg = np.asarray(h5["primary"]["pdg"], dtype=np.int32)
 
         # --- steps info ---
         s_evt = np.asarray(h5["steps"]["event_id"], dtype=np.int32)
