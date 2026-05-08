@@ -171,7 +171,6 @@ def main():
                 compared_label=compared_label,
             )
             comparisons.append((compared_label, pairs))
-        print(f"Found {count_empty_events} empty events")
         generate_benchmark_comparison_plots(
             comparisons,
             Path(args.outdir),
