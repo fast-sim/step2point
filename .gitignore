@@ -12,4 +12,8 @@ venv/
 build/
 dist/
 outputs/
+martina_test/
+uv.lock
+ILD_l5_o1_v02.xml
+pyproject.toml
 .DS_Store
