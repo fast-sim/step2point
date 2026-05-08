@@ -28,7 +28,7 @@ def inspect_h5(path, label):
                 try:
                     data = obj[0]
                     print(f"    sample[0] = {data}")
-                except:
+                except Exception:
                     pass
 
         f.visititems(visit)
