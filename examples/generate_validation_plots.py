@@ -162,8 +162,12 @@ def main():
             ["post"] if len(args.input) == 2 and args.label is None else args.label[1:]
         )
         comparisons = []
+        count_empty_events = 0
         for compared_path, compared_label in zip(args.input[1:], compared_labels, strict=True):
             compared_showers = load_showers(compared_path, collections)
+            if compared_showers.n_points == 0:
+                count_empty_events +=1
+                continue
             pairs = pair_showers(
                 reference_showers,
                 compared_showers,
@@ -171,6 +175,7 @@ def main():
                 compared_label=compared_label,
             )
             comparisons.append((compared_label, pairs))
+        print(f"Found {count_empty_events} empty events")
         generate_benchmark_comparison_plots(
             comparisons,
             Path(args.outdir),
@@ -179,7 +184,7 @@ def main():
             pre_label=reference_label,
         )
         return
-
+    
     input_path = args.input[0]
     reader = build_reader(input_path)
     if isinstance(reader, EDM4hepRootReader):
@@ -213,9 +218,14 @@ def main():
             collection_name=args.collection_name[0],
         )
     pairs = []
+    count_empty_events = 0
     for shower in reader.iter_showers():
+        if shower.n_points == 0:
+            count_empty_events +=1
+            continue
         result = algorithm.compress(shower)
         pairs.append((shower, result.shower))
+    print(f"Found {count_empty_events} empty events")
     generate_benchmark_plots(
         pairs,
         Path(args.outdir),
