@@ -46,6 +46,9 @@ markers = [
   "strict_regression: exact reference regression tests",
   "loose_regression: range- and invariant-based regression tests for nondeterministic algorithms",
 ]
+[tool.uv.sources]
+k-diffusion = { git = "https://github.com/crowsonkb/k-diffusion.git" }
+clip = { git = "https://github.com/openai/CLIP.git" }
 
 [tool.ruff]
 line-length = 130
