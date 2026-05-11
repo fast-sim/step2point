@@ -90,6 +90,7 @@ class BarrelLayerGeometry:
 class BarrelLayout:
     collection_name: str
     detector_name: str
+    det_id: int
     readout_xml_path: str
     detector_xml_path: str
     segmentation_type: str
@@ -215,6 +216,7 @@ def build_barrel_layout_from_collection(main_xml: str | Path, collection_name: s
     detector_ref = resolver.find_detector_for_readout(collection_name)
     readout = readout_ref.element
     detector = detector_ref.element
+    det_id = detector.get("id")
 
     if detector.attrib.get("type") != "ODDPolyhedraBarrelCalorimeter":
         raise NotImplementedError(
@@ -293,6 +295,7 @@ def build_barrel_layout_from_collection(main_xml: str | Path, collection_name: s
     return BarrelLayout(
         collection_name=collection_name,
         detector_name=detector.attrib["name"],
+        det_id = det_id,
         readout_xml_path=str(readout_ref.path),
         detector_xml_path=str(detector_ref.path),
         segmentation_type=seg.attrib["type"],
