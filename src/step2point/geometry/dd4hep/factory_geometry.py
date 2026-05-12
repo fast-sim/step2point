@@ -34,6 +34,7 @@ _UNITS = {
 
 
 def _eval_expr(expr: str, names: dict[str, float]) -> float:
+    expr = expr.strip()  # remove leading/trailing whitespace
     node = ast.parse(expr, mode="eval")
 
     def _visit(current: ast.AST) -> float:
@@ -133,8 +134,9 @@ class DD4hepResolver:
         self._load_recursive(self.main_xml)
         pending: dict[str, str] = {}
         for root in self._roots.values():
-            for const in root.findall(".//define/constant"):
-                pending[const.attrib["name"]] = const.attrib["value"]
+            for define in root.iter('define'):
+                for const in define.iter('constant'):
+                    pending[const.attrib["name"]] = const.attrib["value"]
 
         constants: dict[str, float] = {}
         while pending:
