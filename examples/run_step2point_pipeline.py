@@ -69,11 +69,12 @@ def parse_args():
         "--hdbscan-cell-id-encoding",
         help="Cell-ID encoding string used by HDBSCAN to extract system and layer.",
     )
-    parser.add_argument("--grid-x", type=int, default=2, help="Number of regular subdivisions along local cell x.")
-    parser.add_argument("--grid-y", type=int, default=2, help="Number of regular subdivisions along local cell y/z.")
+    parser.add_argument("--grid-x", type=int, nargs="+", default=2, help="Number of regular subdivisions along local cell x.")
+    parser.add_argument("--grid-y", type=int, nargs="+", default=2, help="Number of regular subdivisions along local cell y/z.")
     parser.add_argument(
         "--position-mode",
         choices=["weighted", "center"],
+        nargs="+",
         default="weighted",
         help="Output position within each subcell: weighted barycenter or geometric center.",
     )
@@ -152,14 +153,12 @@ def main():
     else:
         if args.compact_xml is None or not args.collection_name:
             raise ValueError("--compact-xml and --collection-name are required for merge_within_regular_subcell.")
-        if len(args.collection_name) != 1:
-            raise ValueError("merge_within_regular_subcell requires exactly one --collection-name.")
         algorithm = MergeWithinRegularSubcell(
             x_bins=args.grid_x,
             y_bins=args.grid_y,
             position_mode=args.position_mode,
             compact_xml=args.compact_xml,
-            collection_name=args.collection_name[0],
+            collection_name=args.collection_name,
         )
     validators = [EnergyConservationValidator(), CellCountRatioValidator(), ShowerMomentsValidator()]
     debug_event_indices = set(args.debug_events or [])
