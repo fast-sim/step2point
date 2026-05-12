@@ -36,6 +36,7 @@ _UNITS = {
 
 
 def _eval_expr(expr: str, names: dict[str, float]) -> float:
+    expr = expr.strip()  # remove leading/trailing whitespace
     node = ast.parse(expr, mode="eval")
 
     def _visit(current: ast.AST) -> float:
