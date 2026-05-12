@@ -218,7 +218,9 @@ def build_barrel_layout_from_collection(main_xml: str | Path, collection_name: s
     detector_ref = resolver.find_detector_for_readout(collection_name)
     readout = readout_ref.element
     detector = detector_ref.element
-    det_id = detector.get("id")
+    det_id_str = detector.get("id")
+
+    det_id = int(resolver.constants[det_id_str])
 
     if detector.attrib.get("type") != "ODDPolyhedraBarrelCalorimeter":
         raise NotImplementedError(
