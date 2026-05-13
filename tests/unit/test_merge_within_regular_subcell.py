@@ -21,8 +21,9 @@ def _simple_layout() -> BarrelLayout:
         module_centers_xy_mm=((0.0, 10.0),),
     )
     return BarrelLayout(
-        collection_name="TestCollection",
+        collection_name=["TestCollection"],
         detector_name="TestBarrel",
+        det_id=1,
         readout_xml_path="",
         detector_xml_path="",
         segmentation_type="CartesianGridXY",
@@ -58,7 +59,7 @@ def test_regular_grid_weighted_splits_one_cell_into_four_subcells():
         cell_id=np.array([_cell_id(1, 1, 0, 0)] * 4, dtype=np.uint64),
     )
 
-    result = MergeWithinRegularSubcell(layout=_simple_layout(), x_bins=2, y_bins=2).compress(shower)
+    result = MergeWithinRegularSubcell(layout=[_simple_layout()], x_bins=[2], y_bins=[2]).compress(shower)
 
     assert result.shower.n_points == 4
     assert result.shower.total_energy == shower.total_energy
@@ -77,10 +78,10 @@ def test_regular_grid_center_mode_places_outputs_at_subcell_centers():
     )
 
     result = MergeWithinRegularSubcell(
-        layout=_simple_layout(),
-        x_bins=2,
-        y_bins=2,
-        position_mode="center",
+        layout=[_simple_layout()],
+        x_bins=[2],
+        y_bins=[2],
+        position_mode=["center"],
     ).compress(shower)
 
     np.testing.assert_allclose(np.sort(result.shower.x), [-0.5, -0.5, 0.5, 0.5])
@@ -98,7 +99,7 @@ def test_regular_grid_requires_cell_id():
     )
 
     try:
-        MergeWithinRegularSubcell(layout=_simple_layout()).compress(shower)
+        MergeWithinRegularSubcell(layout=[_simple_layout()]).compress(shower)
     except ValueError as exc:
         assert "cell_id" in str(exc)
     else:
