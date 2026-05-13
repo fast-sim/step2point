@@ -6,6 +6,8 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
+from typing import Optional;
+
 import numpy as np
 
 _BIN_OPS = {
@@ -91,7 +93,7 @@ class BarrelLayerGeometry:
 class BarrelLayout:
     collection_name: str
     detector_name: str
-    det_id: int
+    det_id: Optional[int]
     readout_xml_path: str
     detector_xml_path: str
     segmentation_type: str
