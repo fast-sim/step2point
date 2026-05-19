@@ -187,7 +187,19 @@ class Transform_pointcloud:
 
         return rotate_z(rotate_x(points, 90), 90)
 
-    def box_selection(self, event, restrict_x=True, restrict_y=True, restrict_z=True):
+    def rotate_and_shift(directions, points):
+        new_points = np.copy(points)
+        new_points[:, :, [0, 1, 2]] = points[:, :, [2, 0, 1]]
+
+        new_directions = directions[:, [2, 0, 1]]
+        new_directions /= np.sqrt(np.sum(new_directions**2, axis=1))[:, None]
+
+        shift_amount = new_points[:, :, [2, 2]] * new_directions[:, None, :2] / new_directions[:, None, [2, 2]]
+        new_points[:, :, :2] -= shift_amount
+
+        return new_directions, new_points
+
+    def box_selection(self, event, restrict_x=True, restrict_y=True, restrict_z=True, box_cut=[None, None, None, None]):
         """
         Find a mask for the hits that are within the detector box.
 
@@ -203,16 +215,19 @@ class Transform_pointcloud:
             Whether to restrict the event in the y direction
         restrict_z: bool
             Whether to restrict the event in the z direction
-
+        box_cut: list of 4 floats: Xmin, Xmax, Ymin, Zmin
         Returns
         -------
         in_box: np.ndarray
             Mask for the hits that are within the detector box
         """
         event = np.array(event)
-        Xmax, Xmin = self.metadata.Xmax_global, self.metadata.Xmin_global
+
+        Xmin = box_cut[0] if box_cut[0] is not None else self.metadata.Xmin_global
+        Xmax = box_cut[1] if box_cut[1] is not None else self.metadata.Xmax_global
+        Zmin = box_cut[3] if box_cut[3] is not None else self.metadata.Zmin_global
+        Zmax = box_cut[2] if box_cut[2] is not None else self.metadata.Zmax_global
         Ymin = self.metadata.Ymin_global
-        Zmax, Zmin = self.metadata.Zmax_global, self.metadata.Zmin_global
         assert len(event.shape) == 2, "Use per event, not on whole dataset"
         in_box = np.ones(event.shape[0], dtype=bool)
         if restrict_x:
@@ -262,6 +277,31 @@ class Transform_pointcloud:
         z_shift = r * np.cos(theta_global) - self.metadata.gun_xyz_pos_global[2]
         return x_shift, z_shift
 
+    def digitize_and_fuzz(self, points):
+        def get_layer_bins():
+            # find bins for layers
+            lbp = np.array(self.metadata.layer_bottom_pos_global)
+            hcal_layer_gap = lbp[-1] - lbp[-2]
+            bins = np.full(len(lbp) + 1, lbp[-1] + hcal_layer_gap * 2)
+            min_gap = np.min(lbp[1:] - lbp[:-1])
+            bins[:-1] = lbp - 0.1 * min_gap
+            return bins
+
+        def fuzz(points):
+            shifts = np.random.uniform(0, 1, size=points.shape[:2])
+            points[:, :, 2] += shifts
+            return points
+
+        new_points = np.zeros_like(points)
+        bins = get_layer_bins()
+        layers = np.digitize(points[:, :, 2], bins) - 1
+        in_bounds = ~np.logical_or(layers == -1, layers == len(bins))
+        to_fill = np.sort(in_bounds, axis=1)[:, ::-1]
+        new_points[to_fill] = points[in_bounds]
+        new_points[to_fill, 2] = layers[in_bounds]
+        new_points = fuzz(new_points)
+        return new_points
+
     # rename this is for the transformations
     def apply_transformations(
         self,
@@ -278,6 +318,7 @@ class Transform_pointcloud:
 
         max_hits = 0
         event_list = []
+
         for event_n in range(start, end):
             if event_n % 100 == 0:
                 print(f"{(event_n - start) / n_events:.0%}", end="\r")
@@ -300,13 +341,25 @@ class Transform_pointcloud:
                     layer[:, 3] -= z_shift[event_n][layer_n]
 
             # no box selection, as your data is already restricted to the box.
-            inbox_mask = self.box_selection(event, restrict_x=False, restrict_y=False, restrict_z=False)
+            inbox_mask = self.box_selection(
+                event,
+                restrict_x=False,
+                restrict_y=False,
+                restrict_z=False,  # , box_cut=[-450, 450, -450, 450]
+            )
             if inbox_mask.sum() == 0:
                 print(f"Event {event_n} has no hits in box, skipping.")
                 continue
             event = event[inbox_mask]
             # print(event.shape)
             t = t[inbox_mask]
+
+            # in global coordinates: cut the backscattering hits
+            ecal_barrel_inner_radius = 1804.8
+            mask = event[:, 1] >= ecal_barrel_inner_radius
+            event = event[mask]
+            t = t[mask]
+
             event = event[np.argsort(t)]
             event_list.append(event)
             max_hits = max(max_hits, event.shape[0])
@@ -320,17 +373,25 @@ class Transform_pointcloud:
             padded.append(event)
 
         events = np.array(padded)
+
         if self.metadata.local_xyz_orientaion:
             original_shape = events.shape
             events_flat = events[..., :3].reshape(-1, 3)  # (74*41917, 3)
             events_rotated_flat = self.global_to_local_points(events_flat.T).T
             events_rotated = events_rotated_flat.reshape(original_shape[0], original_shape[1], 3)  # (74, 41917, 3)
             events[..., :3] = events_rotated
-        return events
+        return self.digitize_and_fuzz(events)
 
 
 def convert(input_path: str, global_path: str = None):
     if global_path is None:
+        # print keys and shapes of the input file
+        f = h5py.File(input_path, "r")
+        print("Input file keys and shapes:")
+        for key in f.keys():
+            for subkey in f[key].keys():
+                print(f"  {key}/{subkey}: {f[key][subkey].shape}")
+
         print(f"Reading {input_path}...")
         with h5py.File(input_path, "r") as h5:
             # --- primary info ---
@@ -405,7 +466,7 @@ def convert(input_path: str, global_path: str = None):
         p_mom = f["p_mom"][:]
         p_global = f["p_global"][:]
         input_p_global = f["input_p_global"][:]
-        input_gun_position = f["input_gun_position"][:]
+        # input_gun_position = f["input_gun_position"][:]
 
     print("Creating CC3 input showers...")
     metadata = Metadata()
@@ -467,13 +528,18 @@ def convert(input_path: str, global_path: str = None):
     moment_angles["theta_global"] = moment_angles["theta_global"].astype(np.float32)
     moment_angles["phi_global"] = moment_angles["phi_global"].astype(np.float32)
 
-    with h5py.File(input_path.replace(".h5", ".input_cc3.h5"), "w") as hf:
+    seed = int(input_path.split("/")[-2].split("_")[1])
+    algo = input_path.split("/")[-1].split(".")[0].split("compressed_")[-1]
+    out_file = f"outputs/cc3input_{algo}/input_cc3_file_{seed}.h5"
+
+    with h5py.File(out_file, "w") as hf:
         hf.create_dataset("energy", data=energies)
         hf.create_dataset("events", data=point_clouds)
+        print(point_clouds.shape)
         hf.create_dataset("n_points", data=num_points)
         for key in moment_angles:
             hf.create_dataset(key, data=moment_angles[key])
-
+    hf.close()
     pool.close()
     pool.join()
     print("--- %s seconds ---" % (time.time() - start_time))

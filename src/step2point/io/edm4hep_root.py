@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Iterator
 
 import numpy as np
+from tqdm import tqdm
 
 from step2point.core.shower import Shower
 
@@ -39,8 +40,8 @@ class EDM4hepRootReader:
         reader = root_io.Reader(self.input_path)
         events = reader.get("events")
         collections = tuple(self.collections or ())
-
-        for iev, event in enumerate(events):
+        total = len(reader.get("events"))  # podio
+        for iev, event in tqdm(enumerate(events), total=total, desc="Reading EDM4hep ROOT"):
             if self.shower_limit is not None and iev >= self.shower_limit:
                 break
 

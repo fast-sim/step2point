@@ -5,7 +5,7 @@ __pycache__/
 *.so
 *.egg-info/
 *.h5
-martina_test/*.sh
+
 martina_test/metadata_p22_th45-135_ph79-109_en5-130/
 .venv/
 venv/
