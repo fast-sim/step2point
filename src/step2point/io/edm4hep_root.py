@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Iterator
 
 import numpy as np
+from tqdm import tqdm
 
 from step2point.core.shower import Shower
 
@@ -39,8 +40,8 @@ class EDM4hepRootReader:
         reader = root_io.Reader(self.input_path)
         events = reader.get("events")
         collections = tuple(self.collections or ())
-
-        for iev, event in enumerate(events):
+        total = len(reader.get("events"))  # podio
+        for iev, event in tqdm(enumerate(events), total=total, desc="Reading EDM4hep ROOT"):
             if self.shower_limit is not None and iev >= self.shower_limit:
                 break
 
@@ -56,20 +57,21 @@ class EDM4hepRootReader:
 
             primary: dict[str, object] = {}
             if self.include_primary:
-                try:
-                    particles = event.get("MCParticles")
-                except Exception:  # pragma: no cover - backend-specific
-                    particles = []
-                for p in particles:
-                    if not p.isCreatedInSimulation():
-                        v = p.getVertex()
-                        m = p.getMomentum()
-                        primary = {
-                            "pdg": int(p.getPDG()),
-                            "vertex": (float(v.x), float(v.y), float(v.z)),
-                            "momentum": (float(m.x), float(m.y), float(m.z)),
-                        }
-                        break
+                for name in ("MCParticles", "MCParticle"):
+                    try:
+                        particles = event.get(name)
+                    except Exception:  # pragma: no cover - backend-specific
+                        particles = []
+                    for p in particles:
+                        if not p.isCreatedInSimulation():
+                            v = p.getVertex()
+                            m = p.getMomentum()
+                            primary = {
+                                "pdg": int(p.getPDG()),
+                                "vertex": (float(v.x), float(v.y), float(v.z)),
+                                "momentum": (float(m.x), float(m.y), float(m.z)),
+                            }
+                            break
 
             for icol, col_name in enumerate(collections):
                 hits = event.get(col_name)

@@ -25,10 +25,6 @@ N_EVENTS = None  # set to an int (e.g. 100) to speed things up
 COLLECTIONS = [
     ("ECalBarrelSiHitsEven", "ECalBarrel"),
     ("ECalBarrelSiHitsOdd", "ECalBarrel"),
-    ("ECalEndcapSiHitsEven", "ECalEndcap"),
-    ("ECalEndcapSiHitsOdd", "ECalEndcap"),
-    ("HcalBarrelRegCollection", "HCalBarrel"),
-    ("HcalEndcapRingCollection", "HCalEndcap"),
 ]
 
 # ── load ROOT file ─────────────────────────────────────────────────────────────
@@ -36,6 +32,8 @@ print("Loading ROOT file...")
 root_file = uproot.open(ROOT_FILE)
 event_tree = root_file["events"]
 
+
+print("\nSaved: mc_vertex_positions.png")
 all_x, all_y, all_z, all_e = [], [], [], []
 
 for col, section in COLLECTIONS:
