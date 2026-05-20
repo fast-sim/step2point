@@ -44,7 +44,7 @@ def parse_args():
         "--hdbscan-algorithm",
         choices=["auto", "brute", "kd_tree", "ball_tree"],
         default="brute",
-        help="HDBSCAN tree-building algorithm."
+        help="HDBSCAN tree-building algorithm.",
     )
     parser.add_argument("--use-time", action="store_true", help="Include time as a clustering feature in HDBSCAN.")
     parser.add_argument(
@@ -181,7 +181,7 @@ def main():
     count_empty_events = 0
     for shower_index, shower in enumerate(reader.iter_showers()):
         if shower.n_points == 0:
-            count_empty_events +=1
+            count_empty_events += 1
             continue
         result = algorithm.compress(shower)
         compressed_showers.append(result.shower)

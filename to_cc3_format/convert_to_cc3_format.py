@@ -16,8 +16,7 @@ import h5py
 import numpy as np
 from tqdm import tqdm
 
-# from martina_test.constants import Constants
-from martina_test.metadata import Metadata
+from to_cc3_format.metadata import Metadata
 
 # instructions on bash
 # python convert_to_cc3_format.py /path/to/step2point_output.h5
