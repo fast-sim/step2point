@@ -15,6 +15,7 @@ shower = next(reader.iter_showers())
 print([attr for attr in dir(shower) if not attr.startswith("_")])
 print(shower.n_points, shower.cell_id is not None, shower.t is not None)
 
+
 print("n_points:", shower.n_points)
 print("energy sum:", shower.E.sum() if shower.E is not None else "N/A")
 print("cell_id sample:", shower.cell_id[:5] if shower.cell_id is not None else "N/A")
