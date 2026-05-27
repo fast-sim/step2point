@@ -16,37 +16,77 @@ import h5py
 import numpy as np
 from tqdm import tqdm
 
-# from martina_test.constants import Constants
 from martina_test.metadata import Metadata
 
 # instructions on bash
 # python convert_to_cc3_format.py /path/to/step2point_output.h5
 
 
-def get_max_hits(start, end, s_evt, unique_ids):
-    max_hits = 0
-    for i in range(start, end):
-        eid = unique_ids[i]
-        mask = s_evt == eid
-        max_hits = max(max_hits, mask.sum())
-    return max_hits
+def compute_boundaries_streaming(input_path, unique_ids, chunk=10_000_000):
+    """Compute searchsorted boundaries without loading all of s_evt."""
+    boundaries = np.zeros(len(unique_ids) + 1, dtype=np.int64)
+    boundaries[-1] = -1  # sentinel, fill at end
+
+    with h5py.File(input_path, "r") as h5:
+        ds = h5["steps"]["event_id"]
+        total = ds.shape[0]
+        uid_ptr = 0  # pointer into unique_ids
+
+        for lo in range(0, total, chunk):
+            hi = min(lo + chunk, total)
+            chunk_data = ds[lo:hi]
+
+            # find where each remaining unique_id first appears in this chunk
+            while uid_ptr < len(unique_ids):
+                idx = np.searchsorted(chunk_data, unique_ids[uid_ptr])
+                if idx < len(chunk_data) and chunk_data[idx] == unique_ids[uid_ptr]:
+                    boundaries[uid_ptr] = lo + idx
+                    uid_ptr += 1
+                else:
+                    break  # not in this chunk yet
+
+        boundaries[-1] = total
+    return boundaries
 
 
-def build_events(start, end, s_evt, unique_ids, s_pos, s_ene, max_hits):
+def get_max_hits_batch(start, end, boundaries):
+    """
+    boundaries[i] = first step row for event i (length n_events+1).
+    No HDF5 access needed — hit count is purely derived from boundaries.
+    """
+    return int(np.max(boundaries[start + 1 : end + 1] - boundaries[start:end]))
+
+
+def build_events_batch(input_path, start, end, boundaries, max_hits):
+    """
+    Builds the (end-start, max_hits, 4) chunk for events [start, end).
+    Opens HDF5 fresh — no pickling, no passing giant arrays.
+    boundaries[i] = first step row for event i (length n_events+1).
+    """
     chunk = np.zeros((end - start, max_hits, 4), dtype=np.float32)
-    for i in range(start, end):
-        eid = unique_ids[i]
-        mask = s_evt == eid
-        n_hits = mask.sum()
-        chunk[i - start, :n_hits, 0] = s_pos[mask, 0]  # x
-        chunk[i - start, :n_hits, 1] = s_pos[mask, 1]  # y
-        chunk[i - start, :n_hits, 2] = s_pos[mask, 2]  # z
-        chunk[i - start, :n_hits, 3] = s_ene[mask]  # energy
+
+    with h5py.File(input_path, "r") as h5:
+        s_pos_ds = h5["steps"]["position"]  # lazy dataset handle
+        s_ene_ds = h5["steps"]["energy"]
+
+        for i in range(start, end):
+            lo = int(boundaries[i])
+            hi = int(boundaries[i + 1])
+            if lo == hi:
+                continue  # empty event
+
+            pos = s_pos_ds[lo:hi]  # shape (n_hits, 3)
+            ene = s_ene_ds[lo:hi]  # shape (n_hits,)
+            n = hi - lo
+
+            chunk[i - start, :n, :3] = pos
+            chunk[i - start, :n, 3] = ene
+
     return chunk
 
 
 def build_events_wrapper(args):
-    return build_events(*args)
+    return build_events_batch(*args)
 
 
 def degrees_to_radians(degrees):
@@ -119,8 +159,8 @@ def split_to_layers(points, layer_bottom_pos, cell_thickness_global, percent_buf
             Array of the top positions of the layers.
         """
         # naive calculation of the layer floors and ceilings
-        layer_floors = layer_bottom_pos - percent_buffer * cell_thickness_global
-        layer_ceilings = layer_bottom_pos + (1 + percent_buffer) * cell_thickness_global
+        layer_floors = layer_bottom_pos.copy() - percent_buffer * cell_thickness_global
+        layer_ceilings = layer_bottom_pos.copy() + (1 + percent_buffer) * cell_thickness_global
         # Unless the cells are thicker than the layers, (which they shouldn't be)
         # the true ceiling for each layer is the bottom of the layer plus the thickness
         true_ceilings = np.minimum((layer_bottom_pos + cell_thickness_global)[:-1], layer_bottom_pos[1:])
@@ -135,9 +175,12 @@ def split_to_layers(points, layer_bottom_pos, cell_thickness_global, percent_buf
     z_coord = points[:, layer_axis]
 
     layer_floors, layer_ceilings = floors_ceilings(layer_bottom_pos, cell_thickness_global, percent_buffer)
-    for floor, ceiling in zip(layer_floors, layer_ceilings):
-        mask = (z_coord >= floor) & (z_coord < ceiling)
-        yield points[mask]
+
+    layer_ids = np.searchsorted(layer_floors, z_coord, side="right") - 1
+    return layer_ids, layer_floors, layer_ceilings
+    # for floor, ceiling in zip(layer_floors, layer_ceilings):
+    #     mask = (z_coord >= floor) & (z_coord < ceiling)
+    #     yield points[mask]
 
 
 class Transform_pointcloud:
@@ -329,7 +372,6 @@ class Transform_pointcloud:
         new_points = fuzz(new_points)
         return new_points
 
-    # rename this is for the transformations
     def apply_transformations(
         self,
         start,
@@ -337,35 +379,40 @@ class Transform_pointcloud:
         events,
         layer_axis=1,
     ):
-        X, Y, Z, E = events[:, :, 0], events[:, :, 1], events[:, :, 2], events[:, :, 3]
-        T = np.zeros_like(E)  # no time info in your dataset
-        n_events = end - start
+        T = np.zeros_like(events[:, :, 3])  # no time info in your dataset
         if self.metadata.aligne:
             x_shift, z_shift = self.get_alignment_shifts(self.phi_global, self.theta_global)
 
         max_hits = 0
         event_list = []
-
         for event_n in range(start, end):
-            if event_n % 100 == 0:
-                print(f"{(event_n - start) / n_events:.0%}", end="\r")
+            # if event_n % 100 == 0:
+            #     print(f"{(event_n - start) / n_events:.0%}", end="\r")
 
-            event = np.transpose(np.vstack([X[event_n], Y[event_n], Z[event_n], E[event_n]]))
+            event = events[event_n]
             if events.shape[0] == 0:
                 print(f"Event {event_n} has no hits, skipping.")
                 return events
             t = T[event_n]
-            for layer_n, layer in enumerate(
-                split_to_layers(
+            # for layer_n, layer in enumerate(
+            #     split_to_layers(
+            #         event, self.metadata.layer_bottom_pos_global, self.metadata.cell_thickness_global, layer_axis=layer_axis
+            #     )
+            # ):
+            #     if len(layer) == 0:
+            #         continue
+
+            #     if self.metadata.aligne:
+            #         layer[:, 0] -= x_shift[event_n][layer_n]
+            #         layer[:, 3] -= z_shift[event_n][layer_n]
+            if self.metadata.aligne:
+                layer_ids, _, _ = split_to_layers(
                     event, self.metadata.layer_bottom_pos_global, self.metadata.cell_thickness_global, layer_axis=layer_axis
                 )
-            ):
-                if len(layer) == 0:
-                    continue
-
-                if self.metadata.aligne:
-                    layer[:, 0] -= x_shift[event_n][layer_n]
-                    layer[:, 3] -= z_shift[event_n][layer_n]
+                valid = (layer_ids >= 0) & (layer_ids < len(x_shift[event_n]))
+                valid_layer_ids = layer_ids[valid]
+                event[valid, 0] -= x_shift[event_n][valid_layer_ids]
+                event[valid, 3] -= z_shift[event_n][valid_layer_ids]
 
             # no box selection, as your data is already restricted to the box.
             inbox_mask = self.box_selection(
@@ -381,7 +428,7 @@ class Transform_pointcloud:
             # print(event.shape)
             t = t[inbox_mask]
 
-            # in global coordinates: cut the backscattering hits
+            # in global coordinates: cut the backscattered hits
             ecal_barrel_inner_radius = 1804.8
             mask = event[:, 1] >= ecal_barrel_inner_radius
             event = event[mask]
@@ -392,12 +439,10 @@ class Transform_pointcloud:
             max_hits = max(max_hits, event.shape[0])
 
         # pad until max hits
-        padded = []
-        for event in event_list:
-            if event.shape[0] < max_hits:
-                padding = np.zeros((max_hits - event.shape[0], 4))
-                event = np.vstack([event, padding])
-            padded.append(event)
+        padded = np.zeros((len(event_list), max_hits, 4))
+        for i, event in enumerate(event_list):
+            padded[i, : event.shape[0]] = event
+        events = padded
 
         events = np.array(padded)
 
@@ -408,6 +453,26 @@ class Transform_pointcloud:
             events_rotated = events_rotated_flat.reshape(original_shape[0], original_shape[1], 3)  # (74, 41917, 3)
             events[..., :3] = events_rotated
         return self.digitize_and_fuzz(events)
+
+
+_events_global = None
+_transform_global = None
+
+
+def _init_worker(events, transform):
+    global _events_global, _transform_global
+    _events_global = events
+    _transform_global = transform
+
+
+def _transform_wrapper(args):
+    global _events_global, _transform_global
+    start, end = args
+    try:
+        return _transform_global.apply_transformations(start, end, _events_global)
+    except Exception as e:
+        print(f"Worker error: {e}", flush=True)
+        raise
 
 
 def convert(input_path: str, global_path: str = None):
@@ -428,8 +493,8 @@ def convert(input_path: str, global_path: str = None):
 
             # --- steps info ---
             s_evt = np.asarray(h5["steps"]["event_id"], dtype=np.int32)
-            s_pos = np.asarray(h5["steps"]["position"], dtype=np.float32)  # (M, 3)
-            s_ene = np.asarray(h5["steps"]["energy"], dtype=np.float32)  # (M,)
+            # s_pos = np.asarray(h5["steps"]["position"], dtype=np.float32)  # (M, 3)
+            # s_ene = np.asarray(h5["steps"]["energy"], dtype=np.float32)  # (M,)
 
         unique_ids = np.unique(p_evt)
         n_events = len(unique_ids)
@@ -440,9 +505,16 @@ def convert(input_path: str, global_path: str = None):
         # If you have mass: E = sqrt(mass^2 + |p|^2)
         incident_energies = np.linalg.norm(p_mom, axis=1).astype(np.float32)  # (N,)
 
+        # Build per-event boundaries using searchsorted (assumes s_evt is sorted)
+        # boundaries[i] = first step index for event i
+        # boundaries[i+1] = first step index for event i+1 (= exclusive end)
+        boundaries = np.searchsorted(s_evt, unique_ids)  # (N,)
+        boundaries = np.append(boundaries, len(s_evt))  # (N+1,) sentinel at end
+        del s_evt  # free ~3 GB immediately
+
         # --- build events array: (N, max_hits, 4) = x, y, z, energy ---
         # first pass: find max hits per event
-        ncpu, batchsize = 64, 512
+        ncpu, batchsize = 4, 8
         pool = mp.Pool(ncpu)
 
         total_events = len(unique_ids)
@@ -451,17 +523,17 @@ def convert(input_path: str, global_path: str = None):
         batch_ends[-1] = total_events
         batch_start_end = np.vstack([batch_starts, batch_ends]).T
 
-        max_hits_argument = [(start, end, s_evt, unique_ids) for start, end in batch_start_end]
-        max_hits = pool.starmap(get_max_hits, max_hits_argument)
+        args = [(int(s), int(e), boundaries) for s, e in zip(batch_starts, batch_ends)]
+        max_hits = pool.starmap(get_max_hits_batch, args)
         max_hits = max(max_hits)
         print(f"Max hits per event: {max_hits}")
 
         events = np.zeros((n_events, max_hits, 4), dtype=np.float32)
-        events_argument = [(start, end, s_evt, unique_ids, s_pos, s_ene, max_hits) for start, end in batch_start_end]
+        args = [(input_path, int(s), int(e), boundaries, max_hits) for s, e in zip(batch_starts, batch_ends)]
 
         print(f"Building event array with shape {events.shape}...")
         with Pool(ncpu) as pool:
-            chunks = list(tqdm(pool.imap(build_events_wrapper, events_argument), total=len(events_argument)))
+            chunks = list(tqdm(pool.imap(build_events_wrapper, args), total=len(args)))
 
         events = np.vstack(chunks)
         print(f"Final shape: {events.shape}")
@@ -490,18 +562,37 @@ def convert(input_path: str, global_path: str = None):
         global_path = input_path.replace(".h5", ".input_global_cc3.h5")
         with h5py.File(global_path, "w") as out:
             for key, value in dict_.items():
-                out.create_dataset(key, data=value)
+                if key != "events":
+                    out.create_dataset(key, data=value)
+
+            # Large events array needs to be written in chunks to avoid memory issues
+            n_events, max_hits, n_feat = events.shape
+            ds = out.create_dataset(
+                "events",
+                shape=(n_events, max_hits, n_feat),
+                dtype=np.float32,
+                chunks=(min(512, n_events), max_hits, n_feat),  # chunk per batch
+            )
+            chunk_size = 512
+            for lo in range(0, n_events, chunk_size):
+                hi = min(lo + chunk_size, n_events)
+                ds[lo:hi] = events[lo:hi]
+
         print("Done!")
         for key, value in dict_.items():
             print(f"  {key}:             {value.shape}")
+        del dict_  # free memory
     else:
         assert os.path.exists(global_path), "Global file must be created first to compute local transformations."
+        print(f"Reading global file from {global_path}...")
         f = h5py.File(global_path, "r")
-        events = f["events"][:]
-        incident_energies = f["energy"][:]
-        p_mom = f["p_mom"][:]
-        p_global = f["p_global"][:]
-        input_p_global = f["input_p_global"][:]
+        max_len = f[list(f.keys())[1]].shape[0]
+        tot = max_len  # 35000  # for testing, use only a subset of events to speed up
+        events = f["events"][:tot]
+        incident_energies = f["energy"][:tot]
+        p_mom = f["p_mom"][:tot]
+        p_global = f["p_global"][:tot]
+        input_p_global = f["input_p_global"][:tot]
         # input_gun_position = f["input_gun_position"][:]
 
     print("Creating CC3 input showers...")
@@ -531,25 +622,49 @@ def convert(input_path: str, global_path: str = None):
     energies = np.vstack(energies)
 
     print("Applying transformations to point clouds.")
-    arguments = [
-        (
-            start,
-            end,
-            events,
-        )
-        for start, end in zip(batch_starts, batch_ends)
-    ]
-    point_clouds = pool.starmap(transform.apply_transformations, arguments)
-    # pad until max hits
-    padded = []
-    max_hits = max(pc.shape[1] for pc in point_clouds)
-    for pc in point_clouds:
-        if pc.shape[1] < max_hits:
-            padding = np.zeros((pc.shape[0], max_hits - pc.shape[1], 4))
-            pc = np.concatenate([pc, padding], axis=1)
-        padded.append(pc)
-    point_clouds = np.vstack(padded)
 
+    # shm = shared_memory.SharedMemory(create=True, size=events.nbytes)
+    # shared_events = np.ndarray(events.shape, dtype=events.dtype, buffer=shm.buf)
+    # shared_events[:] = events  # copy once into shared memory
+    # pool = mp.Pool(ncpu, initializer=_init_worker, initargs=(shm.name, events.shape, events.dtype, transform))
+    # point_clouds = list(tqdm(pool.imap(_transform_wrapper, arguments), total=len(arguments)))
+    # pool.close()
+    # pool.join()
+    # shm.close()
+    # shm.unlink()
+    bs = 10_000
+    pc_list = []
+    for i in range(0, total_events, bs):
+        start_ = i
+        end_ = min(i + bs, total_events)
+        tot = end_ - start_
+        if tot == 0:
+            continue
+        print(f"Processing {start_} until {end_} / {total_events}")
+
+        batch_starts = np.arange(0, tot, batchsize)
+        batch_ends = np.minimum(batch_starts + batchsize, tot)
+        arguments = list(zip(batch_starts, batch_ends))
+
+        _init_worker(events[start_:end_], transform)
+        point_clouds = [_transform_wrapper(arg) for arg in tqdm(arguments)]
+        pc_list += point_clouds
+
+    # pad until max hits
+    max_hits = max(pc.shape[1] for pc in pc_list)
+    point_clouds = np.zeros((total_events, max_hits, 4), dtype=np.float32)
+    start = 0
+    for pc in pc_list:
+        actual = pc.shape[0]
+        end = min(start + actual, point_clouds.shape[0])
+        rows = end - start
+        if rows <= 0:
+            break  # point_clouds is full
+        point_clouds[start:end, : pc.shape[1], :] = pc[:rows]
+        start = end
+
+    del pc_list  # free memory
+    print(f"Point clouds shape after transformations: {point_clouds.shape}")
     print("Transformations applied. Now sorting by number of points and writing to file.")
     num_points = (events[..., -1] > 0).sum(axis=1)
     if metadata.sort:
