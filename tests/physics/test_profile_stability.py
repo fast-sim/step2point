@@ -66,3 +66,18 @@ def test_hdbscan_profile_distance_is_bounded():
         d_long, d_rad = _profile_distance(shower, out)
         assert d_long < 3.0
         assert d_rad < 2.0
+
+
+def test_cluster_within_cell_profile_distance_is_bounded():
+    from sklearn.cluster import AgglomerativeClustering
+
+    from step2point.algorithms.cluster_within_cell import ClusterWithinCell
+
+    algo = ClusterWithinCell(
+        clusterer=AgglomerativeClustering(n_clusters=None, distance_threshold=1.0),
+    )
+    for shower in Step2PointHDF5Reader(str(DATA_GAMMA), shower_limit=3).iter_showers():
+        out = algo.compress(shower).shower
+        d_long, d_rad = _profile_distance(shower, out)
+        assert d_long < 3.0
+        assert d_rad < 2.0
