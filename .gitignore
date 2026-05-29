@@ -5,6 +5,7 @@ __pycache__/
 *.so
 *.egg-info/
 *.h5
+libevent-2.1.12-stable/
 
 martina_test/metadata_p22_th45-135_ph79-109_en5-130/
 .venv/

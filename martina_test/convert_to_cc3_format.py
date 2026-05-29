@@ -682,6 +682,7 @@ def convert(input_path: str, global_path: str = None):
     seed = int(input_path.split("/")[-2].split("_")[1])
     algo = input_path.split("/")[-1].split(".")[0].split("compressed_")[-1]
     out_file = f"outputs/cc3input_{algo}/input_cc3_file_{seed}.h5"
+    os.makedirs(f"outputs/cc3input_{algo}", exist_ok=True)
 
     with h5py.File(out_file, "w") as hf:
         hf.create_dataset("energy", data=energies)
