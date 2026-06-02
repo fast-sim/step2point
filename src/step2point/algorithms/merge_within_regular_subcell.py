@@ -59,13 +59,13 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                     )
         if collection_name is not None:
             for idx, collection in enumerate(collection_name):
-                if all(len(x) != len(collection_name) for x in [x_bins, y_bins, position_mode, collection_name]):
+                if any(len(x) != len(collection_name) for x in [self._as_list(x_bins), self._as_list(y_bins), self._as_list(position_mode)]):
                     raise ValueError("Arguments for lists x_bins, y_bins, position_mode, collection_name must be the same length.")
-                if x_bins[idx] <= 0 or y_bins[idx] <= 0:
+                if self._as_list(x_bins)[idx] <= 0 or self._as_list(y_bins)[idx] <= 0:
                     raise ValueError("x_bins and y_bins must be positive integers.")
-                if position_mode[idx] not in {"weighted", "center"}:
+                if self._as_list(position_mode)[idx] not in {"weighted", "center"}:
                     raise ValueError("position_mode must be 'weighted' or 'center'.")
-                if all(x != position_mode[0] for x in position_mode):
+                if any(x != self._as_list(position_mode)[0] for x in self._as_list(position_mode)):
                     raise ValueError("Currently the same clustering mode must be used across all collections!")
                 if layout is None:
                     layout_idx = build_barrel_layout_from_collection(compact_xml, collection)
@@ -80,19 +80,24 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                 self.position_mode.append(position_mode[idx])
         else:
             self.collection_name = None
-            if all(len(x) != 1 for x in [x_bins, y_bins, position_mode]):
+            if any(len(x) != 1 for x in [self._as_list(x_bins), self._as_list(y_bins), self._as_list(position_mode)]):
                 raise ValueError("No collection name provided- all arguments must only have one value supllied!")
-            if x_bins[0] <= 0 or y_bins[0] <= 0:
+            if self._as_list(x_bins)[0] <= 0 or self._as_list(y_bins)[0] <= 0:
                     raise ValueError("x_bins and y_bins must be positive integers.")
-            if position_mode[0] not in {"weighted", "center"}:
+            if self._as_list(position_mode)[0] not in {"weighted", "center"}:
                     raise ValueError("position_mode must be 'weighted' or 'center'.")
             layout_idx=layout[0] ### Layout is not none- previous checks
             if layout_idx.segmentation_type != "CartesianGridXY":
                     raise NotImplementedError("MergeWithinRegularSubcell currently supports only barrel CartesianGridXY layouts.")
             self.layout.append(layout_idx)
-            self.x_bins.append( int(x_bins[0]))
-            self.y_bins.append( int(y_bins[0]))
-            self.position_mode.append(position_mode[0])
+            self.x_bins.append( int(self._as_list(x_bins)[0]))
+            self.y_bins.append( int(self._as_list(y_bins)[0]))
+            self.position_mode.append(self._as_list(position_mode)[0])
+
+    def _as_list(self, value: int|List|None) -> List|None:
+        if isinstance(value, int):
+            return [value]
+        return value
 
     def compress(self, shower: Shower) -> CompressionResult:
         if shower.cell_id is None:
@@ -258,7 +263,7 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                 "position_mode": self.position_mode,
                 "x_bins": self.x_bins,
                 "y_bins": self.y_bins,
-                "collection_name": (layout.collection_name for layout in self.layout),
+                "collection_name": [layout.collection_name for layout in self.layout],
             },
         )
         return CompressionResult(
@@ -268,7 +273,7 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                 "x_bins": self.x_bins,
                 "y_bins": self.y_bins,
                 "position_mode": self.position_mode,
-                "collection_name": (layout.collection_name for layout in self.layout),
+                "collection_name": [layout.collection_name for layout in self.layout],
             },
             stats={
                 "n_points_before": shower.n_points,
