@@ -18,8 +18,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import h5py
 import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
 import numpy as np
 import pandas as pd
 
@@ -29,7 +29,7 @@ import pandas as pd
 INPUT = "/eos/project/f/fast/edm4hep_frombenchmark/test_small.edm4hep.root"
 COLLECTION = "EcalBarrelCollection"
 MERGE_SCOPE = "system_layer"
-BASE_OUTPUT = Path("step2point/outputs/hdbscan_sweep")
+BASE_OUTPUT = Path("outputs/hdbscan_sweep")
 
 MIN_CLUSTER_SIZES = [3, 5, 8, 12, 20]
 MIN_SAMPLES_LIST = [2, 3, 4]
@@ -62,6 +62,10 @@ def run_pipeline(mcs: int, ms: int) -> Path:
 
     log_path = out_dir / "run.log"
     print(f"  → mcs={mcs:2d}, ms={ms}  ...", end=" ", flush=True)
+    if log_path.exists():
+        print(f"  [skip] output exists at {out_dir}")
+        return out_dir
+
     with open(log_path, "w") as log:
         print(f"Running command:\n{cmd}\nLogging to {log_path}")
         result = subprocess.run(
@@ -129,103 +133,286 @@ PLOT_DIR = BASE_OUTPUT / "plots"
 CMAP = "viridis"
 
 
-def _heatmap(df: pd.DataFrame, metric: str, title: str, fmt: str = ".1f"):
-    """Generic pivot heatmap over (mcs, ms) grid."""
-    if metric not in df.columns:
-        print(f"  [skip] '{metric}' not in data")
-        return
+def plot_h5_overlay_histograms(
+    root_dir,
+    h5_name="compressed_hdbscan.h5",
+):
+    """
+    Creates two overlay histograms:
 
-    pivot = df.pivot_table(index="mcs", columns="ms", values=metric)
-    fig, ax = plt.subplots(figsize=(6, 4))
-    im = ax.imshow(pivot.values, aspect="auto", cmap=CMAP)
-    plt.colorbar(im, ax=ax)
+        - hits_per_event_overlay.png
+        - hit_energy_overlay.png
 
-    ax.set_xticks(range(len(pivot.columns)))
-    ax.set_xticklabels(pivot.columns)
-    ax.set_yticks(range(len(pivot.index)))
-    ax.set_yticklabels(pivot.index)
-    ax.set_xlabel("min_samples")
-    ax.set_ylabel("min_cluster_size")
-    ax.set_title(title)
+    One colored line per (mcs, ms) configuration.
+    """
+    root_dir = Path(root_dir)
 
-    # annotate cells
-    for i in range(pivot.shape[0]):
-        for j in range(pivot.shape[1]):
-            val = pivot.values[i, j]
-            if not np.isnan(val):
-                ax.text(j, i, format(val, fmt), ha="center", va="center", color="white", fontsize=8, fontweight="bold")
+    plot_dir = root_dir / "plots"
+    plot_dir.mkdir(parents=True, exist_ok=True)
 
-    fig.tight_layout()
-    path = PLOT_DIR / f"heatmap_{metric}.png"
-    fig.savefig(path, dpi=150)
-    plt.close(fig)
-    print(f"  saved {path}")
+    hits_data = []
+    energy_data = []
 
+    # configurations to skip
+    ms_toskip = [2, 4, 2, 4, 2, 2, 4, 2, 4]
+    mcs_toskip = [20, 20, 12, 12, 3, 5, 5, 8, 8]
+    # --------------------------------------------------
+    # Read some configurations
 
-def plot_line_per_ms(df: pd.DataFrame, metric: str, ylabel: str):
-    """One line per min_samples, x-axis = min_cluster_size."""
-    if metric not in df.columns:
-        return
-    fig, ax = plt.subplots(figsize=(7, 4))
-    for ms, grp in df.groupby("ms"):
-        grp_sorted = grp.sort_values("mcs")
-        ax.plot(grp_sorted["mcs"], grp_sorted[metric], marker="o", label=f"min_samples={ms}")
-    ax.set_xlabel("min_cluster_size")
-    ax.set_ylabel(ylabel)
-    ax.set_title(f"{ylabel} vs min_cluster_size")
-    ax.legend()
-    ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
-    fig.tight_layout()
-    path = PLOT_DIR / f"line_{metric}.png"
-    fig.savefig(path, dpi=150)
-    plt.close(fig)
-    print(f"  saved {path}")
+    for folder in sorted(root_dir.glob("hdbscan_mcs*_ms*")):
+        match = re.search(r"mcs(\d+)_ms(\d+)", folder.name)
 
+        if match is None:
+            continue
 
-def plot_scatter_tradeoff(df: pd.DataFrame):
-    """Scatter: noise_fraction vs n_clusters, coloured by mcs."""
-    if not {"noise_fraction", "n_clusters"}.issubset(df.columns):
-        print("  [skip] tradeoff scatter — need noise_fraction and n_clusters")
-        return
-    fig, ax = plt.subplots(figsize=(6, 5))
-    sc = ax.scatter(df["n_clusters"], df["noise_fraction"], c=df["mcs"], cmap=CMAP, s=80, zorder=3)
-    plt.colorbar(sc, ax=ax, label="min_cluster_size")
-    for _, row in df.iterrows():
-        ax.annotate(
-            f"ms={int(row['ms'])}",
-            (row["n_clusters"], row["noise_fraction"]),
-            textcoords="offset points",
-            xytext=(5, 3),
-            fontsize=7,
+        mcs = int(match.group(1))
+        ms = int(match.group(2))
+        if ms in ms_toskip and mcs in mcs_toskip:
+            continue
+
+        h5_file = folder / h5_name
+
+        if not h5_file.exists():
+            continue
+
+        with h5py.File(h5_file, "r") as f:
+            steps = f["steps"]
+
+            energy = steps["energy"][:]
+            event_id = steps["event_id"][:]
+
+        _, inverse = np.unique(
+            event_id,
+            return_inverse=True,
         )
-    ax.set_xlabel("n_clusters")
-    ax.set_ylabel("noise fraction")
-    ax.set_title("Clustering trade-off: noise vs. n_clusters")
-    ax.grid(True, alpha=0.3)
+
+        hits_per_event = np.bincount(inverse)
+
+        label = f"mcs={mcs}, ms={ms}"
+
+        hits_data.append((hits_per_event, label))
+        energy_data.append((energy[energy > 0], label))
+
+    # max hits per event across all configs (for common bins)
+    max_h = max((values.max() for values, _ in hits_data), default=0)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    b_ = np.linspace(0, max_h, 20)  # common bins for all configs
+    for values, label in hits_data:
+        ax.hist(
+            values,
+            bins=b_,  # larger bins
+            density=True,
+            histtype="step",
+            linewidth=2,
+            label=label,
+        )
+
+    ax.set_xlabel("Hits per event")
+    ax.set_ylabel("Density")
+    ax.set_title("Hits per event")
+
+    ax.legend(
+        fontsize=8,
+        ncol=2,
+    )
+
     fig.tight_layout()
-    path = PLOT_DIR / "scatter_tradeoff.png"
-    fig.savefig(path, dpi=150)
+
+    out_file = plot_dir / "hits_per_event_overlay.png"
+
+    fig.savefig(
+        out_file,
+        dpi=150,
+    )
+
     plt.close(fig)
-    print(f"  saved {path}")
+
+    print(f"saved {out_file}")
+
+    # --------------------------------------------------
+    # Hit energy (log scale)
+    # --------------------------------------------------
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    all_energy = np.concatenate([vals for vals, _ in energy_data])
+
+    bins = np.logspace(
+        np.log10(all_energy.min()),
+        np.log10(all_energy.max()),
+        80,
+    )
+
+    for values, label in energy_data:
+        ax.hist(
+            values,
+            bins=bins,
+            density=True,
+            histtype="step",
+            linewidth=2,
+            label=label,
+        )
+
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel("Hit energy")
+    ax.set_ylabel("Density")
+    ax.set_title("Hit energy distribution")
+
+    ax.legend(
+        fontsize=8,
+        ncol=2,
+    )
+
+    fig.tight_layout()
+
+    out_file = plot_dir / "hit_energy_overlay.png"
+
+    fig.savefig(
+        out_file,
+        dpi=150,
+    )
+
+    plt.close(fig)
+
+    print(f"saved {out_file}")
 
 
-def make_all_plots(df: pd.DataFrame):
+def plot_compression_ratios(
+    root_dir,
+    txt_name="compression_summary_hdbscan.txt",
+):
+    root_dir = Path(root_dir)
+
+    rows = []
+
+    for folder in sorted(root_dir.glob("hdbscan_mcs*_ms*")):
+        match = re.search(r"mcs(\d+)_ms(\d+)", folder.name)
+        if match is None:
+            continue
+
+        mcs = int(match.group(1))
+        ms = int(match.group(2))
+
+        txt_file = folder / txt_name
+
+        if not txt_file.exists():
+            continue
+
+        row = {"mcs": mcs, "ms": ms}
+
+        with open(txt_file) as f:
+            for line in f:
+                if "=" not in line:
+                    continue
+
+                key, value = line.strip().split("=", 1)
+                try:
+                    row[key] = float(value)
+                except ValueError:
+                    pass
+
+        rows.append(row)
+
+    if not rows:
+        print("No summary files found.")
+        return
+
+    df = pd.DataFrame(rows)
+
+    fig, axes = plt.subplots(
+        1,
+        2,
+        figsize=(12, 5),
+        sharex=True,
+        sharey=True,
+    )
+    # plot merge within cell point
+    txt_within_cell = "outputs/pipeline2_merge_within_cell/test_small/compression_summary_merge_within_cell.txt"
+    if Path(txt_within_cell).exists():
+        row = {}
+        with open(txt_within_cell) as f:
+            for line in f:
+                if "=" not in line:
+                    continue
+
+                key, value = line.strip().split("=", 1)
+                try:
+                    row[key] = float(value)
+                except ValueError:
+                    pass
+
+        if "mean_compression_ratio" in row and "total_compression_ratio" in row:
+            axes[0].axhline(
+                row["mean_compression_ratio"],
+                color="k",
+                linestyle="--",
+                label="merge within cell (mean)",
+            )
+            axes[1].axhline(
+                row["total_compression_ratio"],
+                color="k",
+                linestyle="--",
+                label="merge within cell (total)",
+            )
+
+    metrics = [
+        "mean_compression_ratio",
+        "total_compression_ratio",
+    ]
+
+    titles = [
+        "Mean compression ratio",
+        "Total compression ratio",
+    ]
+
+    for ax, metric, title in zip(axes, metrics, titles):
+        for ms, grp in sorted(df.groupby("ms")):
+            grp = grp.sort_values("mcs")
+
+            ax.plot(
+                grp["mcs"],
+                grp[metric],
+                marker="o",
+                linewidth=2,
+                label=f"ms={ms}",
+            )
+
+        ax.set_xlabel("min_cluster_size")
+        ax.set_ylabel("compression ratio")
+        ax.set_title(title)
+        ax.grid(True, alpha=0.3)
+
+    axes[0].legend(
+        title="min_samples",
+        frameon=False,
+    )
+
+    fig.tight_layout()
+
+    out_file = root_dir / "plots/compression_ratios.png"
+
+    fig.savefig(
+        out_file,
+        dpi=150,
+        bbox_inches="tight",
+    )
+
+    plt.close(fig)
+
+    print(f"saved {out_file}")
+
+
+def make_all_plots():
     PLOT_DIR.mkdir(parents=True, exist_ok=True)
     print("\n── Generating plots ──────────────────────────────")
 
-    # heatmaps
-    _heatmap(df, "n_clusters", "Number of clusters", fmt=".0f")
-    _heatmap(df, "n_noise", "Number of noise points", fmt=".0f")
-    _heatmap(df, "noise_fraction", "Noise fraction", fmt=".3f")
-    _heatmap(df, "mean_cluster_size", "Mean cluster size", fmt=".1f")
-    _heatmap(df, "n_points", "Total points", fmt=".0f")
-
     # line plots
-    plot_line_per_ms(df, "n_clusters", "n_clusters")
-    plot_line_per_ms(df, "noise_fraction", "noise fraction")
+    plot_compression_ratios(BASE_OUTPUT, txt_name="compression_summary_hdbscan.txt")
+    plot_h5_overlay_histograms(BASE_OUTPUT, h5_name="compressed_hdbscan.h5")
 
-    # trade-off scatter
-    plot_scatter_tradeoff(df)
+    print(f"\nDone. Plots saved in: {PLOT_DIR.resolve()}")
 
 
 # ─────────────────────────────────────────────
@@ -249,13 +436,13 @@ def main():
         row = parse_metrics(out_dir, mcs, ms)
         rows.append(row)
 
+    print(h5py.File(out_dir / "compressed_hdbscan.h5", "r").keys())
     df = pd.DataFrame(rows)
     csv_path = BASE_OUTPUT / "summary.csv"
     df.to_csv(csv_path, index=False)
     print(f"\n── Summary saved to {csv_path}")
-    print(df.to_string(index=False))
 
-    make_all_plots(df)
+    make_all_plots()
     print("\nDone. Plots in", PLOT_DIR)
 
 
