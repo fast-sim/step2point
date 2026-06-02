@@ -95,9 +95,16 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
             self.position_mode.append(self._as_list(position_mode)[0])
 
     def _as_list(self, value: int|List|None) -> List|None:
-        if isinstance(value, int):
+        """Convert all input into List/None.
+        """
+        if not isinstance(value, list):
             return [value]
         return value
+    
+    def _maybe_single(self, values: List) -> int|List:
+        """If the list has only one value, return that value instead of the list.
+        """
+        return values[0] if len(values) == 1 else values
 
     def compress(self, shower: Shower) -> CompressionResult:
         if shower.cell_id is None:
@@ -115,9 +122,9 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                 metadata={
                     **shower.metadata,
                     "algorithm": self.name,
-                    "position_mode": self.position_mode,
-                    "x_bins": self.x_bins,
-                    "y_bins": self.y_bins,
+                    "position_mode": self._maybe_single(self.position_mode),
+                    "x_bins": self._maybe_single(self.x_bins),
+                    "y_bins": self._maybe_single(self.y_bins),
                 },
             )
             return CompressionResult(
@@ -129,15 +136,16 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
 
     def _compress_barrel_xy(self, shower: Shower) -> CompressionResult:
         n_points = shower.n_points
-        sub_x = np.empty(n_points, dtype=np.int32)
-        sub_y = np.empty(n_points, dtype=np.int32)
-        center_x = np.empty(n_points, dtype=np.float64)
-        center_y = np.empty(n_points, dtype=np.float64)
-        center_z = np.empty(n_points, dtype=np.float64)
+        sub_x = np.full(n_points, -1, dtype=np.int32)
+        sub_y = np.full(n_points, -1, dtype=np.int32)
+        center_x = np.full(n_points, np.nan, dtype=np.float64)
+        center_y = np.full(n_points, np.nan, dtype=np.float64)
+        center_z = np.full(n_points, np.nan, dtype=np.float64)
+        processed = np.zeros(n_points, dtype=bool)  # check if all points are processed
 
         xy = np.stack([shower.x, shower.y], axis=1).astype(np.float64)
 
-        if self.collection_name is not None:
+        if len(self.layout) > 1:
             for coll_idx, collection in enumerate(self.collection_name):
                 decoded = [decode_dd4hep_cell_id(int(cell_id), self.layout[coll_idx].cell_id_encoding) for cell_id in shower.cell_id]
                 systems = np.asarray([item["system"] for item in decoded], dtype=np.int32)
@@ -181,6 +189,7 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                     center_x[mask] = center_xy_mask[:, 0]
                     center_y[mask] = center_xy_mask[:, 1]
                     center_z[mask] = sub_long_center
+                    processed[mask] = True
         else:
             decoded = [decode_dd4hep_cell_id(int(cell_id), self.layout[0].cell_id_encoding) for cell_id in shower.cell_id]
             modules = np.asarray([item["module"] for item in decoded], dtype=np.int32)
@@ -220,6 +229,14 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                 center_x[mask] = center_xy_mask[:, 0]
                 center_y[mask] = center_xy_mask[:, 1]
                 center_z[mask] = sub_long_center
+                processed[mask] = True
+        
+        # check if all cells are processed- if not raise the error message with the number of unprocessed hits
+        if not np.all(processed):
+            unmatched = np.where(~processed)[0]
+            raise ValueError(
+                f"{len(unmatched)} hits were not processed in MergeWithinRegularSubcell."
+            )
 
         key_dtype = np.dtype([("cell_id", np.uint64), ("sub_x", np.int32), ("sub_y", np.int32)])
         keys = np.empty(n_points, dtype=key_dtype)
@@ -260,20 +277,20 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
             metadata={
                 **shower.metadata,
                 "algorithm": self.name,
-                "position_mode": self.position_mode,
-                "x_bins": self.x_bins,
-                "y_bins": self.y_bins,
-                "collection_name": [layout.collection_name for layout in self.layout],
+                "position_mode": self._maybe_single(self.position_mode),
+                "x_bins": self._maybe_single(self.x_bins),
+                "y_bins": self._maybe_single(self.y_bins),
+                "collection_name": self._maybe_single([layout.collection_name for layout in self.layout]),
             },
         )
         return CompressionResult(
             shower=out,
             algorithm=self.name,
             parameters={
-                "x_bins": self.x_bins,
-                "y_bins": self.y_bins,
-                "position_mode": self.position_mode,
-                "collection_name": [layout.collection_name for layout in self.layout],
+                "x_bins": self._maybe_single(self.x_bins),
+                "y_bins": self._maybe_single(self.y_bins),
+                "position_mode": self._maybe_single(self.position_mode),
+                "collection_name": self._maybe_single([layout.collection_name for layout in self.layout]),
             },
             stats={
                 "n_points_before": shower.n_points,
