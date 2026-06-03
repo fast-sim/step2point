@@ -475,7 +475,7 @@ def _transform_wrapper(args):
         raise
 
 
-def convert(input_path: str, global_path: str = None):
+def convert(input_path: str, global_path: str = None, output_folder: str = None):
     if global_path is None:
         # print keys and shapes of the input file
         f = h5py.File(input_path, "r")
@@ -679,10 +679,14 @@ def convert(input_path: str, global_path: str = None):
     moment_angles["theta_global"] = moment_angles["theta_global"].astype(np.float32)
     moment_angles["phi_global"] = moment_angles["phi_global"].astype(np.float32)
 
-    seed = int(input_path.split("/")[-2].split("_")[1])
-    algo = input_path.split("/")[-1].split(".")[0].split("compressed_")[-1]
-    out_file = f"outputs/cc3input_{algo}/input_cc3_file_{seed}.h5"
-    os.makedirs(f"outputs/cc3input_{algo}", exist_ok=True)
+    if output_folder is not None:
+        os.makedirs(output_folder, exist_ok=True)
+        out_file = f"{output_folder}/input_cc3.h5"
+    else:
+        seed = int(input_path.split("/")[-2].split("_")[1])
+        algo = input_path.split("/")[-1].split(".")[0].split("compressed_")[-1]
+        out_file = f"outputs/cc3input_{algo}/input_cc3_file_{seed}.h5"
+        os.makedirs(f"outputs/cc3input_{algo}", exist_ok=True)
 
     with h5py.File(out_file, "w") as hf:
         hf.create_dataset("energy", data=energies)
@@ -698,10 +702,15 @@ def convert(input_path: str, global_path: str = None):
 
 
 if __name__ == "__main__":
+    print(sys.argv)
     if len(sys.argv) == 2:
         convert(sys.argv[1])
     elif len(sys.argv) == 3:
         convert(sys.argv[1], global_path=sys.argv[2])
+    elif len(sys.argv) == 5 and "--pc_save_folder" in sys.argv:
+        convert(sys.argv[1], global_path=sys.argv[2], output_folder=sys.argv[4])
+    elif len(sys.argv) < 5 and "--pc_save_folder" in sys.argv:
+        convert(sys.argv[1], output_folder=sys.argv[3])
     else:
-        print("Usage: python convert_to_cc3_format.py input.h5 global_path (optional)")
+        print("Usage: python convert_to_cc3_format.py input.h5 global_path (optional) --pc_save_folder (optional)")
         sys.exit(1)
