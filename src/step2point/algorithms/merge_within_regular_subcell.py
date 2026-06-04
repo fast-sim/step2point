@@ -175,10 +175,15 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                 cell_y = np.asarray([item["y"] for item in decoded], dtype=np.int32)
 
                 ### mask out any cellids that don't belong to the detector corresponding to this collection
-                system_mask = systems == self.layout[coll_idx].det_id
+                system_mask = ~processed if coll_idx == 0 else (systems == self.layout[coll_idx].det_id) & (~processed)
+
+                if not np.any(system_mask):
+                    # skip the empty collection
+                    continue
+
                 unique_ml = np.unique(np.stack([systems[system_mask], modules[system_mask], layers[system_mask]], axis=1), axis=0)
                 for system_index, module_index, layer_index in unique_ml:
-                    mask = (modules == module_index) & (layers == layer_index) & (systems == system_index)
+                    mask = system_mask & (modules == module_index) & (layers == layer_index)
                     layer = self.layout[coll_idx].layers[layer_index - 1]
                     sensitive_center_xy = barrel_sensitive_plane_center_xy(self.layout[coll_idx], int(layer_index), int(module_index))
                     _, _, tangent = barrel_module_basis(self.layout[coll_idx], int(layer_index), int(module_index))
