@@ -27,6 +27,8 @@ def _subcell_center(parent_index: np.ndarray, sub_index: np.ndarray, pitch: floa
     sub_pitch = pitch / bins
     return parent_index.astype(np.float64) * pitch + (-0.5 * pitch + (sub_index.astype(np.float64) + 0.5) * sub_pitch)
 
+_MISSING = object()  # anchor for input value
+
 
 class MergeWithinRegularSubcell(CompressionAlgorithm):
     """Subdivide each detector cell into a regular x/y grid before merging.
@@ -39,9 +41,9 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
 
     def __init__(
         self,
-        x_bins: List[int] = [2],
-        y_bins: List[int] = [2],
-        position_mode: List[str] = ["weighted"],
+        x_bins: List[int] = _MISSING,
+        y_bins: List[int] = _MISSING,
+        position_mode: List[str] = _MISSING,
         *,
         layout: List[BarrelLayout] | None = None,
         compact_xml: str | Path | None = None,
@@ -57,7 +59,18 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                     raise ValueError(
                         "MergeWithinRegularSubcell requires either a prebuilt layout or both compact_xml and collection_name."
                     )
+        # auto fill in collection name from layout
+        if layout is not None and collection_name is None:
+            collection_name = [layout.collection_name for layout in self._as_list(layout)]
         if collection_name is not None:
+            n_collections = len(collection_name)
+            # Dynemic defaulting inputs:
+            if x_bins is _MISSING:
+                x_bins = [2] * n_collections
+            if y_bins is _MISSING:
+                y_bins = [2] * n_collections
+            if position_mode is _MISSING:
+                position_mode = ["weighted"] * n_collections
             for idx, collection in enumerate(collection_name):
                 if any(len(x) != len(collection_name) for x in [self._as_list(x_bins), self._as_list(y_bins), self._as_list(position_mode)]):
                     raise ValueError("Arguments for lists x_bins, y_bins, position_mode, collection_name must be the same length.")
@@ -80,6 +93,13 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                 self.position_mode.append(position_mode[idx])
         else:
             self.collection_name = None
+            # Dynemic defaulting inputs:
+            if x_bins is _MISSING:
+                x_bins = [2]
+            if y_bins is _MISSING:
+                y_bins = [2]
+            if position_mode is _MISSING:
+                position_mode = ["weighted"]
             if any(len(x) != 1 for x in [self._as_list(x_bins), self._as_list(y_bins), self._as_list(position_mode)]):
                 raise ValueError("No collection name provided- all arguments must only have one value supllied!")
             if self._as_list(x_bins)[0] <= 0 or self._as_list(y_bins)[0] <= 0:
