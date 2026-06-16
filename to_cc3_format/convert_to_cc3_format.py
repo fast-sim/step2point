@@ -64,24 +64,19 @@ def build_events_batch(input_path, start, end, boundaries, max_hits):
     boundaries[i] = first step row for event i (length n_events+1).
     """
     chunk = np.zeros((end - start, max_hits, 4), dtype=np.float32)
-
     with h5py.File(input_path, "r") as h5:
         s_pos_ds = h5["steps"]["position"]  # lazy dataset handle
         s_ene_ds = h5["steps"]["energy"]
-
         for i in range(start, end):
             lo = int(boundaries[i])
             hi = int(boundaries[i + 1])
             if lo == hi:
                 continue  # empty event
-
             pos = s_pos_ds[lo:hi]  # shape (n_hits, 3)
             ene = s_ene_ds[lo:hi]  # shape (n_hits,)
             n = hi - lo
-
             chunk[i - start, :n, :3] = pos
             chunk[i - start, :n, 3] = ene
-
     return chunk
 
 
@@ -344,7 +339,7 @@ class Transform_pointcloud:
         theta_global = degrees_to_radians(theta_global.reshape((-1, 1)))
         r = (dist_to_layers / np.sin(phi_global)) / np.sin(theta_global)
         x_shift = r * np.cos(phi_global) * np.sin(theta_global) - self.metadata.gun_xyz_pos_global[0]
-        z_shift = r * np.cos(theta_global) - self.metadata.gun_xyz_pos_global[2]
+        z_shift = r * np.cos(theta_global) + self.metadata.gun_xyz_pos_global[2]
         return x_shift, z_shift
 
     def digitize_and_fuzz(self, points):
@@ -394,17 +389,6 @@ class Transform_pointcloud:
                 print(f"Event {event_n} has no hits, skipping.")
                 return events
             t = T[event_n]
-            # for layer_n, layer in enumerate(
-            #     split_to_layers(
-            #         event, self.metadata.layer_bottom_pos_global, self.metadata.cell_thickness_global, layer_axis=layer_axis
-            #     )
-            # ):
-            #     if len(layer) == 0:
-            #         continue
-
-            #     if self.metadata.aligne:
-            #         layer[:, 0] -= x_shift[event_n][layer_n]
-            #         layer[:, 3] -= z_shift[event_n][layer_n]
             if self.metadata.aligne:
                 layer_ids, _, _ = split_to_layers(
                     event, self.metadata.layer_bottom_pos_global, self.metadata.cell_thickness_global, layer_axis=layer_axis
@@ -412,7 +396,8 @@ class Transform_pointcloud:
                 valid = (layer_ids >= 0) & (layer_ids < len(x_shift[event_n]))
                 valid_layer_ids = layer_ids[valid]
                 event[valid, 0] -= x_shift[event_n][valid_layer_ids]
-                event[valid, 3] -= z_shift[event_n][valid_layer_ids]
+                event[valid, 2] -= z_shift[event_n][valid_layer_ids]
+                # event[valid, 3] -= z_shift[event_n][valid_layer_ids]
 
             # no box selection, as your data is already restricted to the box.
             inbox_mask = self.box_selection(
@@ -433,6 +418,19 @@ class Transform_pointcloud:
             mask = event[:, 1] >= ecal_barrel_inner_radius
             event = event[mask]
             t = t[mask]
+            if event.shape[0] == 0:
+                print(f"Event {event_n} has no hits after backscatter cut, skipping.")
+                continue
+
+            # energy cut at 1e-12 GeV, to remove noise hits
+            energy_cut = 1e-12
+            mask = event[:, 3] > energy_cut
+            event = event[mask]
+            t = t[mask]
+
+            if event.shape[0] == 0:
+                print(f"Event {event_n} has no hits after energy cut, skipping.")
+                continue
 
             event = event[np.argsort(t)]
             event_list.append(event)
@@ -598,7 +596,7 @@ def convert(input_path: str, global_path: str = None, output_folder: str = None)
     print("Creating CC3 input showers...")
     metadata = Metadata()
     transform = Transform_pointcloud(metadata)
-    ncpu, batchsize = 64, 512
+    ncpu, batchsize = 64, 512  # 64, 512
 
     iE = incident_energies
     mox = p_mom[:, 0]

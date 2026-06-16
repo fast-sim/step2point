@@ -62,7 +62,7 @@ def write_step2point_hdf5(
             primary_vertex.append(tuple(map(float, shower.primary.get("vertex", (0.0, 0.0, 0.0)))))
             primary_momentum.append(tuple(map(float, shower.primary.get("momentum", (0.0, 0.0, 0.0)))))
 
-    with h5py.File(output, "w") as h5:
+    with h5py.File(output, "w", locking=False) as h5:
         if algorithm is not None:
             h5.attrs["algorithm"] = algorithm
         if source_input is not None:
@@ -124,7 +124,7 @@ def write_step2point_debug_hdf5(
     )
 
     labels = [np.ascontiguousarray(np.asarray(item), dtype=np.int64) for item in cluster_labels]
-    with h5py.File(output, "a") as h5:
+    with h5py.File(output, "a", locking=False) as h5:
         h5.attrs["debug_output"] = True
         if debug_event_indices is not None:
             h5.attrs["debug_event_indices"] = np.asarray(list(debug_event_indices), dtype=np.int32)
