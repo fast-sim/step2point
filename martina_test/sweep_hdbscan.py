@@ -159,6 +159,13 @@ PLOT_DIR = BASE_OUTPUT / "plots"
 CMAP = "viridis"
 
 
+# Shared color map: same ms value → same color in every plot
+def _ms_color(ms: int, all_ms: list) -> tuple:
+    cmap = plt.cm.get_cmap("tab10" if len(all_ms) <= 10 else "tab20")
+    idx = sorted(all_ms).index(ms)
+    return cmap(idx / max(len(all_ms) - 1, 1))
+
+
 def plot_per_layer_histograms(
     root_dir,
     h5_name="input_cc3.h5",
@@ -230,7 +237,7 @@ def plot_per_layer_histograms(
         energy_per_layer = []
         mean_r_per_layer = np.zeros(n_layers)
         total_e_per_r = np.zeros(len(radial_bins))  # optional: mean energy per unit radius
-        total_e_per_layer = np.zeros(n_layers)
+        counts_per_layer = np.zeros(n_layers)
         sigma_r_per_layer = np.zeros(n_layers)
 
         for lyr in range(n_layers):
@@ -238,7 +245,7 @@ def plot_per_layer_histograms(
             e_lyr = energy[mask]
             r_lyr = r[mask]
             energy_per_layer.append(e_lyr)
-            total_e_per_layer[lyr] = e_lyr.sum()
+            counts_per_layer[lyr] = mask.sum()
             if e_lyr.size > 0:
                 mu_r = np.average(r_lyr, weights=e_lyr)
                 mean_r_per_layer[lyr] = mu_r
@@ -254,7 +261,7 @@ def plot_per_layer_histograms(
             hits_per_layer,  # [1]  (n_events, n_layers)
             energy_per_layer,  # [2]  list of 1-D arrays
             mean_r_per_layer,  # [3]  (n_layers,)
-            total_e_per_layer,  # [4]  (n_layers,)
+            counts_per_layer,  # [4]  (n_layers,)
             sigma_r_per_layer,  # [5]  (n_layers,)
             total_e_per_r,  # [6]  (100,) optional radial profile
         )
@@ -287,6 +294,7 @@ def plot_per_layer_histograms(
     mcs_toskip = {3, 5, 8, 10, 12, 15, 20, 25, 40, 60}
 
     hdb_records = []
+    hdb_ms_list = []
     for folder in sorted(root_dir.glob("hdbscan_mcs*_ms*")):
         match = re.search(r"mcs(\d+)_ms(\d+)(?:_eps([\d.]+))?", folder.name)
         if match is None:
@@ -294,6 +302,8 @@ def plot_per_layer_histograms(
         mcs = int(match.group(1))
         ms = int(match.group(2))
         epsilon = float(match.group(3)) if match.group(3) is not None else 0.0
+        if epsilon != 0:
+            continue
         if mcs in mcs_toskip and ms in ms_toskip:
             continue
         h5_file = folder / h5_name
@@ -304,15 +314,19 @@ def plot_per_layer_histograms(
         except Exception as exc:
             print(f"[warn] Could not load {h5_file}: {exc}")
             continue
-        label = f"ms={ms}, eps={epsilon}"
+        label = f"ms={ms}"
         hdb_records.append((label, *data))
+        hdb_ms_list.append(ms)
 
     if not hdb_records and not extra_records:
         print("No data found; skipping per-layer plots.")
         return
 
-    hdb_colors = random_colors(max(len(hdb_records), 1))
-    extra_colors = random_colors(max(len(extra_records), 1))
+    paired = sorted(zip(hdb_ms_list, hdb_records), key=lambda x: x[0])
+    hdb_ms_list, hdb_records = ([x[0] for x in paired], [x[1] for x in paired]) if paired else ([], [])
+    all_ms = sorted(set(hdb_ms_list))
+    hdb_colors = [_ms_color(ms, all_ms) for ms in hdb_ms_list]
+    extra_colors = ["dimgrey", "silver"]
     layers = np.arange(n_layers)
 
     legend_handles = [
@@ -443,8 +457,8 @@ def plot_per_layer_histograms(
     ax_r.legend(fontsize=7, ncol=2)
 
     ax_e.set_xlabel("Layer index")
-    ax_e.set_ylabel("Total energy  [GeV]")
-    ax_e.set_title("Longitudinal energy profile")
+    ax_e.set_ylabel("Counts per layer")
+    ax_e.set_title("Longitudinal counts profile")
     ax_e.grid(True, alpha=0.3)
     ax_e.legend(fontsize=7, ncol=2)
 
@@ -535,7 +549,8 @@ def plot_h5_overlay_histograms(
         mcs = int(match.group(1))
         ms = int(match.group(2))
         epsilon = float(match.group(3)) if match.group(3) is not None else 0.0
-
+        if epsilon != 0:
+            continue
         if mcs in mcs_toskip:
             if ms in ms_toskip:
                 continue
@@ -549,21 +564,19 @@ def plot_h5_overlay_histograms(
 
         _, inverse = np.unique(event_id, return_inverse=True)
         hits_per_event = np.bincount(inverse)
-        label = f"mcs={mcs}, ms={ms}, eps={epsilon}"
-        hits_data.append((hits_per_event, label))
-        energy_data.append((energy[energy > 0], label))
+        label = f"ms={ms}"
+        hits_data.append((hits_per_event, label, ms))
+        energy_data.append((energy[energy > 0], label, ms))
 
-    # add colors to the extra datasets (after the loop to preserve step lines on top)
-    def random_colors(n: int) -> list:
-        cmap = plt.cm.get_cmap("tab20" if n <= 20 else "turbo")
-        return [cmap(i / n) for i in range(n)]
+    hits_data.sort(key=lambda x: x[2])
+    energy_data.sort(key=lambda x: x[2])
+    all_ms = sorted({ms for _, _, ms in hits_data})
+    hits_data = [(vals, label, _ms_color(ms, all_ms)) for vals, label, ms in hits_data]
+    energy_data = [(vals, label, _ms_color(ms, all_ms)) for vals, label, ms in energy_data]
 
-    colors = random_colors(len(hits_data))
-    colors_extra = random_colors(len(extra_hits))
-    hits_data = [(vals, label, color) for (vals, label), color in zip(hits_data, colors)]
-    energy_data = [(vals, label, color) for (vals, label), color in zip(energy_data, colors)]
-    extra_energy = [(vals, label, color) for (vals, label), color in zip(extra_energy, colors_extra)]
+    colors_extra = ["dimgrey", "silver"]
     extra_hits = [(vals, label, color) for (vals, label), color in zip(extra_hits, colors_extra)]
+    extra_energy = [(vals, label, color) for (vals, label), color in zip(extra_energy, colors_extra)]
 
     # --------------------------------------------------
     # Hits per event
@@ -583,12 +596,12 @@ def plot_h5_overlay_histograms(
     for values, label, color in hits_data:
         ax.hist(values, bins=b_, density=True, histtype="step", linewidth=2, label=label, color=color)
 
-    ax.set_xlabel("Hits per event")
+    ax.set_xlabel("Points per event")
     ax.set_ylabel("Density")
-    ax.set_title("Hits per event")
+    ax.set_title("Points per event")
     ax.legend(fontsize=8, ncol=2)
     fig.tight_layout()
-    out_file = plot_dir / "hits_per_event_overlay.png"
+    out_file = plot_dir / "points_per_event_overlay.png"
     fig.savefig(out_file, dpi=150)
     plt.close(fig)
     print(f"saved {out_file}")
@@ -609,16 +622,44 @@ def plot_h5_overlay_histograms(
 
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_xlabel("Hit energy")
+    ax.set_xlabel("Point energy")
     ax.set_ylabel("Density")
     ax.set_ylim([1e-2, 3e8])
-    ax.set_title("Hit energy distribution")
+    ax.set_title("Point energy distribution")
     ax.legend(fontsize=8, ncol=2)
     fig.tight_layout()
     out_file = plot_dir / "hit_energy_overlay.png"
     fig.savefig(out_file, dpi=150)
     plt.close(fig)
     print(f"saved {out_file}")
+
+
+def _draw_heatmap(ax, df, metric, title):
+    mcs_vals = sorted(df["mcs"].unique())
+    ms_vals = sorted(df["ms"].unique())
+    pivot = df.pivot(index="ms", columns="mcs", values=metric)
+    pivot = pivot.reindex(index=ms_vals, columns=mcs_vals)
+    Z = pivot.values.astype(float)
+
+    im = ax.pcolormesh(
+        np.arange(len(mcs_vals) + 1),
+        np.arange(len(ms_vals) + 1),
+        Z,
+        cmap="viridis",
+    )
+    plt.colorbar(im, ax=ax)
+    ax.set_xticks(np.arange(len(mcs_vals)) + 0.5)
+    ax.set_xticklabels(mcs_vals, fontsize=8)
+    ax.set_yticks(np.arange(len(ms_vals)) + 0.5)
+    ax.set_yticklabels(ms_vals, fontsize=8)
+    for i in range(len(ms_vals)):
+        for j in range(len(mcs_vals)):
+            val = Z[i, j]
+            if not np.isnan(val):
+                ax.text(j + 0.5, i + 0.5, f"{val:.2f}", ha="center", va="center", fontsize=7, color="white")
+    ax.set_xlabel("min_cluster_size")
+    ax.set_ylabel("min_samples")
+    ax.set_title(title)
 
 
 def plot_compression_ratios(
@@ -638,7 +679,10 @@ def plot_compression_ratios(
         mcs = int(match.group(1))
         ms = int(match.group(2))
         epsilon = float(match.group(3)) if match.group(3) is not None else 0.0
-
+        if epsilon != 0:
+            continue
+        if ms == 4:
+            continue
         txt_file = folder / txt_name
         if not txt_file.exists():
             continue
@@ -663,15 +707,14 @@ def plot_compression_ratios(
         return
 
     df = pd.DataFrame(rows)
+    all_ms = sorted(df["ms"].unique().tolist())
 
-    fig, axes = plt.subplots(
-        1,
-        2,
-        figsize=(12, 5),
-        sharex=True,
-        sharey=True,
-    )
-    # plot merge within cell point
+    metrics = ["mean_compression_ratio", "total_compression_ratio"]
+    titles = ["Mean compression ratio", "Total compression ratio"]
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+
+    # ── top row: line plots ──────────────────────────────────────────────
     txt_within_cell = "outputs/pipeline2_merge_within_cell/test_small/compression_summary_merge_within_cell.txt"
     if Path(txt_within_cell).exists():
         row = {}
@@ -679,82 +722,329 @@ def plot_compression_ratios(
             for line in f:
                 if "=" not in line:
                     continue
-
                 key, value = line.strip().split("=", 1)
                 try:
                     row[key] = float(value)
                 except ValueError:
                     pass
+        for ax, key in zip(axes[0], metrics):
+            if key in row:
+                ax.axhline(row[key], color="k", linestyle="--", label="merge within cell")
 
-        if "mean_compression_ratio" in row and "total_compression_ratio" in row:
-            axes[0].axhline(
-                row["mean_compression_ratio"],
-                color="k",
-                linestyle="--",
-                label="merge within cell (mean)",
-            )
-            axes[1].axhline(
-                row["total_compression_ratio"],
-                color="k",
-                linestyle="--",
-                label="merge within cell (total)",
-            )
-
-    metrics = [
-        "mean_compression_ratio",
-        "total_compression_ratio",
-    ]
-
-    titles = [
-        "Mean compression ratio",
-        "Total compression ratio",
-    ]
-
-    for ax, metric, title in zip(axes, metrics, titles):
+    for ax, metric, title in zip(axes[0], metrics, titles):
         for ms, grp in sorted(df.groupby("ms")):
             grp = grp.sort_values("mcs")
-            ax.plot(
-                grp["mcs"],
-                grp[metric],
-                marker="o",
-                linewidth=2,
-                label=f"ms={ms}",
-            )
-        for epsilon, grp in sorted(df.groupby("epsilon")):
-            grp = grp.sort_values("epsilon")
-
-            if epsilon != 0:
-                ax.plot(
-                    grp["mcs"],
-                    grp[metric],
-                    marker="*",
-                    linewidth=2,
-                    linestyle="-",
-                    label=f"ms={grp['ms'].values[0]}, eps>0",
-                    color="k",
-                )
+            ax.plot(grp["mcs"], grp[metric], marker="o", linewidth=2, color=_ms_color(ms, all_ms), label=f"ms={ms}")
         ax.set_xlabel("min_cluster_size")
         ax.set_ylabel("compression ratio")
         ax.set_title(title)
         ax.grid(True, alpha=0.3)
 
-    axes[0].legend(
-        title="min_samples",
-        frameon=False,
-    )
+    axes[0, 0].legend(title="min_samples", frameon=False)
+
+    # ── bottom row: heatmaps ─────────────────────────────────────────────
+    for ax, metric, title in zip(axes[1], metrics, titles):
+        _draw_heatmap(ax, df, metric, f"{title} (heatmap)")
 
     fig.tight_layout()
-
     out_file = root_dir / "plots/compression_ratios.png"
-
-    fig.savefig(
-        out_file,
-        dpi=150,
-        bbox_inches="tight",
-    )
-
+    fig.savefig(out_file, dpi=150, bbox_inches="tight")
     plt.close(fig)
+    print(f"saved {out_file}")
 
+
+def plot_clusters_per_cell_histogram(
+    root_dir,
+    h5_name="input_cc3.h5",
+    n_layers=30,
+):
+    root_dir = Path(root_dir)
+    plot_dir = root_dir / "plots"
+    plot_dir.mkdir(parents=True, exist_ok=True)
+
+    # --------------------------------------------------
+    # Spatial cell bins — 5 mm cells
+    cell_bins = np.linspace(-450, 450, int(900 / 5) + 1)
+    n_bins = len(cell_bins) - 1
+
+    # --------------------------------------------------
+    # Loader: for each event×layer, bin cluster centroids into (x, y) cells
+    # and return the flat distribution of clusters-per-occupied-voxel.
+    def load_clusters_per_cell(path):
+        with h5py.File(path, "r") as f:
+            data = f["events"][:]  # (n_events, n_pts, 4)
+        counts = []
+        for shower in data:
+            x, y, z, e = shower[:, 0], shower[:, 1], shower[:, 2], shower[:, 3]
+            valid = e > 0
+            if not valid.any():
+                continue
+            layer_idx = np.floor(z[valid]).astype(int).clip(0, n_layers - 1)
+            for lyr in range(n_layers):
+                in_lyr = layer_idx == lyr
+                if not in_lyr.any():
+                    continue
+                cx = np.clip(np.digitize(x[valid][in_lyr], cell_bins) - 1, 0, n_bins - 1)
+                cy = np.clip(np.digitize(y[valid][in_lyr], cell_bins) - 1, 0, n_bins - 1)
+                voxel_ids = cx * n_bins + cy
+                _, cnts = np.unique(voxel_ids, return_counts=True)
+                counts.extend(cnts.tolist())
+        return np.array(counts, dtype=int)
+
+    # --------------------------------------------------
+    # Load all hdbscan configs; store keyed by (mcs, ms, eps)
+    # eps=None  → no epsilon argument (base config)
+    # eps=float → explicit cluster-selection epsilon
+    hdb_data = {}
+    for folder in sorted(root_dir.glob("hdbscan_mcs*_ms*")):
+        match = re.search(r"mcs(\d+)_ms(\d+)(?:_eps([\d.]+))?$", folder.name)
+        if match is None:
+            continue
+        mcs = int(match.group(1))
+        ms = int(match.group(2))
+        eps = float(match.group(3)) if match.group(3) is not None else None
+        h5_file = folder / h5_name
+        if not h5_file.exists():
+            continue
+        try:
+            counts = load_clusters_per_cell(h5_file)
+        except Exception as exc:
+            print(f"[warn] Could not load {h5_file}: {exc}")
+            continue
+        hdb_data[(mcs, ms, eps)] = counts
+
+    if not hdb_data:
+        print("No data found for cluster-per-cell histograms; skipping.")
+        return
+
+    # --------------------------------------------------
+    # Shared helpers
+
+    def sort_by_clusters(records):
+        """Sort descending by total cluster count (most clusters first)."""
+        return sorted(records, key=lambda x: int(x[1].sum()), reverse=True)
+
+    def make_scan_figure(records, title, out_file):
+        """
+        records : [(label, counts), …] already sorted most→fewest clusters.
+        Colors shift sequentially from 'plasma' — first entry (most clusters)
+        gets the brightest colour; last entry gets the darkest.
+        """
+        if not records:
+            return
+        all_c = np.concatenate([c for _, c in records])
+        if len(all_c) == 0:
+            return
+        max_count = int(all_c.max())
+        bins = np.linspace(0, max_count, 30)
+
+        n = len(records)
+        cmap = plt.cm.get_cmap("plasma")
+        colors = [cmap(i / max(n - 1, 1)) for i in range(n)]
+
+        fig, ax = plt.subplots(figsize=(9, 5))
+        fig.suptitle(title, fontsize=12)
+        for (label, counts), color in zip(records, colors):
+            ax.hist(counts, bins=bins, density=True, histtype="step", linewidth=1.5, color=color, label=label)
+
+        ax.set_xlabel("Clusters per (layer, x-bin, y-bin) voxel")
+        ax.set_ylabel("Density")
+        ax.set_yscale("log")
+        ax.grid(True, alpha=0.3, axis="y")
+        ax.legend(loc="upper right", fontsize=7, ncol=2)
+        fig.tight_layout()
+        fig.savefig(out_file, dpi=150)
+        plt.close(fig)
+        print(f"saved {out_file}")
+
+    # --------------------------------------------------
+    # Figure 1 — vary ms (fix mcs to the value with the most ms variants)
+    mcs_to_ms = {}
+    for mcs, ms, eps in hdb_data:
+        if eps is None:
+            mcs_to_ms.setdefault(mcs, set()).add(ms)
+    if mcs_to_ms:
+        fix_mcs = max(mcs_to_ms, key=lambda k: (len(mcs_to_ms[k]), k))
+        vary_ms = sort_by_clusters(
+            [(f"ms={ms}", hdb_data[(fix_mcs, ms, None)]) for ms in sorted(mcs_to_ms[fix_mcs]) if (fix_mcs, ms, None) in hdb_data]
+        )
+        make_scan_figure(
+            vary_ms,
+            f"Clusters per voxel — varying ms  (mcs={fix_mcs} fixed)",
+            plot_dir / "clusters_per_cell_vary_ms.png",
+        )
+
+    # --------------------------------------------------
+    # Figure 2 — vary mcs (fix ms to the value with the most mcs variants)
+    ms_to_mcs = {}
+    for mcs, ms, eps in hdb_data:
+        if eps is None:
+            ms_to_mcs.setdefault(ms, set()).add(mcs)
+    if ms_to_mcs:
+        fix_ms = max(ms_to_mcs, key=lambda k: (len(ms_to_mcs[k]), -k))
+        vary_mcs = sort_by_clusters(
+            [
+                (f"mcs={mcs}", hdb_data[(mcs, fix_ms, None)])
+                for mcs in sorted(ms_to_mcs[fix_ms])
+                if (mcs, fix_ms, None) in hdb_data
+            ]
+        )
+        make_scan_figure(
+            vary_mcs,
+            f"Clusters per voxel — varying mcs  (ms={fix_ms} fixed)",
+            plot_dir / "clusters_per_cell_vary_mcs.png",
+        )
+
+    # --------------------------------------------------
+    # Figure 3 — vary epsilon (ms=8 only; include base eps=None as reference)
+    eps_records = []
+    for mcs, ms, eps in sorted(hdb_data, key=lambda k: (k[0], k[1], k[2] if k[2] is not None else -1.0)):
+        if ms != 8:
+            continue
+        if eps is None:
+            label = f"mcs={mcs}, eps=default"
+        else:
+            label = f"mcs={mcs}, eps={eps}"
+        eps_records.append((label, hdb_data[(mcs, ms, eps)]))
+    if eps_records:
+        # separate eps=default (dashed) from explicit eps (solid) entries,
+        # each group sorted by cluster count
+        base_recs = sort_by_clusters([(lbl, c) for lbl, c in eps_records if "default" in lbl])
+        scan_recs = sort_by_clusters([(lbl, c) for lbl, c in eps_records if "default" not in lbl])
+
+        all_eps_counts = np.concatenate([c for _, c in eps_records])
+        max_count = int(all_eps_counts.max())
+        bins = np.linspace(0, max_count, 30)
+
+        n_scan = len(scan_recs)
+        cmap = plt.cm.get_cmap("plasma")
+        scan_colors = [cmap(i / max(n_scan - 1, 1)) for i in range(n_scan)]
+        base_colors = ["dimgrey", "silver"]
+
+        fig, ax = plt.subplots(figsize=(9, 5))
+        fig.suptitle("Clusters per voxel — varying epsilon  (ms=8)", fontsize=12)
+        for (label, counts), color in zip(base_recs, base_colors):
+            ax.hist(counts, bins=bins, density=True, histtype="step", linewidth=2.0, linestyle="--", color=color, label=label)
+        for (label, counts), color in zip(scan_recs, scan_colors):
+            ax.hist(counts, bins=bins, density=True, histtype="step", linewidth=1.5, color=color, label=label)
+        ax.set_xlabel("Clusters per (layer, x-bin, y-bin) voxel")
+        ax.set_ylabel("Density")
+        ax.set_yscale("log")
+        ax.grid(True, alpha=0.3, axis="y")
+        ax.legend(loc="upper right", fontsize=7, ncol=2)
+        fig.tight_layout()
+        out_eps = plot_dir / "clusters_per_cell_vary_eps.png"
+        fig.savefig(out_eps, dpi=150)
+        plt.close(fig)
+        print(f"saved {out_eps}")
+
+
+def plot_clusters_per_cell(
+    root_dir,
+    h5_name="input_cc3.h5",
+    n_layers=30,
+):
+    root_dir = Path(root_dir)
+    plot_dir = root_dir / "plots"
+    plot_dir.mkdir(parents=True, exist_ok=True)
+
+    cell_bins = np.linspace(-450, 450, int(900 / 5) + 1)
+    n_bins = len(cell_bins) - 1
+
+    def compute_metrics(path):
+        with h5py.File(path, "r") as f:
+            data = f["events"][:]  # (n_events, n_pts, 4)
+        counts = []
+        for shower in data:
+            x, y, z, e = shower[:, 0], shower[:, 1], shower[:, 2], shower[:, 3]
+            valid = e > 0
+            if not valid.any():
+                continue
+            layer_idx = np.floor(z[valid]).astype(int).clip(0, n_layers - 1)
+            for lyr in range(n_layers):
+                in_lyr = layer_idx == lyr
+                if not in_lyr.any():
+                    continue
+                cx = np.clip(np.digitize(x[valid][in_lyr], cell_bins) - 1, 0, n_bins - 1)
+                cy = np.clip(np.digitize(y[valid][in_lyr], cell_bins) - 1, 0, n_bins - 1)
+                voxel_ids = cx * n_bins + cy
+                _, cnts = np.unique(voxel_ids, return_counts=True)
+                counts.extend(cnts.tolist())
+        counts = np.array(counts, dtype=int)
+        if counts.size == 0:
+            return np.nan, np.nan
+        return float(counts.max()), float((counts > 5).mean())
+
+    ref_datasets = [
+        (
+            "/eos/user/m/mamozzan/step2point/outputs/pipeline2_merge_within_cell/test_small/input_cc3.h5",
+            "merge within cell",
+        ),
+    ]
+
+    rows = []
+    for folder in sorted(root_dir.glob("hdbscan_mcs*_ms*")):
+        match = re.search(r"mcs(\d+)_ms(\d+)(?:_eps([\d.]+))?", folder.name)
+        if match is None:
+            continue
+        mcs = int(match.group(1))
+        ms = int(match.group(2))
+        epsilon = float(match.group(3)) if match.group(3) is not None else 0.0
+        if epsilon != 0:
+            continue
+        h5_file = folder / h5_name
+        if not h5_file.exists():
+            continue
+        try:
+            mean_cpc, frac_overlap = compute_metrics(h5_file)
+        except Exception as exc:
+            print(f"[warn] Could not load {h5_file}: {exc}")
+            continue
+        rows.append({"mcs": mcs, "ms": ms, "epsilon": epsilon, "max_clusters_per_cell": mean_cpc, "frac_overlap": frac_overlap})
+
+    if not rows:
+        print("No data found for clusters-per-cell plot.")
+        return
+
+    df = pd.DataFrame(rows)
+    all_ms = sorted(df["ms"].unique().tolist())
+
+    metrics = ["max_clusters_per_cell", "frac_overlap"]
+    titles = ["Max clusters per occupied cell", "Fraction of cells with >5 clusters"]
+    ylabels = ["Max clusters per cell", "Fraction overlapping cells"]
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+
+    # ── top row: line plots ──────────────────────────────────────────────
+    ref_styles = ["--", ":"]
+    ref_colors = ["k", "grey"]
+    for (path, label), color, ls in zip(ref_datasets, ref_colors, ref_styles):
+        try:
+            max_cpc, frac_overlap = compute_metrics(path)
+            for ax, val in zip(axes[0], [max_cpc, frac_overlap]):
+                ax.axhline(val, color=color, linestyle=ls, linewidth=1.5, label=label)
+        except Exception as exc:
+            print(f"[warn] Could not load reference {path}: {exc}")
+
+    for ax, metric, title, ylabel in zip(axes[0], metrics, titles, ylabels):
+        for ms, grp in sorted(df.groupby("ms")):
+            grp = grp.sort_values("mcs")
+            ax.plot(grp["mcs"], grp[metric], marker="o", linewidth=2, color=_ms_color(ms, all_ms), label=f"ms={ms}")
+        ax.set_xlabel("min_cluster_size")
+        ax.set_ylabel(ylabel)
+        ax.set_title(title)
+        ax.grid(True, alpha=0.3)
+
+    axes[0, 0].legend(title="min_samples", frameon=False)
+
+    # ── bottom row: heatmaps ─────────────────────────────────────────────
+    for ax, metric, title in zip(axes[1], metrics, titles):
+        _draw_heatmap(ax, df, metric, f"{title} (heatmap)")
+
+    fig.tight_layout()
+    out_file = plot_dir / "clusters_per_cell.png"
+    fig.savefig(out_file, dpi=150, bbox_inches="tight")
+    plt.close(fig)
     print(f"saved {out_file}")
 
 
@@ -764,8 +1054,10 @@ def make_all_plots():
 
     # line plots
     plot_compression_ratios(BASE_OUTPUT, txt_name="compression_summary_hdbscan.txt")
+    plot_clusters_per_cell(BASE_OUTPUT, h5_name="input_cc3.h5", n_layers=30)
     plot_h5_overlay_histograms(BASE_OUTPUT, h5_name="compressed_hdbscan.h5")
     plot_per_layer_histograms(BASE_OUTPUT, h5_name="input_cc3.h5", n_layers=30, n_layers_to_plot=10)
+    plot_clusters_per_cell_histogram(BASE_OUTPUT, h5_name="input_cc3.h5")
     print(f"\nDone. Plots saved in: {PLOT_DIR.resolve()}")
 
 

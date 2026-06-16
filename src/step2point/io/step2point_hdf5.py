@@ -16,7 +16,7 @@ class Step2PointHDF5Reader(ShowerReader):
     shower_limit: int | None = None
 
     def iter_showers(self) -> Iterator[Shower]:
-        with h5py.File(self.input_path, "r") as h5:
+        with h5py.File(self.input_path, "r", locking=False) as h5:
             steps = h5["steps"]
             event_ids = np.asarray(steps["event_id"], dtype=np.int32)
             energy = np.asarray(steps["energy"], dtype=np.float32)

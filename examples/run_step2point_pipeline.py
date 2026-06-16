@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import time
 from pathlib import Path
 
 import numpy as np
@@ -173,17 +174,29 @@ def main():
     validators = [EnergyConservationValidator(), CellCountRatioValidator(), ShowerMomentsValidator()]
     debug_event_indices = set(args.debug_events or [])
 
+    t_main_start = time.perf_counter()
     compression_stats: list[dict] = []
     validation_results: list[dict] = []
     compressed_showers = []
     debug_showers = []
     debug_labels = []
     count_empty_events = 0
-    for shower_index, shower in enumerate(reader.iter_showers()):
+    t_compress_total = 0.0
+    t_validate_total = 0.0
+    t_read_start = time.perf_counter()
+    showers_list = list(reader.iter_showers())
+    t_read = time.perf_counter() - t_read_start
+    print(f"[timing] read {len(showers_list)} showers in {t_read:.2f}s")
+
+    t_loop_start = time.perf_counter()
+    REPORT_EVERY = 100
+    for shower_index, shower in enumerate(showers_list):
         if shower.n_points == 0:
             count_empty_events += 1
             continue
+        t0 = time.perf_counter()
         result = algorithm.compress(shower)
+        t_compress_total += time.perf_counter() - t0
         compressed_showers.append(result.shower)
         compression_stats.append(result.stats)
         if shower_index in debug_event_indices:
@@ -198,18 +211,40 @@ def main():
                 )
             debug_showers.append(shower.copy())
             debug_labels.append(cluster_label.copy())
+        t0 = time.perf_counter()
         for validator in validators:
             vr = validator.run(shower, result.shower)
             validation_results.append({"validator": vr.name, "shower_id": shower.shower_id, **vr.metrics})
+        t_validate_total += time.perf_counter() - t0
+        if (shower_index + 1) % REPORT_EVERY == 0:
+            elapsed = time.perf_counter() - t_loop_start
+            n_done = shower_index + 1 - count_empty_events
+            print(
+                f"  [timing] shower {shower_index + 1}: "
+                f"elapsed={elapsed:.1f}s  compress={t_compress_total:.2f}s  validate={t_validate_total:.2f}s  "
+                f"other={elapsed - t_compress_total - t_validate_total:.2f}s  "
+                f"avg_per_shower={elapsed / max(n_done, 1) * 1000:.1f}ms"
+            )
+    t_loop = time.perf_counter() - t_loop_start
+    n_processed = len(compression_stats)
+    print(
+        f"Loop done: {n_processed} showers in {t_loop:.2f}s  "
+        f"(compress={t_compress_total:.2f}s, validate={t_validate_total:.2f}s, "
+        f"other={t_loop - t_compress_total - t_validate_total:.2f}s)"
+    )
     print(f"Found {count_empty_events} empty events")
     outdir = Path(args.output)
     outdir.mkdir(parents=True, exist_ok=True)
+    t_write_start = time.perf_counter()
     output_h5 = write_step2point_hdf5(
         compressed_showers,
         outdir / f"compressed_{args.algorithm}.h5",
         algorithm=args.algorithm,
         source_input=args.input,
     )
+    t_write = time.perf_counter() - t_write_start
+    print(f"[timing] write HDF5 in {t_write:.2f}s")
+    print(f"[timing] total wall time {time.perf_counter() - t_main_start:.2f}s")
     n_showers = len(compression_stats)
     mean_points_before = sum(float(stats["n_points_before"]) for stats in compression_stats) / n_showers if n_showers else 0.0
     mean_points_after = sum(float(stats["n_points_after"]) for stats in compression_stats) / n_showers if n_showers else 0.0
