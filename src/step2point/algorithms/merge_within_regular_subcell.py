@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import List
 
 import numpy as np
 
@@ -26,6 +27,8 @@ def _subcell_center(parent_index: np.ndarray, sub_index: np.ndarray, pitch: floa
     sub_pitch = pitch / bins
     return parent_index.astype(np.float64) * pitch + (-0.5 * pitch + (sub_index.astype(np.float64) + 0.5) * sub_pitch)
 
+_MISSING = object()  # anchor for input value
+
 
 class MergeWithinRegularSubcell(CompressionAlgorithm):
     """Subdivide each detector cell into a regular x/y grid before merging.
@@ -38,30 +41,90 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
 
     def __init__(
         self,
-        x_bins: int = 2,
-        y_bins: int = 2,
-        position_mode: str = "weighted",
+        x_bins: List[int] = _MISSING,
+        y_bins: List[int] = _MISSING,
+        position_mode: List[str] = _MISSING,
         *,
-        layout: BarrelLayout | None = None,
+        layout: List[BarrelLayout] | None = None,
         compact_xml: str | Path | None = None,
-        collection_name: str | None = None,
+        collection_name: List[str] | None = None,
     ) -> None:
-        if x_bins <= 0 or y_bins <= 0:
-            raise ValueError("x_bins and y_bins must be positive integers.")
-        if position_mode not in {"weighted", "center"}:
-            raise ValueError("position_mode must be 'weighted' or 'center'.")
+        self.x_bins = []
+        self.y_bins = []
+        self.collection_name = []
+        self.layout = []
+        self.position_mode = []
         if layout is None:
-            if compact_xml is None or collection_name is None:
-                raise ValueError(
-                    "MergeWithinRegularSubcell requires either a prebuilt layout or both compact_xml and collection_name."
-                )
-            layout = build_barrel_layout_from_collection(compact_xml, collection_name)
-        if layout.segmentation_type != "CartesianGridXY":
-            raise NotImplementedError("MergeWithinRegularSubcell currently supports only barrel CartesianGridXY layouts.")
-        self.x_bins = int(x_bins)
-        self.y_bins = int(y_bins)
-        self.position_mode = position_mode
-        self.layout = layout
+                if compact_xml is None or collection_name is None:
+                    raise ValueError(
+                        "MergeWithinRegularSubcell requires either a prebuilt layout or both compact_xml and collection_name."
+                    )
+        # auto fill in collection name from layout
+        if layout is not None and collection_name is None:
+            collection_name = [layout.collection_name for layout in self._as_list(layout)]
+        if collection_name is not None:
+            n_collections = len(collection_name)
+            # Dynemic defaulting inputs:
+            if x_bins is _MISSING:
+                x_bins = [2] * n_collections
+            if y_bins is _MISSING:
+                y_bins = [2] * n_collections
+            if position_mode is _MISSING:
+                position_mode = ["weighted"] * n_collections
+            for idx, collection in enumerate(collection_name):
+                if any(len(x) != len(collection_name) for x in [self._as_list(x_bins), self._as_list(y_bins), self._as_list(position_mode)]):
+                    raise ValueError("Arguments for lists x_bins, y_bins, position_mode, collection_name must be the same length.")
+                if self._as_list(x_bins)[idx] <= 0 or self._as_list(y_bins)[idx] <= 0:
+                    raise ValueError("x_bins and y_bins must be positive integers.")
+                if self._as_list(position_mode)[idx] not in {"weighted", "center"}:
+                    raise ValueError("position_mode must be 'weighted' or 'center'.")
+                if any(x != self._as_list(position_mode)[0] for x in self._as_list(position_mode)):
+                    raise ValueError("Currently the same clustering mode must be used across all collections!")
+                if layout is None:
+                    layout_idx = build_barrel_layout_from_collection(compact_xml, collection)
+                else:
+                    layout_idx=layout[idx]
+                if layout_idx.segmentation_type != "CartesianGridXY":
+                    raise NotImplementedError("MergeWithinRegularSubcell currently supports only barrel CartesianGridXY layouts.")
+                self.layout.append(layout_idx)
+                self.x_bins.append( int(x_bins[idx]))
+                self.y_bins.append( int(y_bins[idx]))
+                self.collection_name.append(collection_name[idx])
+                self.position_mode.append(position_mode[idx])
+        else:
+            self.collection_name = None
+            # Dynemic defaulting inputs:
+            if x_bins is _MISSING:
+                x_bins = [2]
+            if y_bins is _MISSING:
+                y_bins = [2]
+            if position_mode is _MISSING:
+                position_mode = ["weighted"]
+            if any(len(x) != 1 for x in [self._as_list(x_bins), self._as_list(y_bins), self._as_list(position_mode)]):
+                raise ValueError("No collection name provided- all arguments must only have one value supllied!")
+            if self._as_list(x_bins)[0] <= 0 or self._as_list(y_bins)[0] <= 0:
+                    raise ValueError("x_bins and y_bins must be positive integers.")
+            if self._as_list(position_mode)[0] not in {"weighted", "center"}:
+                    raise ValueError("position_mode must be 'weighted' or 'center'.")
+            layout_idx=layout[0] ### Layout is not none- previous checks
+            if layout_idx.segmentation_type != "CartesianGridXY":
+                    raise NotImplementedError("MergeWithinRegularSubcell currently supports only barrel CartesianGridXY layouts.")
+            self.layout.append(layout_idx)
+            self.x_bins.append( int(self._as_list(x_bins)[0]))
+            self.y_bins.append( int(self._as_list(y_bins)[0]))
+            self.position_mode.append(self._as_list(position_mode)[0])
+
+    def _as_list(self, value: int|List|None) -> List|None:
+        """Convert all input into List/None.
+        """
+        if not isinstance(value, list):
+            return [value]
+        return value
+    
+    def _maybe_single(self, values: List) -> int|List:
+        """If the list has only one value, return that value instead of the list.
+        """
+        return values[0] if len(values) == 1 else values
 
     def compress(self, shower: Shower) -> CompressionResult:
         if shower.cell_id is None:
@@ -79,9 +142,9 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                 metadata={
                     **shower.metadata,
                     "algorithm": self.name,
-                    "position_mode": self.position_mode,
-                    "x_bins": self.x_bins,
-                    "y_bins": self.y_bins,
+                    "position_mode": self._maybe_single(self.position_mode),
+                    "x_bins": self._maybe_single(self.x_bins),
+                    "y_bins": self._maybe_single(self.y_bins),
                 },
             )
             return CompressionResult(
@@ -93,52 +156,112 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
 
     def _compress_barrel_xy(self, shower: Shower) -> CompressionResult:
         n_points = shower.n_points
-        decoded = [decode_dd4hep_cell_id(int(cell_id), self.layout.cell_id_encoding) for cell_id in shower.cell_id]
-        modules = np.asarray([item["module"] for item in decoded], dtype=np.int32)
-        layers = np.asarray([item["layer"] for item in decoded], dtype=np.int32)
-        cell_x = np.asarray([item["x"] for item in decoded], dtype=np.int32)
-        cell_y = np.asarray([item["y"] for item in decoded], dtype=np.int32)
-
-        sub_x = np.empty(n_points, dtype=np.int32)
-        sub_y = np.empty(n_points, dtype=np.int32)
-        center_x = np.empty(n_points, dtype=np.float64)
-        center_y = np.empty(n_points, dtype=np.float64)
-        center_z = np.empty(n_points, dtype=np.float64)
+        sub_x = np.full(n_points, -1, dtype=np.int32)
+        sub_y = np.full(n_points, -1, dtype=np.int32)
+        center_x = np.full(n_points, np.nan, dtype=np.float64)
+        center_y = np.full(n_points, np.nan, dtype=np.float64)
+        center_z = np.full(n_points, np.nan, dtype=np.float64)
+        processed = np.zeros(n_points, dtype=bool)  # check if all points are processed
 
         xy = np.stack([shower.x, shower.y], axis=1).astype(np.float64)
-        unique_ml = np.unique(np.stack([modules, layers], axis=1), axis=0)
-        for module_index, layer_index in unique_ml:
-            mask = (modules == module_index) & (layers == layer_index)
-            layer = self.layout.layers[layer_index - 1]
-            sensitive_center_xy = barrel_sensitive_plane_center_xy(self.layout, int(layer_index), int(module_index))
-            _, _, tangent = barrel_module_basis(self.layout, int(layer_index), int(module_index))
 
-            tangent_local = (xy[mask] - sensitive_center_xy) @ tangent
-            long_local = shower.z[mask].astype(np.float64)
+        if len(self.layout) > 1:
+            for coll_idx, collection in enumerate(self.collection_name):
+                decoded = [decode_dd4hep_cell_id(int(cell_id), self.layout[coll_idx].cell_id_encoding) for cell_id in shower.cell_id]
+                systems = np.asarray([item["system"] for item in decoded], dtype=np.int32)
+                modules = np.asarray([item["module"] for item in decoded], dtype=np.int32)
+                layers = np.asarray([item["layer"] for item in decoded], dtype=np.int32)
+                cell_x = np.asarray([item["x"] for item in decoded], dtype=np.int32)
+                cell_y = np.asarray([item["y"] for item in decoded], dtype=np.int32)
 
-            parent_tangent = cell_x[mask].astype(np.float64) * layer.pitch_tangent_mm
-            parent_long = cell_y[mask].astype(np.float64) * layer.pitch_z_mm
+                ### mask out any cellids that don't belong to the detector corresponding to this collection
+                system_mask = ~processed if coll_idx == 0 else (systems == self.layout[coll_idx].det_id) & (~processed)
 
-            sub_x_mask = _subcell_indices(
-                tangent_local - parent_tangent,
-                layer.pitch_tangent_mm,
-                self.x_bins,
+                if not np.any(system_mask):
+                    # skip the empty collection
+                    continue
+
+                unique_ml = np.unique(np.stack([systems[system_mask], modules[system_mask], layers[system_mask]], axis=1), axis=0)
+                for system_index, module_index, layer_index in unique_ml:
+                    mask = system_mask & (modules == module_index) & (layers == layer_index)
+                    layer = self.layout[coll_idx].layers[layer_index - 1]
+                    sensitive_center_xy = barrel_sensitive_plane_center_xy(self.layout[coll_idx], int(layer_index), int(module_index))
+                    _, _, tangent = barrel_module_basis(self.layout[coll_idx], int(layer_index), int(module_index))
+
+                    tangent_local = (xy[mask] - sensitive_center_xy) @ tangent
+                    long_local = shower.z[mask].astype(np.float64)
+
+                    parent_tangent = cell_x[mask].astype(np.float64) * layer.pitch_tangent_mm
+                    parent_long = cell_y[mask].astype(np.float64) * layer.pitch_z_mm
+
+                    sub_x_mask = _subcell_indices(
+                        tangent_local - parent_tangent,
+                        layer.pitch_tangent_mm,
+                        self.x_bins[coll_idx],
+                    )
+                    sub_y_mask = _subcell_indices(
+                        long_local - parent_long,
+                        layer.pitch_z_mm,
+                        self.y_bins[coll_idx],
+                    )
+                    sub_x[mask] = sub_x_mask
+                    sub_y[mask] = sub_y_mask
+
+                    sub_tangent_center = _subcell_center(cell_x[mask], sub_x_mask, layer.pitch_tangent_mm, self.x_bins[coll_idx])
+                    sub_long_center = _subcell_center(cell_y[mask], sub_y_mask, layer.pitch_z_mm, self.y_bins[coll_idx])
+
+                    center_xy_mask = sensitive_center_xy + sub_tangent_center[:, None] * tangent[None, :]
+                    center_x[mask] = center_xy_mask[:, 0]
+                    center_y[mask] = center_xy_mask[:, 1]
+                    center_z[mask] = sub_long_center
+                    processed[mask] = True
+        else:
+            decoded = [decode_dd4hep_cell_id(int(cell_id), self.layout[0].cell_id_encoding) for cell_id in shower.cell_id]
+            modules = np.asarray([item["module"] for item in decoded], dtype=np.int32)
+            layers = np.asarray([item["layer"] for item in decoded], dtype=np.int32)
+            cell_x = np.asarray([item["x"] for item in decoded], dtype=np.int32)
+            cell_y = np.asarray([item["y"] for item in decoded], dtype=np.int32)
+            unique_ml = np.unique(np.stack([modules, layers], axis=1), axis=0)
+            for module_index, layer_index in unique_ml:
+                mask = (modules == module_index) & (layers == layer_index)
+                layer = self.layout[0].layers[layer_index - 1]
+                sensitive_center_xy = barrel_sensitive_plane_center_xy(self.layout[0], int(layer_index), int(module_index))
+                _, _, tangent = barrel_module_basis(self.layout[0], int(layer_index), int(module_index))
+
+                tangent_local = (xy[mask] - sensitive_center_xy) @ tangent
+                long_local = shower.z[mask].astype(np.float64)
+
+                parent_tangent = cell_x[mask].astype(np.float64) * layer.pitch_tangent_mm
+                parent_long = cell_y[mask].astype(np.float64) * layer.pitch_z_mm
+
+                sub_x_mask = _subcell_indices(
+                    tangent_local - parent_tangent,
+                    layer.pitch_tangent_mm,
+                    self.x_bins[0],
+                )
+                sub_y_mask = _subcell_indices(
+                    long_local - parent_long,
+                    layer.pitch_z_mm,
+                    self.y_bins[0],
+                )
+                sub_x[mask] = sub_x_mask
+                sub_y[mask] = sub_y_mask
+
+                sub_tangent_center = _subcell_center(cell_x[mask], sub_x_mask, layer.pitch_tangent_mm, self.x_bins[0])
+                sub_long_center = _subcell_center(cell_y[mask], sub_y_mask, layer.pitch_z_mm, self.y_bins[0])
+
+                center_xy_mask = sensitive_center_xy + sub_tangent_center[:, None] * tangent[None, :]
+                center_x[mask] = center_xy_mask[:, 0]
+                center_y[mask] = center_xy_mask[:, 1]
+                center_z[mask] = sub_long_center
+                processed[mask] = True
+        
+        # check if all cells are processed- if not raise the error message with the number of unprocessed hits
+        if not np.all(processed):
+            unmatched = np.where(~processed)[0]
+            raise ValueError(
+                f"{len(unmatched)} hits were not processed in MergeWithinRegularSubcell."
             )
-            sub_y_mask = _subcell_indices(
-                long_local - parent_long,
-                layer.pitch_z_mm,
-                self.y_bins,
-            )
-            sub_x[mask] = sub_x_mask
-            sub_y[mask] = sub_y_mask
-
-            sub_tangent_center = _subcell_center(cell_x[mask], sub_x_mask, layer.pitch_tangent_mm, self.x_bins)
-            sub_long_center = _subcell_center(cell_y[mask], sub_y_mask, layer.pitch_z_mm, self.y_bins)
-
-            center_xy_mask = sensitive_center_xy + sub_tangent_center[:, None] * tangent[None, :]
-            center_x[mask] = center_xy_mask[:, 0]
-            center_y[mask] = center_xy_mask[:, 1]
-            center_z[mask] = sub_long_center
 
         key_dtype = np.dtype([("cell_id", np.uint64), ("sub_x", np.int32), ("sub_y", np.int32)])
         keys = np.empty(n_points, dtype=key_dtype)
@@ -150,7 +273,7 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
 
         e_sum = np.bincount(inverse, weights=shower.E, minlength=n_out)
         safe_e = np.where(e_sum > 0.0, e_sum, 1.0)
-        if self.position_mode == "weighted":
+        if self.position_mode[0] == "weighted":
             x_out = np.bincount(inverse, weights=shower.x * shower.E, minlength=n_out) / safe_e
             y_out = np.bincount(inverse, weights=shower.y * shower.E, minlength=n_out) / safe_e
             z_out = np.bincount(inverse, weights=shower.z * shower.E, minlength=n_out) / safe_e
@@ -179,20 +302,20 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
             metadata={
                 **shower.metadata,
                 "algorithm": self.name,
-                "position_mode": self.position_mode,
-                "x_bins": self.x_bins,
-                "y_bins": self.y_bins,
-                "collection_name": self.layout.collection_name,
+                "position_mode": self._maybe_single(self.position_mode),
+                "x_bins": self._maybe_single(self.x_bins),
+                "y_bins": self._maybe_single(self.y_bins),
+                "collection_name": self._maybe_single([layout.collection_name for layout in self.layout]),
             },
         )
         return CompressionResult(
             shower=out,
             algorithm=self.name,
             parameters={
-                "x_bins": self.x_bins,
-                "y_bins": self.y_bins,
-                "position_mode": self.position_mode,
-                "collection_name": self.layout.collection_name,
+                "x_bins": self._maybe_single(self.x_bins),
+                "y_bins": self._maybe_single(self.y_bins),
+                "position_mode": self._maybe_single(self.position_mode),
+                "collection_name": self._maybe_single([layout.collection_name for layout in self.layout]),
             },
             stats={
                 "n_points_before": shower.n_points,
