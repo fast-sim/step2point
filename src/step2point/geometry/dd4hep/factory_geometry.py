@@ -3,11 +3,10 @@ from __future__ import annotations
 import ast
 import operator
 import os
+import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
-
-import re
 
 import numpy as np
 
