@@ -1,1 +1,1 @@
-config_varients/caloclouds_3_S2P_hdbscan.py
+config_varients/caloclouds_3_S2P_hdbscan_ms8_mcs40.py
