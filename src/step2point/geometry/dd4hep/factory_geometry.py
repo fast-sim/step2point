@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import operator
 import os
+import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
@@ -140,22 +141,43 @@ class DD4hepResolver:
     def _collect_all(self) -> dict[str, float]:
         self._load_recursive(self.main_xml)
         pending: dict[str, str] = {}
-        for root in self._roots.values():
-            for const in root.findall(".//define/constant"):
-                pending[const.attrib["name"]] = const.attrib["value"]
+        ### Iteratively load constants
+        
+        pending = {}
 
-        constants: dict[str, float] = {}
+        for root in self._roots.values():
+            for const in root.iter("constant"):
+                name = const.attrib.get("name")
+                expr = const.attrib.get("value")
+                if name and expr:
+                    pending[name] = expr
+
+
+        constants = {}
+        pending = pending.copy()
+
         while pending:
-            progress = False
-            for name, expr in list(pending.items()):
+            unresolved = {}
+
+            for name, expr in pending.items():
+                expr_py = normalize(expr)
+
                 try:
-                    constants[name] = _eval_expr(expr.replace("^", "**"), constants)
-                except KeyError:
-                    continue
-                del pending[name]
-                progress = True
-            if not progress:
-                raise ValueError(f"Unresolved constants: {sorted(pending)}")
+                    constants[name] = _eval_expr(expr_py, constants)
+                except NameError:
+                    # dependency not ready yet
+                    unresolved[name] = expr
+                except Exception as e:
+                    print(f"FAILED {name}: '{expr}' → '{expr_py}' → {e}")
+
+            # detect cyclic or impossible reolutions
+            if len(unresolved) == len(pending):
+                print("Unresolved constants (likely cyclic or missing):")
+                for k, v in unresolved.items():
+                    print(f"  {k} = {v}")
+                break
+
+            pending = unresolved
         return constants
 
     def find_readout(self, name: str) -> XMLNodeRef:
@@ -172,6 +194,11 @@ class DD4hepResolver:
                     return XMLNodeRef(path=path, element=detector)
         raise KeyError(f"Detector using readout {readout_name!r} not found under {self.main_xml}")
 
+### Subsitute expresions for variable resolution in xml
+def normalize(expr):
+    expr = expr.replace("^", "**")
+    expr = re.sub(r"(\d)\s+(\d)", r"\1*\2", expr)
+    return expr
 
 def get_dd4hep_cell_id_encoding(main_xml: str | Path, collection_name: str) -> str:
     resolver = DD4hepResolver(main_xml)
@@ -194,19 +221,27 @@ def _rotation_matrix_xyz(z: float, y: float, x: float) -> np.ndarray:
 
 def _layer_specs(detector: ET.Element, constants: dict[str, float]) -> list[LayerSpec]:
     specs: list[LayerSpec] = []
+
     for layer_elem in detector.findall("layer"):
-        repeat = int(layer_elem.attrib["repeat"])
+        repeat_expr = layer_elem.attrib["repeat"]
+        repeat = int(_eval_expr(normalize(repeat_expr), constants))
+
         thickness = 0.0
         sensitive_thickness = 0.0
         sensitive_center = 0.0
         offset = 0.0
+
         for slice_elem in layer_elem.findall("slice"):
-            slice_thickness = _eval_expr(slice_elem.attrib["thickness"], constants)
+            slice_expr = slice_elem.attrib["thickness"]
+            slice_thickness = _eval_expr(normalize(slice_expr), constants)
+
             if slice_elem.attrib.get("sensitive") == "yes":
                 sensitive_thickness = slice_thickness
                 sensitive_center = offset + 0.5 * slice_thickness
+
             offset += slice_thickness
             thickness += slice_thickness
+
         specs.append(
             LayerSpec(
                 repeat=repeat,
@@ -215,6 +250,7 @@ def _layer_specs(detector: ET.Element, constants: dict[str, float]) -> list[Laye
                 sensitive_center_offset_mm=sensitive_center,
             )
         )
+
     return specs
 
 
@@ -225,9 +261,12 @@ def build_barrel_layout_from_collection(main_xml: str | Path, collection_name: s
     readout = readout_ref.element
     detector = detector_ref.element
 
-    if detector.attrib.get("type") != "ODDPolyhedraBarrelCalorimeter":
+    supported_detectors = {'ODDPolyhedraBarrelCalorimeter', 'DD4hep_PolyhedraBarrelCalorimeter2'}
+
+    if detector.attrib.get("type") not in supported_detectors:
         raise NotImplementedError(
-            f"Only ODDPolyhedraBarrelCalorimeter is implemented in this prototype, got {detector.attrib.get('type')!r}"
+            f"Only ODDPolyhedraBarrelCalorimeter or DD4hep_PolyhedraBarrelCalorimeter2" 
+            f"is implemented in this prototype, got {detector.attrib.get('type')!r}"
         )
 
     seg = readout.find("segmentation")
@@ -243,6 +282,7 @@ def build_barrel_layout_from_collection(main_xml: str | Path, collection_name: s
     dim = detector.find("dimensions")
     if dim is None:
         raise ValueError("Detector dimensions not found")
+
     numsides = int(_eval_expr(dim.attrib["numsides"], resolver.constants))
     det_z = _eval_expr(dim.attrib["z"], resolver.constants)
     rmin = _eval_expr(dim.attrib["rmin"], resolver.constants)
