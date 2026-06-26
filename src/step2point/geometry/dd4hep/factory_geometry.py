@@ -265,7 +265,8 @@ def build_barrel_layout_from_collection(main_xml: str | Path, collection_name: s
 
     if detector.attrib.get("type") not in supported_detectors:
         raise NotImplementedError(
-            f"Only ODDPolyhedraBarrelCalorimeter or DD4hep_PolyhedraBarrelCalorimeter2 is implemented in this prototype, got {detector.attrib.get('type')!r}"
+            f"Only ODDPolyhedraBarrelCalorimeter or DD4hep_PolyhedraBarrelCalorimeter2" 
+            f"is implemented in this prototype, got {detector.attrib.get('type')!r}"
         )
 
     seg = readout.find("segmentation")
