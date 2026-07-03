@@ -149,6 +149,7 @@ def main():
             outlier_policy=args.outlier_policy,
             merge_scope=args.merge_scope,
             cell_id_encoding=_resolve_hdbscan_cell_id_encodings(args),
+            collection_name=args.collection_name,
             algorithm=args.hdbscan_algorithm,
             n_jobs=args.n_jobs,
         )

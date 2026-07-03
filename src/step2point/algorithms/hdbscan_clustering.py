@@ -175,6 +175,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         decoded = np.empty(cell_ids.shape[0], dtype=np.int64)
         unique_subdetectors = np.unique(subdetectors)
         subdetector_names = shower.metadata.get("subdetector_names")
+        MAP = {isub: name for isub, name in enumerate(subdetector_names)}
         # checks
         if self.collection_name:
             for name in self.collection_name:
@@ -183,12 +184,13 @@ class HDBSCANClustering(CompressionAlgorithm):
                         f"{name} is outside the contained subdetector"
                     )
         for isub, subdetector in enumerate(unique_subdetectors):
-            if subdetector < 0:
+            if subdetector not in MAP.keys():
                 raise ValueError(
                     f"Subdetector index {subdetector} is outside the available cell_id encodings "
-                    f"(n={len(self.cell_id_encoding)})."
                 )
             mask = subdetectors == subdetector
+            if self.collection_name is not None:
+                isub = self.collection_name.index(MAP[subdetector])
             decoded[mask] = extract_field(
                 cell_ids[mask],
                 self.cell_id_encoding[int(isub)],
@@ -216,6 +218,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         decoded = np.empty(cell_ids.shape[0], dtype=np.int64)
         unique_subdetectors = np.unique(subdetectors)
         subdetector_names = shower.metadata.get("subdetector_names")
+        MAP = {isub: name for isub, name in enumerate(subdetector_names)}
         # checks
         if self.collection_name:
             for name in self.collection_name:
@@ -224,11 +227,12 @@ class HDBSCANClustering(CompressionAlgorithm):
                         f"{name} is outside the contained subdetector"
                     )
         for isub, subdetector in enumerate(unique_subdetectors):
-            if subdetector < 0:
+            if subdetector not in MAP.keys():
                 raise ValueError(
                     f"Subdetector index {subdetector} is outside the available cell_id encodings "
-                    f"(n={len(self.cell_id_encoding)})."
                 )
+            if self.collection_name is not None:
+                isub = self.collection_name.index(MAP[subdetector])
             encoding = self.cell_id_encoding[int(isub)]
             field_name = "y" if self._encoding_has_field(encoding, "y") else "z"
             mask = subdetectors == subdetector
