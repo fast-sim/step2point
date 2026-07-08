@@ -22,6 +22,7 @@ Example:
 """
 
 import os
+import re
 import sys
 
 import h5py
@@ -38,7 +39,7 @@ def convert_to_ddml_format(input_cc3_path: str, out_file: str = None):
     with h5py.File(input_cc3_path, "r") as f:
         point_clouds = f["events"][:].astype(np.float32)
         energies = f["energy"][:].astype(np.float32)
-        passthrough = {key: f[key][:] for key in f.keys() if key not in ("events", "energy", "n_points")}
+        passthrough = {key: f[key][:] for key in f.keys() if key not in ("events", "energy", "n_points", "layer_counts")}
 
     metadata = Metadata()
     n_layers = len(metadata.layer_bottom_pos_global)
@@ -73,11 +74,19 @@ def convert_to_ddml_format(input_cc3_path: str, out_file: str = None):
     if out_file is None:
         in_dir, in_name = os.path.split(input_cc3_path)
         base = in_name[:-3] if in_name.endswith(".h5") else in_name
-        # parent dir is named "cc3input_<algo>" (see convert_to_cc3_format.py); pull
-        # the algo name out of it so the DDML file is identifiable without the path.
         parent_name = os.path.basename(in_dir)
-        algo = parent_name.split("cc3input_", 1)[-1] if "cc3input_" in parent_name else parent_name
-        out_file = os.path.join(in_dir, f"{base}_ddml_{algo}.h5")
+        if "cc3input_" in parent_name:
+            # parent dir is named "cc3input_<algo>" (see convert_to_cc3_format.py); pull
+            # the algo name out of it so the DDML file is identifiable without the path.
+            algo = parent_name.split("cc3input_", 1)[-1]
+            out_file = os.path.join(in_dir, f"{base}_ddml_{algo}.h5")
+        else:
+            # CC3 generated_showers layout:
+            # generated_showers/<algo>_<timestamp>/generated_showers_<N>/generated_showers.h5
+            grandparent_name = os.path.basename(os.path.dirname(in_dir))
+            algo = re.sub(r"_\d{4}_\d{2}_\d{2}__\d{2}_\d{2}_\d{2}$", "", grandparent_name)
+            count = parent_name.rsplit("_", 1)[-1]
+            out_file = os.path.join(in_dir, f"{algo}_{count}.h5")
 
     print(f"Writing {out_file}...")
     with h5py.File(out_file, "w") as hf:

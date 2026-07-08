@@ -180,11 +180,11 @@ def plot_per_layer_histograms(
 
     extra_datasets = [
         (
-            "/eos/user/m/mamozzan/step2point/outputs/pipeline2_identity/test_small/input_cc3.h5",
+            "/eos/project/f/fast/step2point_files/pipeline2_identity/test_small/input_cc3.h5",
             "identity",
         ),
         (
-            "/eos/user/m/mamozzan/step2point/outputs/pipeline2_merge_within_cell/test_small/input_cc3.h5",
+            "/eos/project/f/fast/step2point_files/pipeline2_merge_within_cell/test_small/input_cc3.h5",
             "merge within cell",
         ),
     ]
@@ -510,11 +510,11 @@ def plot_h5_overlay_histograms(
     # --------------------------------------------------
     extra_datasets = [
         (
-            "/eos/user/m/mamozzan/step2point/outputs/pipeline2_merge_within_cell/test_small/compressed_merge_within_cell.h5",
+            "/eos/project/f/fast/step2point_files/pipeline2_merge_within_cell/test_small/compressed_merge_within_cell.h5",
             "merge within cell",
         ),
         (
-            "/eos/user/m/mamozzan/step2point/outputs/pipeline2_identity/test_small/compressed_identity.h5",
+            "/eos/project/f/fast/step2point_files/pipeline2_identity/test_small/compressed_identity.h5",
             "identity",
         ),
     ]
@@ -715,7 +715,9 @@ def plot_compression_ratios(
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
     # ── top row: line plots ──────────────────────────────────────────────
-    txt_within_cell = "outputs/pipeline2_merge_within_cell/test_small/compression_summary_merge_within_cell.txt"
+    txt_within_cell = (
+        "/eos/project/f/fast/step2point_files/pipeline2_merge_within_cell/test_small/compression_summary_merge_within_cell.txt"
+    )
     if Path(txt_within_cell).exists():
         row = {}
         with open(txt_within_cell) as f:
@@ -977,7 +979,7 @@ def plot_clusters_per_cell(
 
     ref_datasets = [
         (
-            "/eos/user/m/mamozzan/step2point/outputs/pipeline2_merge_within_cell/test_small/input_cc3.h5",
+            "/eos/project/f/fast/step2point_files/pipeline2_merge_within_cell/test_small/input_cc3.h5",
             "merge within cell",
         ),
     ]

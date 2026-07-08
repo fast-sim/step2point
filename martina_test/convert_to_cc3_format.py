@@ -13,6 +13,7 @@ import time
 from multiprocessing import Pool
 
 import h5py
+import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
@@ -373,6 +374,7 @@ class Transform_pointcloud:
         end,
         events,
         layer_axis=1,
+        global_offset=0,
     ):
         T = np.zeros_like(events[:, :, 3])  # no time info in your dataset
         if self.metadata.aligne:
@@ -383,37 +385,24 @@ class Transform_pointcloud:
         for event_n in range(start, end):
             # if event_n % 100 == 0:
             #     print(f"{(event_n - start) / n_events:.0%}", end="\r")
-
+            # `events` here is a chunk re-indexed to start at 0 (see convert()'s outer
+            # `bs` loop), but self.phi_global/x_shift/z_shift are indexed over the
+            # *full* dataset -- global_offset + event_n recovers the real index into
+            # those. Using event_n directly applied a different, essentially random
+            # event's alignment shift to every event outside the first chunk.
+            global_event_n = global_offset + event_n
             event = events[event_n]
             if events.shape[0] == 0:
                 print(f"Event {event_n} has no hits, skipping.")
                 return events
             t = T[event_n]
-            if self.metadata.aligne:
-                layer_ids, _, _ = split_to_layers(
-                    event, self.metadata.layer_bottom_pos_global, self.metadata.cell_thickness_global, layer_axis=layer_axis
-                )
-                valid = (layer_ids >= 0) & (layer_ids < len(x_shift[event_n]))
-                valid_layer_ids = layer_ids[valid]
-                event[valid, 0] -= x_shift[event_n][valid_layer_ids]
-                event[valid, 2] -= z_shift[event_n][valid_layer_ids]
-                # event[valid, 3] -= z_shift[event_n][valid_layer_ids]
 
-            # no box selection, as your data is already restricted to the box.
-            inbox_mask = self.box_selection(
-                event,
-                restrict_x=False,
-                restrict_y=False,
-                restrict_z=False,  # , box_cut=[-450, 450, -450, 450]
-            )
-            if inbox_mask.sum() == 0:
-                print(f"Event {event_n} has no hits in box, skipping.")
-                continue
-            event = event[inbox_mask]
-            # print(event.shape)
-            t = t[inbox_mask]
-
-            # in global coordinates: cut the backscattered hits
+            # in global coordinates: cut the backscattered hits *before* the alignment
+            # shift below. Hits with y under the first layer's floor get an invalid
+            # layer_id from split_to_layers, so the shift silently skips them, leaving
+            # them at their raw (unshifted) position and biasing CoG_x/CoG_z for any
+            # event where they carry non-negligible energy. Cutting them first removes
+            # them from the event entirely so they can no longer do that.
             ecal_barrel_inner_radius = 1804.8
             mask = event[:, 1] >= ecal_barrel_inner_radius
             event = event[mask]
@@ -421,6 +410,36 @@ class Transform_pointcloud:
             if event.shape[0] == 0:
                 print(f"Event {event_n} has no hits after backscatter cut, skipping.")
                 continue
+
+            if self.metadata.aligne:
+                layer_ids, _, _ = split_to_layers(
+                    event, self.metadata.layer_bottom_pos_global, self.metadata.cell_thickness_global, layer_axis=layer_axis
+                )
+                # Hits just before the first layer (layer_ids == -1, e.g. in the
+                # ~6mm gap between the backscatter cut radius and the first layer
+                # floor) still need a shift applied, or they stay at their raw,
+                # unshifted position and bias the event's CoG. Clip to the nearest
+                # valid layer instead of skipping them.
+                clipped_layer_ids = np.clip(layer_ids, 0, len(x_shift[global_event_n]) - 1)
+                event[:, 0] -= x_shift[global_event_n][clipped_layer_ids]
+                event[:, 2] -= z_shift[global_event_n][clipped_layer_ids]
+
+            # restrict to a 500x500 mm box in the transverse (local x/y) plane:
+            # global X and global Z become local y and local x after the
+            # global_to_local_points rotation, and metadata.Xmin/Xmax_global,
+            # Zmin/Zmax_global are already set to -250/250 mm.
+            inbox_mask = self.box_selection(
+                event,
+                restrict_x=True,
+                restrict_y=False,
+                restrict_z=True,
+            )
+            if inbox_mask.sum() == 0:
+                print(f"Event {event_n} has no hits in box, skipping.")
+                continue
+            event = event[inbox_mask]
+            # print(event.shape)
+            t = t[inbox_mask]
 
             # energy cut at 1e-7 GeV (detecro resolution at 1e-5 GeV), to remove noise hits
             energy_cut = 1e-6
@@ -450,24 +469,27 @@ class Transform_pointcloud:
             events_rotated_flat = self.global_to_local_points(events_flat.T).T
             events_rotated = events_rotated_flat.reshape(original_shape[0], original_shape[1], 3)  # (74, 41917, 3)
             events[..., :3] = events_rotated
-        return self.digitize_and_fuzz(events)
+        r = self.digitize_and_fuzz(events)
+        return r
 
 
 _events_global = None
 _transform_global = None
+_global_offset = 0
 
 
-def _init_worker(events, transform):
-    global _events_global, _transform_global
+def _init_worker(events, transform, global_offset=0):
+    global _events_global, _transform_global, _global_offset
     _events_global = events
     _transform_global = transform
+    _global_offset = global_offset
 
 
 def _transform_wrapper(args):
-    global _events_global, _transform_global
+    global _events_global, _transform_global, _global_offset
     start, end = args
     try:
-        return _transform_global.apply_transformations(start, end, _events_global)
+        return _transform_global.apply_transformations(start, end, _events_global, global_offset=_global_offset)
     except Exception as e:
         print(f"Worker error: {e}", flush=True)
         raise
@@ -644,7 +666,7 @@ def convert(input_path: str, global_path: str = None, output_folder: str = None)
         batch_ends = np.minimum(batch_starts + batchsize, tot)
         arguments = list(zip(batch_starts, batch_ends))
 
-        _init_worker(events[start_:end_], transform)
+        _init_worker(events[start_:end_], transform, global_offset=start_)
         point_clouds = [_transform_wrapper(arg) for arg in tqdm(arguments)]
         pc_list += point_clouds
 
@@ -701,6 +723,97 @@ def convert(input_path: str, global_path: str = None, output_folder: str = None)
     pool.close()
     pool.join()
     print("--- %s seconds ---" % (time.time() - start_time))
+
+
+def plot_shower(event, out_path=None, title=None, cmap="viridis", point_size=8):
+    """
+    Scatter-plot a single shower's hits in the x-y, x-z, and y-z projections, colored by hit energy.
+
+    Parameters
+    ----------
+    event : np.ndarray (n_hits, 4)
+        Hits of a single shower, in columns (x, y, z, energy), e.g. `events[i]`
+        from a CC3-format file. Padding rows (energy <= 0) are dropped automatically.
+    out_path : str, optional
+        If given, save the figure to this path.
+    title : str, optional
+        Figure title.
+    """
+    event = np.asarray(event)
+    mask = event[:, 3] > 0
+    x, y, z, e = event[mask, 0], event[mask, 1], event[mask, 2], event[mask, 3]
+    cog_x = np.sum(e * x) / np.sum(e)
+
+    fig, axes = plt.subplots(1, 4, figsize=(19, 4.5))
+    projections = [("x", "y", x, y), ("x", "z", x, z), ("z", "y", z, y)]
+    sc = None
+    for ax, (xlabel, ylabel, xs, ys) in zip(axes[:3], projections):
+        sc = ax.scatter(xs, ys, c=e, cmap=cmap, s=point_size)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.set_title(f"{xlabel}-{ylabel}")
+        ax.set_aspect("equal", adjustable="datalim")
+        ax.set_xlim([-200, 200]) if xlabel == "x" or xlabel == "z" else ax.set_xlim([1700, 2150])
+        ax.set_ylim([-200, 200]) if ylabel == "x" or ylabel == "z" else ax.set_ylim([1700, 2150])
+
+    cog_ax = axes[3]
+    cog_ax.hist(x, weights=e, bins=40, range=(-200, 200), color="tab:blue", alpha=0.7)
+    cog_ax.axvline(cog_x, color="red", linestyle="--", label=f"COG_x = {cog_x:.2f}")
+    cog_ax.set_xlabel("x")
+    cog_ax.set_ylabel("Energy [GeV]")
+    cog_ax.set_yscale("log")
+    cog_ax.set_xlim([-200, 200])
+    cog_ax.set_title("energy-weighted x distribution")
+    cog_ax.legend()
+
+    fig.colorbar(sc, ax=axes[:3], label="Energy [GeV]", fraction=0.02, pad=0.02)
+    if title:
+        fig.suptitle(title)
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight")
+        print(f"Plot saved to: {out_path}")
+    return fig
+
+
+def plot_cog_x_histogram(events, n_showers=1000, out_path=None):
+    """
+    Histogram the per-shower energy-weighted CoG_x over many showers (one value
+    per shower), comparable to the "CoG x" panel in cog_radial_profile.png.
+    Unlike plot_shower's per-event x-distribution panel (hit-level, one shower),
+    this is event-level (one number per shower, many showers).
+
+    Parameters
+    ----------
+    events : np.ndarray (n_events, n_hits, 4)
+        Showers in columns (x, y, z, energy). Padding rows (energy <= 0) are
+        dropped automatically.
+    n_showers : int
+        Number of showers (from the start of `events`) to include.
+    out_path : str, optional
+        If given, save the figure to this path.
+    """
+    n_showers = min(n_showers, events.shape[0])
+    e = events[:n_showers, :, 3]
+    x = events[:n_showers, :, 0]
+    mask = e > 0
+    e_masked = e * mask
+    cog_x = (x * e_masked).sum(axis=1) / e_masked.sum(axis=1)
+
+    lo, hi = np.percentile(cog_x, 1), np.percentile(cog_x, 99)
+    if lo == hi:
+        lo, hi = lo - 1, hi + 1
+
+    fig, ax = plt.subplots(figsize=(6, 4.5))
+    ax.hist(cog_x, bins=40, range=(lo, hi), color="tab:blue", alpha=0.7, density=True)
+    ax.axvline(0, color="black", linewidth=0.8, linestyle="--")
+    ax.set_xlim(lo, hi)
+    ax.set_xlabel("CoG x [mm]")
+    ax.set_ylabel("Density")
+    ax.set_title(f"CoG x distribution ({n_showers} showers)")
+    if out_path:
+        fig.savefig(out_path, dpi=150, bbox_inches="tight")
+        print(f"Plot saved to: {out_path}")
+    return fig
 
 
 if __name__ == "__main__":
