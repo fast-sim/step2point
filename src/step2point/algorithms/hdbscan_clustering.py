@@ -108,7 +108,7 @@ class HDBSCANClustering(CompressionAlgorithm):
         outlier_policy: str = "nearest_cluster",
         merge_scope: str = "system_layer",
         cell_id_encoding: str | tuple[str, ...] | None = None,
-        collection_name: List[str, ...] | None = None,
+        collection_name: list[str, ...] | None = None,
         algorithm: str = "auto",
         n_jobs: int = -1,
     ) -> None:
@@ -184,10 +184,9 @@ class HDBSCANClustering(CompressionAlgorithm):
                         f"{name} is outside the contained subdetector"
                     )
         for isub, subdetector in enumerate(unique_subdetectors):
-            if subdetector < 0 or subdetector > len(subdetector_names):
+            if subdetector < 0:
                 raise ValueError(
                     f"Subdetector index {subdetector} is outside the available cell_id encodings "
-                    f"(n={len(subdetector_names)})."
                 )
             mask = subdetectors == subdetector
             if self.collection_name is not None:
@@ -228,10 +227,9 @@ class HDBSCANClustering(CompressionAlgorithm):
                         f"{name} is outside the contained subdetector"
                     )
             for isub, subdetector in enumerate(unique_subdetectors):
-                if subdetector < 0 or subdetector > len(subdetector_names):
+                if subdetector < 0:
                     raise ValueError(
                         f"Subdetector index {subdetector} is outside the available cell_id encodings "
-                        f"(n={len(subdetector_names)})."
                     )
             if self.collection_name is not None:
                 isub = self.collection_name.index(MAP[subdetector])

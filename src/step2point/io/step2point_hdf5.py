@@ -41,7 +41,6 @@ class Step2PointHDF5Reader(ShowerReader):
                         "vertex": tuple(map(float, p_vertex[i])),
                         "momentum": tuple(map(float, p_mom[i])),
                     }
-            step = h5["steps"]
             if "subdetector" in steps:
                 subdetector = np.asarray(steps["subdetector"], dtype=np.uint8)
             else:
