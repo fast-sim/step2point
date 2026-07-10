@@ -4,6 +4,7 @@ import numpy as np
 
 from step2point.metrics.spatial import longitudinal_radial_phi
 
+
 def weighted_moment(values, weights, order: int) -> float:
     values = np.asarray(values, dtype=np.float64)
     weights = np.asarray(weights, dtype=np.float64)
