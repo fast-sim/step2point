@@ -7,6 +7,7 @@ import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 
@@ -36,6 +37,7 @@ _UNITS = {
 
 
 def _eval_expr(expr: str, names: dict[str, float]) -> float:
+    expr = expr.strip()  # remove leading/trailing whitespace
     node = ast.parse(expr, mode="eval")
 
     def _visit(current: ast.AST) -> float:
@@ -92,6 +94,7 @@ class BarrelLayerGeometry:
 class BarrelLayout:
     collection_name: str
     detector_name: str
+    det_id: Optional[int]
     readout_xml_path: str
     detector_xml_path: str
     segmentation_type: str
@@ -260,6 +263,9 @@ def build_barrel_layout_from_collection(main_xml: str | Path, collection_name: s
     detector_ref = resolver.find_detector_for_readout(collection_name)
     readout = readout_ref.element
     detector = detector_ref.element
+    det_id_str = detector.get("id")
+
+    det_id = int(resolver.constants[det_id_str])
 
     supported_detectors = {'ODDPolyhedraBarrelCalorimeter', 'DD4hep_PolyhedraBarrelCalorimeter2'}
 
@@ -342,6 +348,7 @@ def build_barrel_layout_from_collection(main_xml: str | Path, collection_name: s
     return BarrelLayout(
         collection_name=collection_name,
         detector_name=detector.attrib["name"],
+        det_id = det_id,
         readout_xml_path=str(readout_ref.path),
         detector_xml_path=str(detector_ref.path),
         segmentation_type=seg.attrib["type"],
