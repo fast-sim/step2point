@@ -91,6 +91,7 @@ def parse_args():
         help="Optional output path for the debug HDF5. Defaults to debug_<algorithm>.h5 in --output.",
     )
     parser.add_argument("--output", required=True)
+    parser.add_argument("--axis-override", type=float, nargs=3, help="Override shower axis for shower moments validation.")
     return parser.parse_args()
 
 
@@ -170,7 +171,7 @@ def main():
             compact_xml=args.compact_xml,
             collection_name=args.collection_name,
         )
-    validators = [EnergyConservationValidator(), CellCountRatioValidator(), ShowerMomentsValidator()]
+    validators = [EnergyConservationValidator(), CellCountRatioValidator(), ShowerMomentsValidator(axis_override=args.axis)]
     debug_event_indices = set(args.debug_events or [])
 
     compression_stats: list[dict] = []

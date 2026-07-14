@@ -5,12 +5,13 @@ from step2point.metrics.shower_shapes import shower_moments
 from step2point.validation.base import Validator
 
 
-class ShowerMomentsValidator(Validator):
+class ShowerMomentsValidator(Validator, axis_override=None):
     name = "shower_moments"
+    self.axis_override = axis_override
 
     def run(self, before, after) -> ValidationResult:
-        m_pre = shower_moments(before)
-        m_post = shower_moments(after)
+        m_pre = shower_moments(before, axis_override=self.axis_override)
+        m_post = shower_moments(after, axis_override=self.axis_override)
         out = {}
         for key, v_pre in m_pre.items():
             v_post = m_post[key]
