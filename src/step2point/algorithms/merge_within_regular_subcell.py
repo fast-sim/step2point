@@ -72,17 +72,8 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
             if position_mode is _MISSING:
                 position_mode = ["weighted"] * n_collections
             for idx, collection in enumerate(collection_name):
-                x_bins_list = self._as_list(x_bins)
-                y_bins_list = self._as_list(y_bins)
-                position_mode_list = self._as_list(position_mode)
-                if any(
-                    len(x) != len(collection_name)
-                    for x in [x_bins_list, y_bins_list, position_mode_list]
-                ):
-                    raise ValueError(
-                        "Arguments for x_bins, y_bins, position_mode, "
-                        "and collection_name must have the same length."
-                    )
+                if any(len(x) != len(collection_name) for x in [self._as_list(x_bins), self._as_list(y_bins), self._as_list(position_mode)]):
+                    raise ValueError("Arguments for lists x_bins, y_bins, position_mode, collection_name must be the same length.")
                 if self._as_list(x_bins)[idx] <= 0 or self._as_list(y_bins)[idx] <= 0:
                     raise ValueError("x_bins and y_bins must be positive integers.")
                 if self._as_list(position_mode)[idx] not in {"weighted", "center"}:
@@ -176,13 +167,7 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
 
         if len(self.layout) > 1:
             for coll_idx, collection in enumerate(self.collection_name):
-                decoded = [
-                    decode_dd4hep_cell_id(
-                        int(cell_id),
-                        self.layout[coll_idx].cell_id_encoding,
-                    )
-                    for cell_id in shower.cell_id
-                ]
+                decoded = [decode_dd4hep_cell_id(int(cell_id), self.layout[coll_idx].cell_id_encoding) for cell_id in shower.cell_id]
                 systems = np.asarray([item["system"] for item in decoded], dtype=np.int32)
                 modules = np.asarray([item["module"] for item in decoded], dtype=np.int32)
                 layers = np.asarray([item["layer"] for item in decoded], dtype=np.int32)
@@ -190,7 +175,9 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                 cell_y = np.asarray([item["y"] for item in decoded], dtype=np.int32)
 
                 ### mask out any cellids that don't belong to the detector corresponding to this collection
-                system_mask = ~processed if coll_idx == 0 else (systems == self.layout[coll_idx].det_id) & (~processed)
+                system_mask = (
+                    systems == self.layout[coll_idx].det_id
+                ) & (~processed)
 
                 if not np.any(system_mask):
                     # skip the empty collection
@@ -198,13 +185,9 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
 
                 unique_ml = np.unique(np.stack([systems[system_mask], modules[system_mask], layers[system_mask]], axis=1), axis=0)
                 for system_index, module_index, layer_index in unique_ml:
-                    mask = system_mask & (modules == module_index) & (layers == layer_index)
+                    mask = system_mask & (modules == module_index) & (layers == layer_index)           
                     layer = self.layout[coll_idx].layers[layer_index - 1]
-                    sensitive_center_xy = barrel_sensitive_plane_center_xy(
-                        self.layout[coll_idx],
-                        int(layer_index),
-                        int(module_index),
-                    )
+                    sensitive_center_xy = barrel_sensitive_plane_center_xy(self.layout[coll_idx], int(layer_index), int(module_index))
                     _, _, tangent = barrel_module_basis(self.layout[coll_idx], int(layer_index), int(module_index))
 
                     tangent_local = (xy[mask] - sensitive_center_xy) @ tangent
@@ -275,13 +258,19 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                 center_z[mask] = sub_long_center
                 processed[mask] = True
         
-        # check if all cells are processed- if not raise the error message with the number of unprocessed hits
+        # check if all cells are processed- if proccess all the unmatch and countinue
         if not np.all(processed):
             unmatched = np.where(~processed)[0]
-            raise ValueError(
-                f"{len(unmatched)} hits were not processed in MergeWithinRegularSubcell."
-            )
 
+            sub_x[unmatched] = 0
+            sub_y[unmatched] = 0
+
+            center_x[unmatched] = shower.x[unmatched]
+            center_y[unmatched] = shower.y[unmatched]
+            center_z[unmatched] = shower.z[unmatched]
+
+            processed[unmatched] = True
+        
         key_dtype = np.dtype([("cell_id", np.uint64), ("sub_x", np.int32), ("sub_y", np.int32)])
         keys = np.empty(n_points, dtype=key_dtype)
         keys["cell_id"] = shower.cell_id
