@@ -7,9 +7,9 @@ import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
+import math
 
 _BIN_OPS = {
     ast.Add: operator.add,
@@ -33,11 +33,21 @@ _UNITS = {
     "tesla": 1.0,
     "deg": np.pi / 180.0,
     "rad": 1.0,
+    "mrad": 1e-3,
+}
+
+_FUNCTIONS = {
+    "sin": math.sin,
+    "cos": math.cos,
+    "tan": math.tan,
+    "sqrt": math.sqrt,
+    "floor": math.floor,
+    "ceil": math.ceil,
 }
 
 
 def _eval_expr(expr: str, names: dict[str, float]) -> float:
-    expr = expr.strip()  # remove leading/trailing whitespace
+    expr = expr.strip()
     node = ast.parse(expr, mode="eval")
 
     def _visit(current: ast.AST) -> float:
@@ -51,6 +61,16 @@ def _eval_expr(expr: str, names: dict[str, float]) -> float:
             if current.id in _UNITS:
                 return _UNITS[current.id]
             raise KeyError(current.id)
+        if isinstance(current, ast.Call):
+            if (
+                isinstance(current.func, ast.Name)
+                and current.func.id in _FUNCTIONS
+                and len(current.args) == 1
+            ):
+                return _FUNCTIONS[current.func.id](
+                    _visit(current.args[0])
+                )
+            raise ValueError(f"Unsupported function: {ast.dump(current)}")
         if isinstance(current, ast.BinOp) and type(current.op) in _BIN_OPS:
             return _BIN_OPS[type(current.op)](_visit(current.left), _visit(current.right))
         if isinstance(current, ast.UnaryOp) and type(current.op) in _UNARY_OPS:
@@ -147,16 +167,20 @@ class DD4hepResolver:
         ### Iteratively load constants
         
         pending = {}
+        constants = {}
 
         for root in self._roots.values():
             for const in root.iter("constant"):
                 name = const.attrib.get("name")
                 expr = const.attrib.get("value")
                 if name and expr:
+                    expr = expr.strip()
+                    # DD4hep ID encoding string
+                    if ":" in expr and "," in expr:
+                        constants[name] = expr
+                        continue
                     pending[name] = expr
 
-
-        constants = {}
         pending = pending.copy()
 
         while pending:
@@ -199,6 +223,8 @@ class DD4hepResolver:
 
 ### Subsitute expresions for variable resolution in xml
 def normalize(expr):
+    expr = expr.strip()
+    expr = re.sub(r"\(int\)\s*", "", expr)
     expr = expr.replace("^", "**")
     expr = re.sub(r"(\d)\s+(\d)", r"\1*\2", expr)
     return expr
@@ -264,14 +290,17 @@ def build_barrel_layout_from_collection(main_xml: str | Path, collection_name: s
     readout = readout_ref.element
     detector = detector_ref.element
     det_id_str = detector.get("id")
-
     det_id = int(resolver.constants[det_id_str])
 
-    supported_detectors = {'ODDPolyhedraBarrelCalorimeter', 'DD4hep_PolyhedraBarrelCalorimeter2'}
+    supported_detectors = {
+        'ODDPolyhedraBarrelCalorimeter',
+        'DD4hep_PolyhedraBarrelCalorimeter2',
+        'GenericCalBarrel_o1_v01',
+    }
 
     if detector.attrib.get("type") not in supported_detectors:
         raise NotImplementedError(
-            f"Only ODDPolyhedraBarrelCalorimeter or DD4hep_PolyhedraBarrelCalorimeter2" 
+            f"Only ODDPolyhedraBarrelCalorimeter or DD4hep_PolyhedraBarrelCalorimeter2 or GenericCalBarrel_o1_v01"
             f"is implemented in this prototype, got {detector.attrib.get('type')!r}"
         )
 
