@@ -72,8 +72,18 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
             if position_mode is _MISSING:
                 position_mode = ["weighted"] * n_collections
             for idx, collection in enumerate(collection_name):
-                if any(len(x) != len(collection_name) for x in [self._as_list(x_bins), self._as_list(y_bins), self._as_list(position_mode)]):
-                    raise ValueError("Arguments for lists x_bins, y_bins, position_mode, collection_name must be the same length.")
+                if any(
+                    len(x) != len(collection_name)
+                    for x in [
+                        self._as_list(x_bins),
+                        self._as_list(y_bins),
+                        self._as_list(position_mode),
+                    ]
+                ):
+                    raise ValueError(
+                        "Arguments for lists x_bins, y_bins, position_mode, "
+                        "collection_name must be the same length."
+                    )
                 if self._as_list(x_bins)[idx] <= 0 or self._as_list(y_bins)[idx] <= 0:
                     raise ValueError("x_bins and y_bins must be positive integers.")
                 if self._as_list(position_mode)[idx] not in {"weighted", "center"}:
@@ -166,8 +176,16 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
         xy = np.stack([shower.x, shower.y], axis=1).astype(np.float64)
 
         if len(self.layout) > 1:
-            for coll_idx, collection in enumerate(self.collection_name):
-                decoded = [decode_dd4hep_cell_id(int(cell_id), self.layout[coll_idx].cell_id_encoding) for cell_id in shower.cell_id]
+            subdetector_names = shower.metadata.get("subdetector_names", [])
+            MAP = {name: isub for isub, name in enumerate(subdetector_names)}
+            for collection in self.collection_name:
+                decoded = [
+                    decode_dd4hep_cell_id(
+                        int(cell_id),
+                        self.layout[int(MAP[collection])].cell_id_encoding,
+                    )
+                    for cell_id in shower.cell_id
+                ]
                 systems = np.asarray([item["system"] for item in decoded], dtype=np.int32)
                 modules = np.asarray([item["module"] for item in decoded], dtype=np.int32)
                 layers = np.asarray([item["layer"] for item in decoded], dtype=np.int32)
@@ -176,7 +194,7 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
 
                 ### mask out any cellids that don't belong to the detector corresponding to this collection
                 system_mask = (
-                    systems == self.layout[coll_idx].det_id
+                    systems == self.layout[int(MAP[collection])].det_id
                 ) & (~processed)
 
                 if not np.any(system_mask):
@@ -186,9 +204,13 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                 unique_ml = np.unique(np.stack([systems[system_mask], modules[system_mask], layers[system_mask]], axis=1), axis=0)
                 for system_index, module_index, layer_index in unique_ml:
                     mask = system_mask & (modules == module_index) & (layers == layer_index)           
-                    layer = self.layout[coll_idx].layers[layer_index - 1]
-                    sensitive_center_xy = barrel_sensitive_plane_center_xy(self.layout[coll_idx], int(layer_index), int(module_index))
-                    _, _, tangent = barrel_module_basis(self.layout[coll_idx], int(layer_index), int(module_index))
+                    layer = self.layout[int(MAP[collection])].layers[layer_index - 1]
+                    sensitive_center_xy = barrel_sensitive_plane_center_xy(
+                        self.layout[int(MAP[collection])],
+                        int(layer_index),
+                        int(module_index),
+                    )
+                    _, _, tangent = barrel_module_basis(self.layout[int(MAP[collection])], int(layer_index), int(module_index))
 
                     tangent_local = (xy[mask] - sensitive_center_xy) @ tangent
                     long_local = shower.z[mask].astype(np.float64)
@@ -199,18 +221,18 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                     sub_x_mask = _subcell_indices(
                         tangent_local - parent_tangent,
                         layer.pitch_tangent_mm,
-                        self.x_bins[coll_idx],
+                        self.x_bins[int(MAP[collection])],
                     )
                     sub_y_mask = _subcell_indices(
                         long_local - parent_long,
                         layer.pitch_z_mm,
-                        self.y_bins[coll_idx],
+                        self.y_bins[int(MAP[collection])],
                     )
                     sub_x[mask] = sub_x_mask
                     sub_y[mask] = sub_y_mask
 
-                    sub_tangent_center = _subcell_center(cell_x[mask], sub_x_mask, layer.pitch_tangent_mm, self.x_bins[coll_idx])
-                    sub_long_center = _subcell_center(cell_y[mask], sub_y_mask, layer.pitch_z_mm, self.y_bins[coll_idx])
+                    sub_tangent_center = _subcell_center(cell_x[mask], sub_x_mask, layer.pitch_tangent_mm, self.x_bins[int(MAP[collection])])
+                    sub_long_center = _subcell_center(cell_y[mask], sub_y_mask, layer.pitch_z_mm, self.y_bins[int(MAP[collection])])
 
                     center_xy_mask = sensitive_center_xy + sub_tangent_center[:, None] * tangent[None, :]
                     center_x[mask] = center_xy_mask[:, 0]
