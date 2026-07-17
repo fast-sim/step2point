@@ -7,11 +7,10 @@ import os
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from typing import Optional
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
-
 
 _BIN_OPS = {
     ast.Add: operator.add,
