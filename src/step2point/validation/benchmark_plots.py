@@ -20,6 +20,9 @@ from step2point.validation.plotting import (
     plot_overlay_line_multi,
 )
 
+STABLE_RATIO_YLIM = (0.5, 1.5)
+ENERGY_RATIO_XLIM = (1.0 - 1.0e-7, 1.0 + 1.0e-7)
+
 
 @dataclass(slots=True)
 class PlotArtifacts:
@@ -327,10 +330,13 @@ def generate_benchmark_plots(
     pre_label: str = "pre",
     post_label: str = "post",
     generate_plots: bool = True,
+    with_ratio: bool = True,
+    ratio_ylim: tuple[float, float] | None = None,
 ) -> PlotArtifacts:
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     data = _compute_benchmark_data(pairs, axis_override=axis_override, origin_override=origin_override)
+    overlay_ratio_ylim = STABLE_RATIO_YLIM if ratio_ylim is None else ratio_ylim
     reference_showers = [pre for pre, _ in pairs]
     summary = build_validation_summary(
         reference_showers=reference_showers,
@@ -339,17 +345,29 @@ def generate_benchmark_plots(
     )
 
     if generate_plots:
-        plot_hist(data["energy_ratios"], outdir / "energy_ratio.png", "Energy ratio", "E_post / E_pre")
+        plot_hist(
+            data["energy_ratios"],
+            outdir / "energy_ratio.png",
+            "Energy ratio",
+            "E_post / E_pre",
+            xlim=ENERGY_RATIO_XLIM,
+        )
         plot_hist(data["cell_ratios"], outdir / "cell_count_ratio.png", "Cell count ratio", "N_cells_post / N_cells_pre")
-        plot_hist(data["point_ratios"], outdir / "point_count_ratio.png", "Point count ratio", "N_points_post / N_points_pre")
+        plot_hist(
+            data["point_ratios"],
+            outdir / "point_count_ratio.png",
+            "Number of points reduction",
+            "N_points_post / N_points_pre",
+        )
         plot_overlay_hist(
             [pre.n_points for pre, _ in pairs],
             [post.n_points for _, post in pairs],
             outdir / "n_points.png",
-            "Point count",
-            "N_points",
+            "Number of points",
+            "Number of points",
             pre_label=pre_label,
             post_label=post_label,
+            with_ratio=False,
         )
         plot_overlay_hist(
             data["pre_cell_logs"],
@@ -360,6 +378,7 @@ def generate_benchmark_plots(
             logy=True,
             pre_label=pre_label,
             post_label=post_label,
+            with_ratio=with_ratio,
         )
         plot_overlay_hist(
             data["pre_point_logs"],
@@ -370,6 +389,7 @@ def generate_benchmark_plots(
             logy=True,
             pre_label=pre_label,
             post_label=post_label,
+            with_ratio=with_ratio,
         )
 
         long_centers = 0.5 * (data["long_bins"][:-1] + data["long_bins"][1:])
@@ -385,6 +405,9 @@ def generate_benchmark_plots(
             ylabel="Energy fraction",
             pre_label=pre_label,
             post_label=post_label,
+            xlim=(0.0, float(long_centers[-1])),
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
         )
         plot_overlay_line(
             radial_centers,
@@ -396,6 +419,8 @@ def generate_benchmark_plots(
             ylabel="Energy fraction",
             pre_label=pre_label,
             post_label=post_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
         )
         plot_overlay_line(
             phi_centers,
@@ -407,6 +432,8 @@ def generate_benchmark_plots(
             ylabel="Energy fraction",
             pre_label=pre_label,
             post_label=post_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
         )
 
         plot_overlay_hist(
@@ -417,6 +444,9 @@ def generate_benchmark_plots(
             "m1",
             pre_label=pre_label,
             post_label=post_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+            ratio_band=False,
         )
         plot_overlay_hist(
             data["long_m2_pre"],
@@ -426,6 +456,9 @@ def generate_benchmark_plots(
             "m2",
             pre_label=pre_label,
             post_label=post_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+            ratio_band=False,
         )
         plot_overlay_hist(
             data["rad_m1_pre"],
@@ -435,6 +468,9 @@ def generate_benchmark_plots(
             "m1",
             pre_label=pre_label,
             post_label=post_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+            ratio_band=False,
         )
         plot_overlay_hist(
             data["rad_m2_pre"],
@@ -444,6 +480,9 @@ def generate_benchmark_plots(
             "m2",
             pre_label=pre_label,
             post_label=post_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+            ratio_band=False,
         )
 
     summary_path = write_validation_summary(summary, outdir)
@@ -458,9 +497,12 @@ def generate_benchmark_comparison_plots(
     origin_override=None,
     pre_label: str = "pre",
     generate_plots: bool = True,
+    with_ratio: bool = True,
+    ratio_ylim: tuple[float, float] | None = None,
 ) -> PlotArtifacts:
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
+    overlay_ratio_ylim = STABLE_RATIO_YLIM if ratio_ylim is None else ratio_ylim
 
     series = [
         (
@@ -488,6 +530,7 @@ def generate_benchmark_comparison_plots(
             outdir / "energy_ratio.png",
             "Energy ratio",
             "E_post / E_pre",
+            xlim=ENERGY_RATIO_XLIM,
         )
         plot_hist_series(
             [(label, data["cell_ratios"]) for label, _, data in series],
@@ -498,16 +541,17 @@ def generate_benchmark_comparison_plots(
         plot_hist_series(
             [(label, data["point_ratios"]) for label, _, data in series],
             outdir / "point_count_ratio.png",
-            "Point count ratio",
+            "Number of points reduction",
             "N_points_post / N_points_pre",
         )
         plot_overlay_hist_multi(
             [pre.n_points for pre, _ in comparisons[0][1]],
             [(label, [post.n_points for _, post in pairs]) for label, pairs, _ in series],
             outdir / "n_points.png",
-            "Point count",
-            "N_points",
+            "Number of points",
+            "Number of points",
             pre_label=pre_label,
+            with_ratio=False,
         )
         plot_overlay_hist_multi(
             reference_data["pre_cell_logs"],
@@ -517,6 +561,7 @@ def generate_benchmark_comparison_plots(
             "log10(cell energy [GeV])",
             logy=True,
             pre_label=pre_label,
+            with_ratio=with_ratio,
         )
         plot_overlay_hist_multi(
             reference_data["pre_point_logs"],
@@ -526,6 +571,7 @@ def generate_benchmark_comparison_plots(
             "log10(point energy [GeV])",
             logy=True,
             pre_label=pre_label,
+            with_ratio=with_ratio,
         )
 
         long_centers = 0.5 * (reference_data["long_bins"][:-1] + reference_data["long_bins"][1:])
@@ -540,6 +586,9 @@ def generate_benchmark_comparison_plots(
             "longitudinal coordinate [mm]",
             ylabel="Energy fraction",
             pre_label=pre_label,
+            xlim=(0.0, float(long_centers[-1])),
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
         )
         plot_overlay_line_multi(
             radial_centers,
@@ -550,6 +599,8 @@ def generate_benchmark_comparison_plots(
             "radial coordinate [mm]",
             ylabel="Energy fraction",
             pre_label=pre_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
         )
         plot_overlay_line_multi(
             phi_centers,
@@ -560,6 +611,8 @@ def generate_benchmark_comparison_plots(
             "phi",
             ylabel="Energy fraction",
             pre_label=pre_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
         )
         plot_overlay_hist_multi(
             reference_data["long_m1_pre"],
@@ -568,6 +621,9 @@ def generate_benchmark_comparison_plots(
             "Longitudinal first moment",
             "m1",
             pre_label=pre_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+            ratio_band=False,
         )
         plot_overlay_hist_multi(
             reference_data["long_m2_pre"],
@@ -576,6 +632,9 @@ def generate_benchmark_comparison_plots(
             "Longitudinal second moment",
             "m2",
             pre_label=pre_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+            ratio_band=False,
         )
         plot_overlay_hist_multi(
             reference_data["rad_m1_pre"],
@@ -584,6 +643,9 @@ def generate_benchmark_comparison_plots(
             "Radial first moment",
             "m1",
             pre_label=pre_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+            ratio_band=False,
         )
         plot_overlay_hist_multi(
             reference_data["rad_m2_pre"],
@@ -592,6 +654,9 @@ def generate_benchmark_comparison_plots(
             "Radial second moment",
             "m2",
             pre_label=pre_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+            ratio_band=False,
         )
 
     summary_path = write_validation_summary(summary, outdir)
