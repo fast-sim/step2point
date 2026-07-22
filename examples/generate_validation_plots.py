@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from step2point.algorithms.dbscan_clustering import DBSCANClustering
+from step2point.algorithms.greedy_agglomerative import GreedyAgglomerativeClustering
 from step2point.algorithms.hdbscan_clustering import HDBSCANClustering
 from step2point.algorithms.identity import IdentityCompression
 from step2point.algorithms.merge_within_cell import MergeWithinCell
@@ -77,8 +79,26 @@ def main():
     )
     parser.add_argument(
         "--algorithm",
-        choices=["identity", "merge_within_cell", "merge_within_regular_subcell", "hdbscan"],
+        choices=["identity", "merge_within_cell", "merge_within_regular_subcell", "hdbscan", "greedy_agglomerative", "dbscan"],
         default="merge_within_cell",
+    )
+    parser.add_argument("--dbscan-eps", type=float, default=1.0, help="DBSCAN eps radius in scaled feature space.")
+    parser.add_argument(
+        "--dbscan-algorithm",
+        choices=["auto", "brute", "kd_tree", "ball_tree"],
+        default="auto",
+        help="DBSCAN neighbour-search algorithm.",
+    )
+    parser.add_argument(
+        "--max-link-distance",
+        type=float,
+        default=5.0,
+        help="Greedy agglomerative clustering link-distance threshold in mm.",
+    )
+    parser.add_argument(
+        "--max-cluster-distance",
+        type=float,
+        help="Greedy agglomerative maximum total cluster extent in mm. Defaults to --max-link-distance.",
     )
     parser.add_argument("--min-cluster-size", type=int, default=5, help="HDBSCAN min_cluster_size.")
     parser.add_argument("--min-samples", type=int, default=3, help="HDBSCAN min_samples.")
@@ -208,6 +228,22 @@ def main():
         algorithm = IdentityCompression()
     elif args.algorithm == "merge_within_cell":
         algorithm = MergeWithinCell()
+    elif args.algorithm == "greedy_agglomerative":
+        algorithm = GreedyAgglomerativeClustering(
+            max_link_distance=args.max_link_distance,
+            max_cluster_distance=args.max_cluster_distance,
+        )
+    elif args.algorithm == "dbscan":
+        algorithm = DBSCANClustering(
+            eps=args.dbscan_eps,
+            min_samples=args.min_samples,
+            use_time=args.use_time,
+            outlier_policy=args.outlier_policy,
+            merge_scope=args.merge_scope,
+            cell_id_encoding=resolve_cell_id_encodings(),
+            algorithm=args.dbscan_algorithm,
+            n_jobs=args.n_jobs,
+        )
     elif args.algorithm == "hdbscan":
         algorithm = HDBSCANClustering(
             min_cluster_size=args.min_cluster_size,

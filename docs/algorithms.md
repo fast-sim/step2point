@@ -83,3 +83,70 @@ TODO:
 
 - [ ] C++ backend. The core HDBSCAN clustering is handled by scikit-learn (Cython/C), so the Python path already gets compiled performance for the hot loop. A native C++ implementation would require either reimplementing HDBSCAN or linking a C++ library.
 - [ ] GPU acceleration via scikit-learn's [Array API support](https://scikit-learn.org/stable/modules/array_api.html). This would allow HDBSCAN to run on GPU arrays (e.g. CuPy, PyTorch) for larger datasets. Needs investigation into whether the step2point backends API (currently Python and C++ only) should be extended to cover compute backends, or if this should be handled transparently within the Python algorithm.
+
+## Greedy agglomerative clustering
+
+> greedy_agglomerative
+
+Requires:
+
+- `cell_id` defined for each deposit
+
+This algorithm works strictly within each exact `cell_id`. Inside one cell it
+starts from singleton deposits and repeatedly merges the closest valid pair of
+clusters until no valid merge remains.
+
+Two clusters are allowed to merge only if both conditions hold:
+
+- the minimum point-to-point distance between the two clusters is below
+  `max_link_distance`
+- the maximum pairwise distance inside the merged cluster is below
+  `max_cluster_distance`
+
+This gives a deterministic clustering with an explicit local merge threshold
+and an explicit bound on total cluster extent, so long chain-like clusters are
+suppressed.
+
+Parameters:
+
+- `max_link_distance`: local merge distance threshold in mm
+- `max_cluster_distance`: maximum total cluster extent in mm. If omitted in the
+  CLI, it defaults to the same value as `max_link_distance`
+
+## DBSCAN clustering
+
+> dbscan
+
+DBSCAN stands for **Density-Based Spatial Clustering of Applications with Noise**.
+It clusters deposits that have enough nearby neighbours within a fixed radius.
+Compared with HDBSCAN, it is simpler and exposes a direct hard local distance
+scale through `eps`.
+
+Requires:
+
+- `cell_id` defined for each deposit
+- a cell-id decoding rule when using merge scopes that require decoded detector
+  fields
+
+This algorithm uses the same `merge_scope` concept as `hdbscan`: it first
+groups deposits according to detector boundaries and then runs DBSCAN
+independently inside each group. Within a group it clusters on `(x, y, z)` or,
+when enabled, `(x, y, z, t)` after scaling the spatial coordinates and
+optionally the time coordinate.
+
+Parameters:
+
+- `eps`: DBSCAN neighbourhood radius in scaled feature space
+- `min_samples`: minimum number of nearby points needed for a core point
+- `xy_scale`: divide x, y, z coordinates by this before clustering
+- `t_scale`: divide time (relative to the group median) by this before clustering
+- `use_time`: whether to include time as a clustering feature
+- `outlier_policy`: how DBSCAN outlier points are handled (`nearest_cluster` or
+  `standalone`)
+- `merge_scope`: detector boundary DBSCAN is not allowed to cross. Supported
+  values are `none`, `layer`, `system_layer`, `cell_id`, and
+  `cell_id_neighbour`
+- `cell_id_encoding`: cell-id encoding string, or one string per input
+  collection / system slot when clustering across multiple readout collections
+- `algorithm`: internal neighbour-search method used by scikit-learn's DBSCAN
+- `n_jobs`: number of parallel jobs for neighbour queries

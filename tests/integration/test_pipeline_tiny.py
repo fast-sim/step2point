@@ -5,6 +5,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 
+from step2point.algorithms.greedy_agglomerative import GreedyAgglomerativeClustering
 from step2point.algorithms.identity import IdentityCompression
 from step2point.algorithms.merge_within_cell import MergeWithinCell
 from step2point.core.pipeline import Pipeline
@@ -25,6 +26,18 @@ def test_pipeline_identity_tiny():
 def test_pipeline_merge_tiny():
     reader = Step2PointHDF5Reader(str(DATA))
     report = Pipeline(reader, MergeWithinCell(), [EnergyConservationValidator(), CellCountRatioValidator()]).run()
+    assert len(report.compression_stats) == 3
+    for stat in report.compression_stats:
+        assert stat["n_points_after"] <= stat["n_points_before"]
+
+
+def test_pipeline_greedy_agglomerative_tiny():
+    reader = Step2PointHDF5Reader(str(DATA))
+    report = Pipeline(
+        reader,
+        GreedyAgglomerativeClustering(max_link_distance=5.0, max_cluster_distance=5.0),
+        [EnergyConservationValidator(), CellCountRatioValidator()],
+    ).run()
     assert len(report.compression_stats) == 3
     for stat in report.compression_stats:
         assert stat["n_points_after"] <= stat["n_points_before"]
