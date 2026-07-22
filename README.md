@@ -267,6 +267,11 @@ PYTHONPATH=src python examples/generate_validation_plots.py \
   --outdir outputs/plots_compare_merge_within_cell
 ```
 
+Overlay plots include ratio panels by default. Use `--ratio-ylim MIN MAX` to
+control their range or `--no-ratio` to hide them. Detector presentation plots
+can use `examples/plot_detector_cells.py --presentation-single-layer` to show
+one representative detector layer behind hits projected from all layers.
+
 Note:
 `PYTHONPATH=src` is only needed when running directly from a source checkout without installing the package first. If you already ran `pip install -e .[dev]`, you can drop that prefix and use `python ...` directly.
 
