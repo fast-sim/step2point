@@ -31,6 +31,7 @@ from step2point.vis.detector_layout_utils import (
     filter_geometry_to_bounds,
     layer_intersects_ylim,
     overlay_color_spec,
+    resolve_overlay_bounds,
     scatter_area_from_data_diameter,
     x_bins_intersect_limits,
     z_bins_intersect_limits,
@@ -49,6 +50,7 @@ def plot_barrel_wireframe(
     overlay_render: str = "points",
     overlay_size_scale: float = 1.0,
     annotate_cell_id: bool = False,
+    presentation_single_layer: bool = False,
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
     zlim: tuple[float, float] | None = None,
@@ -64,7 +66,12 @@ def plot_barrel_wireframe(
         xz_polygons: list[np.ndarray] = []
         zy_polygons: list[np.ndarray] = []
     else:
-        selected_layers = [layer_index] if layer_index is not None else [layer.layer_index for layer in layout.layers]
+        if layer_index is not None:
+            selected_layers = [layer_index]
+        elif presentation_single_layer:
+            selected_layers = [layout.layers[0].layer_index]
+        else:
+            selected_layers = [layer.layer_index for layer in layout.layers]
         xy_segments = []
         xz_segments = []
         zy_segments = []
@@ -185,10 +192,8 @@ def plot_barrel_wireframe(
         xy_auto_bounds = expand_bounds(*collection_bounds(xy_segments, xy_polygons))
         xz_auto_bounds = expand_bounds(*collection_bounds(xz_segments, xz_polygons))
         zy_auto_bounds = expand_bounds(*collection_bounds(zy_segments, zy_polygons))
-        resolved_bounds = WorldBounds.resolved(
-            xlim=xlim,
-            ylim=ylim,
-            zlim=zlim,
+        resolved_bounds = resolve_overlay_bounds(
+            bounds,
             fallback_x=(
                 min(xy_auto_bounds[0], xz_auto_bounds[0]),
                 max(xy_auto_bounds[1], xz_auto_bounds[1]),
@@ -198,6 +203,7 @@ def plot_barrel_wireframe(
                 max(xy_auto_bounds[3], zy_auto_bounds[3]),
             ),
             fallback_z=(zy_auto_bounds[0], zy_auto_bounds[1]),
+            presentation_single_layer=presentation_single_layer,
         )
         point_mask = resolved_bounds.point_mask(overlay_shower)
         if annotate_cell_id and module_index is not None and overlay_shower.cell_id is not None:
@@ -397,9 +403,13 @@ def plot_barrel_wireframe(
         ax_zy.set_title(f"{layout.detector_name}{module_label} full global {title_kind} (ZY)")
     elif layer_index is None:
         title_kind = "cell wireframe" if draw_cells else "layer/module outline"
-        ax_xy.set_title(f"{layout.detector_name}{module_label} full global {title_kind} (XY)")
-        ax_xz.set_title(f"{layout.detector_name}{module_label} full global {title_kind} (XZ)")
-        ax_zy.set_title(f"{layout.detector_name}{module_label} full global {title_kind} (ZY)")
+        if presentation_single_layer:
+            title_prefix = f"{layout.detector_name}{module_label} representative layer global {title_kind}"
+        else:
+            title_prefix = f"{layout.detector_name}{module_label} full global {title_kind}"
+        ax_xy.set_title(f"{title_prefix} (XY)")
+        ax_xz.set_title(f"{title_prefix} (XZ)")
+        ax_zy.set_title(f"{title_prefix} (ZY)")
     else:
         title_kind = "cell wireframe" if draw_cells else "layer/module outline"
         ax_xy.set_title(f"{layout.detector_name}{module_label} layer {layer_index} global {title_kind} (XY)")
@@ -427,12 +437,15 @@ def plot_barrel_wireframe(
 
 
 def _overlay_facecolors(color_values: np.ndarray, cmap: str | None) -> np.ndarray:
+    values = np.asarray(color_values)
+    if values.ndim == 2 and values.shape[1] == 4:
+        return values.astype(np.float64, copy=False)
     if cmap is None:
-        rgba = np.zeros((len(color_values), 4), dtype=np.float64)
+        rgba = np.zeros((len(values), 4), dtype=np.float64)
         rgba[:, 3] = 1.0
         return rgba
     cmap_obj = colormaps.get_cmap(cmap)
-    values = np.asarray(color_values, dtype=np.float64)
+    values = values.astype(np.float64, copy=False)
     if values.size == 0:
         return np.empty((0, 4), dtype=np.float64)
     vmin = float(np.min(values))
