@@ -233,7 +233,7 @@ def convert(
         z_shifts = np.zeros((n_events, n_layers), dtype=np.float32)
 
     # ------------------------------------------------------------------ #
-    # 5. Reconstruct global (x, y, z) and assign cell_ids per event       #
+    # 5. Reconstruct global (x, y, z) and assign cell_ids per event      #
     # ------------------------------------------------------------------ #
     all_positions = []
     all_energies = []

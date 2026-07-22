@@ -17,7 +17,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
-from martina_test.metadata import Metadata
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(SCRIPT_DIR)
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+from martina_test.metadata import Metadata  # noqa: E402
 
 # instructions on bash
 # python convert_to_cc3_format.py /path/to/step2point_output.h5
@@ -424,15 +429,21 @@ class Transform_pointcloud:
                 event[:, 0] -= x_shift[global_event_n][clipped_layer_ids]
                 event[:, 2] -= z_shift[global_event_n][clipped_layer_ids]
 
-            # restrict to a 500x500 mm box in the transverse (local x/y) plane:
-            # global X and global Z become local y and local x after the
-            # global_to_local_points rotation, and metadata.Xmin/Xmax_global,
-            # Zmin/Zmax_global are already set to -250/250 mm.
+            # restrict to a box in the transverse (local x/y) plane: global X and
+            # global Z become local y and local x after the global_to_local_points
+            # rotation. Edge set to 249.32670000000002 mm (not metadata's default
+            # 250mm) so the cut lands exactly on a readout cell boundary instead
+            # of mid-cell - a mid-cell cut splits a single cell's raw steps across
+            # the box edge inconsistently between identity (many raw points, some
+            # in/some out) and merge_within_cell (one merged centroid, wholly
+            # in or out).
+            cell_edge = 249.32670000000002
             inbox_mask = self.box_selection(
                 event,
                 restrict_x=True,
                 restrict_y=False,
                 restrict_z=True,
+                box_cut=[-cell_edge, cell_edge, cell_edge, -cell_edge],
             )
             if inbox_mask.sum() == 0:
                 print(f"Event {event_n} has no hits in box, skipping.")
@@ -441,7 +452,7 @@ class Transform_pointcloud:
             # print(event.shape)
             t = t[inbox_mask]
 
-            # energy cut at 1e-7 GeV (detecro resolution at 1e-5 GeV), to remove noise hits
+            # energy cut disabled (was 1e-6 GeV) - keep every hit with nonzero energy
             energy_cut = 1e-6
             mask = event[:, 3] > energy_cut
             event = event[mask]
@@ -701,7 +712,8 @@ def convert(input_path: str, global_path: str = None, output_folder: str = None)
 
     if output_folder is not None:
         os.makedirs(output_folder, exist_ok=True)
-        out_file = f"{output_folder}/input_cc3.h5"
+        parent_dir_name = input_path.split("/")[-2]  # e.g. "test_small"
+        out_file = f"{output_folder}/input_cc3_{parent_dir_name}.h5"
     else:
         seed = int(input_path.split("/")[-2].split("_")[1])
         dir_name = input_path.split("/")[-3]  # e.g. pipeline2_hdbscan_ms8_mcs40

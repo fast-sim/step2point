@@ -187,6 +187,10 @@ def plot_per_layer_histograms(
             "/eos/project/f/fast/step2point_files/pipeline2_merge_within_cell/test_small/input_cc3.h5",
             "merge within cell",
         ),
+        (
+            "/eos/project/f/fast/step2point_files/pipeline2_merge_within_regular_subcell/test_small/input_cc3.h5",
+            "merge within regular subcell",
+        ),
     ]
 
     # --------------------------------------------------
@@ -326,7 +330,7 @@ def plot_per_layer_histograms(
     hdb_ms_list, hdb_records = ([x[0] for x in paired], [x[1] for x in paired]) if paired else ([], [])
     all_ms = sorted(set(hdb_ms_list))
     hdb_colors = [_ms_color(ms, all_ms) for ms in hdb_ms_list]
-    extra_colors = ["dimgrey", "silver"]
+    extra_colors = ["dimgrey", "silver", "saddlebrown"]
     layers = np.arange(n_layers)
 
     legend_handles = [
@@ -517,6 +521,10 @@ def plot_h5_overlay_histograms(
             "/eos/project/f/fast/step2point_files/pipeline2_identity/test_small/compressed_identity.h5",
             "identity",
         ),
+        (
+            "/eos/project/f/fast/step2point_files/pipeline2_merge_within_regular_subcell/test_small/compressed_merge_within_regular_subcell.h5",
+            "merge within regular subcell",
+        ),
     ]
 
     extra_plot_kwargs = {"histtype": "stepfilled", "alpha": 0.3, "linewidth": 1}
@@ -574,7 +582,7 @@ def plot_h5_overlay_histograms(
     hits_data = [(vals, label, _ms_color(ms, all_ms)) for vals, label, ms in hits_data]
     energy_data = [(vals, label, _ms_color(ms, all_ms)) for vals, label, ms in energy_data]
 
-    colors_extra = ["dimgrey", "silver"]
+    colors_extra = ["dimgrey", "silver", "saddlebrown"]
     extra_hits = [(vals, label, color) for (vals, label), color in zip(extra_hits, colors_extra)]
     extra_energy = [(vals, label, color) for (vals, label), color in zip(extra_energy, colors_extra)]
 
@@ -715,12 +723,23 @@ def plot_compression_ratios(
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
     # ── top row: line plots ──────────────────────────────────────────────
-    txt_within_cell = (
-        "/eos/project/f/fast/step2point_files/pipeline2_merge_within_cell/test_small/compression_summary_merge_within_cell.txt"
-    )
-    if Path(txt_within_cell).exists():
+    ref_summaries = [
+        (
+            "/eos/project/f/fast/step2point_files/pipeline2_merge_within_cell/test_small/compression_summary_merge_within_cell.txt",
+            "merge within cell",
+            "k",
+        ),
+        (
+            "/eos/project/f/fast/step2point_files/pipeline2_merge_within_regular_subcell/test_small/compression_summary_merge_within_regular_subcell.txt",
+            "merge within regular subcell",
+            "saddlebrown",
+        ),
+    ]
+    for txt_path, ref_label, ref_color in ref_summaries:
+        if not Path(txt_path).exists():
+            continue
         row = {}
-        with open(txt_within_cell) as f:
+        with open(txt_path) as f:
             for line in f:
                 if "=" not in line:
                     continue
@@ -731,7 +750,7 @@ def plot_compression_ratios(
                     pass
         for ax, key in zip(axes[0], metrics):
             if key in row:
-                ax.axhline(row[key], color="k", linestyle="--", label="merge within cell")
+                ax.axhline(row[key], color=ref_color, linestyle="--", label=ref_label)
 
     for ax, metric, title in zip(axes[0], metrics, titles):
         for ms, grp in sorted(df.groupby("ms")):
@@ -982,6 +1001,10 @@ def plot_clusters_per_cell(
             "/eos/project/f/fast/step2point_files/pipeline2_merge_within_cell/test_small/input_cc3.h5",
             "merge within cell",
         ),
+        (
+            "/eos/project/f/fast/step2point_files/pipeline2_merge_within_regular_subcell/test_small/input_cc3.h5",
+            "merge within regular subcell",
+        ),
     ]
 
     rows = []
@@ -1018,8 +1041,8 @@ def plot_clusters_per_cell(
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
     # ── top row: line plots ──────────────────────────────────────────────
-    ref_styles = ["--", ":"]
-    ref_colors = ["k", "grey"]
+    ref_styles = ["--", ":", "-."]
+    ref_colors = ["k", "grey", "saddlebrown"]
     for (path, label), color, ls in zip(ref_datasets, ref_colors, ref_styles):
         try:
             max_cpc, frac_overlap = compute_metrics(path)
