@@ -140,6 +140,18 @@ def main():
         action="store_true",
         help="Write validation_summary.json but skip PNG plot generation.",
     )
+    parser.add_argument(
+        "--no-ratio",
+        action="store_true",
+        help="Disable the narrow ratio panel on overlay-style validation plots.",
+    )
+    parser.add_argument(
+        "--ratio-ylim",
+        type=float,
+        nargs=2,
+        metavar=("MIN", "MAX"),
+        help="Override the y-axis range used for overlay ratio panels.",
+    )
     parser.add_argument("--outdir", default="outputs/plots")
     args = parser.parse_args()
     collections = parse_collections(args.collections)
@@ -183,6 +195,8 @@ def main():
             origin_override=args.origin,
             pre_label=reference_label,
             generate_plots=not args.summary_only,
+            with_ratio=not args.no_ratio,
+            ratio_ylim=tuple(args.ratio_ylim) if args.ratio_ylim is not None else None,
         )
         return
 
@@ -228,6 +242,8 @@ def main():
         axis_override=args.axis,
         origin_override=args.origin,
         generate_plots=not args.summary_only,
+        with_ratio=not args.no_ratio,
+        ratio_ylim=tuple(args.ratio_ylim) if args.ratio_ylim is not None else None,
     )
 
 

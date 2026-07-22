@@ -8,6 +8,22 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import LogLocator
 
+SERIES_COLORS = {
+    "Geant4 steps": "#000000",
+    "regular 5x5 per cell": "#0057D9",
+    "regular 3x3 per cell": "#C2185B",
+    "density within cell": "#1B9E77",
+    "density within layer": "#D95F02",
+}
+FALLBACK_COLORS = ["#6A3D9A", "#B8860B", "#4F6D7A", "#C97B84"]
+SERIES_ORDER = [
+    "Geant4 steps",
+    "regular 5x5 per cell",
+    "regular 3x3 per cell",
+    "density within cell",
+    "density within layer",
+]
+
 
 def load_summary(path: str | Path) -> dict[str, object]:
     return json.loads(Path(path).read_text())
@@ -44,7 +60,9 @@ def collect_metric_points(summary_paths: list[str], metric: str):
 def collect_reference_metric_points(summary_paths: list[str], metric: str, reference_label: str):
     baseline_metric = {
         "n_points_post": "n_points_pre",
+        "n_points_pre": "n_points_pre",
         "n_cells_post": "n_cells_pre",
+        "n_cells_pre": "n_cells_pre",
     }.get(metric)
     if baseline_metric is None:
         return {}
@@ -73,27 +91,37 @@ def plot_metric_vs_energy(
     outpath: str | Path,
     *,
     reference_label: str = "Geant4 steps",
+    reference_only: bool = False,
+    title: str | None = None,
 ) -> None:
-    grouped = collect_metric_points(summary_paths, metric)
+    grouped = {}
+    if not reference_only:
+        grouped = collect_metric_points(summary_paths, metric)
     grouped.update(collect_reference_metric_points(summary_paths, metric, reference_label))
     outpath = Path(outpath)
     outpath.parent.mkdir(parents=True, exist_ok=True)
 
     fig, ax = plt.subplots(figsize=(7, 4.5))
-    colors = ["#0057D9", "#C2185B", "#1B9E77", "#D95F02", "#6A3D9A", "#B8860B"]
+    ordered_names = [name for name in SERIES_ORDER if name in grouped]
+    ordered_names.extend(name for name in grouped if name not in ordered_names)
+    fallback_index = 0
 
-    for idx, (name, points) in enumerate(sorted(grouped.items())):
+    for name in ordered_names:
+        points = grouped[name]
         points = sorted(points, key=lambda item: item[0])
         x = np.asarray([item[0] for item in points], dtype=np.float64)
         y = np.asarray([item[1] for item in points], dtype=np.float64)
         y_std = np.asarray([item[2] for item in points], dtype=np.float64)
-        color = colors[idx % len(colors)]
+        color = SERIES_COLORS.get(name)
+        if color is None:
+            color = FALLBACK_COLORS[fallback_index % len(FALLBACK_COLORS)]
+            fallback_index += 1
         ax.plot(x, y, color=color, linewidth=2.0, marker="o", markersize=5, label=name)
         ax.fill_between(x, y - y_std, y + y_std, color=color, alpha=0.15)
 
     title_map = {
         "energy_ratio": "Energy ratio vs incident energy",
-        "point_count_ratio": "Ratio of numner of points vs incident energy",
+        "point_count_ratio": "Ratio of number of points vs incident energy",
         "cell_count_ratio": "Ratio of number of cells vs incident energy",
         "n_points_post": "Number of points vs incident energy",
         "n_points_pre": "Pre-compression point count vs incident energy",
@@ -109,9 +137,11 @@ def plot_metric_vs_energy(
         "n_cells_post": "<# cells>",
         "n_cells_pre": "<# cells>",
     }
-    ax.set_title(title_map.get(metric, metric))
+    metric_title = title_map.get(metric, metric)
+    ax.set_title(metric_title if not title else f"{title}: {metric_title}")
     ax.set_xlabel("Incident energy [GeV]")
     ax.set_ylabel(ylabel_map.get(metric, metric))
+    ax.set_xlim(0.0, 200.0)
     if metric in {"n_points_post", "n_points_pre"}:
         ax.set_yscale("log")
         ax.yaxis.set_major_locator(LogLocator(base=10.0))
@@ -143,6 +173,15 @@ def main():
         default="Geant4 steps",
         help="Legend label used for the original-shower baseline on absolute count plots.",
     )
+    parser.add_argument(
+        "--reference-only",
+        action="store_true",
+        help="Plot only the Geant4/reference baseline from existing summaries and skip comparison lines.",
+    )
+    parser.add_argument(
+        "--title",
+        help="Optional common title prefix applied to all generated trend plots.",
+    )
     parser.add_argument("--outdir", default="outputs/validation_summary_trends")
     args = parser.parse_args()
 
@@ -153,6 +192,8 @@ def main():
             metric,
             outdir / f"{metric}_vs_energy.png",
             reference_label=args.reference_label,
+            reference_only=args.reference_only,
+            title=args.title,
         )
 
 
