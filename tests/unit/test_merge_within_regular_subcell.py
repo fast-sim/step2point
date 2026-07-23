@@ -83,6 +83,17 @@ def test_regular_grid_center_mode_places_outputs_at_subcell_centers():
         cell_id=np.array([_cell_id(1, 1, 0, 0)] * 4, dtype=np.uint64),
     )
 
+    shower.metadata = {
+        "subdetector": np.array(
+            [0, 0, 1, 1],
+            dtype=np.int64,
+        ),
+        "subdetector_names": [
+            "EcalCollection",
+            "HcalCollection",
+        ],
+    }
+
     result = MergeWithinRegularSubcell(
         layout=[_simple_layout()],
         # x_bins=[2],
@@ -133,6 +144,17 @@ def test_regular_grid_weighted_splits_one_cell_into_four_subcells_multi_collecti
         ),
     )
 
+    shower.metadata = {
+        "subdetector": np.array(
+            [0, 0, 1, 1],
+            dtype=np.int64,
+        ),
+        "subdetector_names": [
+            "EcalCollection",
+            "HcalCollection",
+        ],
+    }
+
     result = MergeWithinRegularSubcell(
         layout=[layout_ecal, layout_hcal],
         # x_bins=[2, 2],
@@ -170,6 +192,17 @@ def test_regular_grid_center_mode_places_outputs_at_subcell_centers_multi_collec
             dtype=np.uint64,
         ),
     )
+
+    shower.metadata = {
+        "subdetector": np.array(
+            [0, 0, 0, 0, 1, 1, 1, 1],
+            dtype=np.int64,
+        ),
+        "subdetector_names": [
+            "ECalBarrelCollection",
+            "HCalBarrelCollection",
+        ],
+    }
 
     result = MergeWithinRegularSubcell(
         layout=[layout_ecal, layout_hcal],
