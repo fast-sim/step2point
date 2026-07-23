@@ -58,6 +58,23 @@ Optional:
 
 This algorithm assumes a `cell_id` can be decoded to define the unmergeable points. It first groups deposits according to a configurable `merge_scope`, and then runs HDBSCAN independently inside each group. The grouping fields are extracted from the cell ID through an explicit cell-id decoding rule, either from a supplied encoding string or derived from the compact XML for one or more readout collections. Within each group the x/y/z coordinates are divided by a spatial scale (default 5 mm, roughly one cell width). If time is used (and available), it is expressed relative to the group median and divided by a temporal scale (default 1 ns), and HDBSCAN clusters on the four scaled coordinates `(x, y, z, t)`; otherwise it clusters on `(x, y, z)` only. Deposits that HDBSCAN labels as noise (label -1) are reassigned to their nearest cluster, ensuring energy conservation.
 
+Near-equal distances can move an HDBSCAN cluster boundary slightly across CPU, linear-algebra, or operating-system
+environments, even with fixed package versions and single-threaded execution. The required hosted-CI check is therefore
+a strengthened loose regression instead of an exact output-row comparison. Its with-time case compares shower IDs and
+compression closely, verifies energy conservation, and checks energy-weighted centroids, moments, and
+longitudinal/radial/time profiles against the committed reference. The without-time case uses broader invariant ranges
+because it has no committed reference. The point-by-point strict test also runs in CI, uploads diagnostic artifacts, and
+uses `continue-on-error` so platform-dependent differences do not block a merge.
+
+The current HDBSCAN with-time loose-regression tolerances are:
+
+- total output point count: within 0.5% of the reference
+- output point count for each shower: within 2% of the reference
+- total energy for each shower: absolute tolerance of `1e-7`
+- energy-weighted centroid: within 0.01 mm spatially and 0.001 ns in time
+- first and second longitudinal, radial, and time moments: within 0.5%
+- normalized L1 distance for each 8-bin longitudinal, radial, and time profile: at most 0.02
+
 `merge_scope` defines which deposits are allowed to cluster together:
 
 - `none`: no detector boundary is enforced; all deposits are clustered together

@@ -17,7 +17,7 @@ pytestmark = pytest.mark.strict_regression
 
 @pytest.mark.skipif(
     os.environ.get("STEP2POINT_ENABLE_STRICT_HDBSCAN") != "1",
-    reason="strict HDBSCAN regression is only enabled in the dedicated pinned CI job",
+    reason="strict HDBSCAN regression runs only in the non-blocking diagnostic job or by explicit opt-in",
 )
 def test_hdbscan_output_matches_reference_with_time(tmp_path):
     outdir = run_pipeline(

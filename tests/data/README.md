@@ -14,7 +14,16 @@
   - `--use-time`
   - cell-id decoding rule:
     `system:8,barrel:3,module:4,stave:1,layer:6,slice:5,x:32:-16,y:-16`
-  - loose regressions cover both `with_time` and `without_time`
+  - the blocking loose regression compares the with-time result's shower IDs, compression, energy-weighted centroids,
+    moments, and longitudinal/radial/time profiles with narrow tolerances instead of comparing point rows
+    - point counts: 0.5% total and 2% per shower
+    - total energy per shower: `1e-7` absolute tolerance
+    - centroids: 0.01 mm spatial and 0.001 ns time absolute tolerance
+    - first/second moments: 0.5% relative tolerance
+    - normalized 8-bin profile L1 distance: at most 0.02
+  - the without-time loose case uses broader invariant/range checks because it has no committed reference
+  - the point-by-point strict reference check runs as a non-blocking CI diagnostic because HDBSCAN cluster boundaries can
+    vary slightly across platforms; its output artifacts remain available for investigation
 - `ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_cluster_within_cell_reference.h5` is the committed reference output for `cluster_within_cell` on the ODD gamma sample with:
   - `AgglomerativeClustering`
     - `distance_threshold=1.`

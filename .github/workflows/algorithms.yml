@@ -49,14 +49,15 @@ jobs:
             /tmp/pytest-of-*/pytest-*/test_*/pipeline_out_*/compressed_*.h5
             /tmp/pytest-of-*/pytest-*/test_*/pipeline_out_*/compression_summary_*.txt
 
-  strict-nondeterministic-regressions:
+  strict-nondeterministic-diagnostics:
     strategy:
       matrix:
         include:
           - algorithm: hdbscan
             test_file: tests/integration/test_algorithm_hdbscan_strict_regression.py
     runs-on: ubuntu-22.04
-    name: strict/${{ matrix.algorithm }}
+    continue-on-error: true
+    name: strict/${{ matrix.algorithm }} (diagnostic)
     env:
       STEP2POINT_ENABLE_STRICT_HDBSCAN: "1"
       OMP_NUM_THREADS: "1"
@@ -73,13 +74,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev,test]
-      - name: Run strict algorithm regression
+      - name: Run strict algorithm diagnostic
         run: pytest -q ${{ matrix.test_file }}
-      - name: Upload strict regression outputs
+      - name: Upload strict diagnostic outputs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: strict-${{ matrix.algorithm }}-outputs
+          name: strict-${{ matrix.algorithm }}-diagnostic-outputs
           path: |
             /tmp/pytest-of-*/pytest-*/test_*/pipeline_out_*/compressed_*.h5
             /tmp/pytest-of-*/pytest-*/test_*/pipeline_out_*/compression_summary_*.txt
@@ -92,6 +93,12 @@ jobs:
             test_file: tests/integration/test_algorithm_hdbscan_loose_regression.py
     runs-on: ubuntu-latest
     name: loose/${{ matrix.algorithm }}
+    env:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

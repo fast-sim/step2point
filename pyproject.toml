@@ -44,7 +44,7 @@ markers = [
   "root: tests that require podio/edm4hep ROOT input",
   "odd_geometry: tests that require an OpenDataDetector checkout",
   "strict_regression: exact reference regression tests",
-  "loose_regression: range- and invariant-based regression tests for nondeterministic algorithms",
+  "loose_regression: tolerant physics-reference and invariant regressions for nondeterministic algorithms",
 ]
 
 [tool.ruff]
