@@ -260,7 +260,12 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                 sub_x[mask] = sub_x_mask
                 sub_y[mask] = sub_y_mask
 
-                sub_tangent_center = _subcell_center(cell_x[local_mask], sub_x_mask, layer.pitch_tangent_mm, self.x_bins[coll_idx])
+                sub_tangent_center = _subcell_center(
+                    cell_x[local_mask], 
+                    sub_x_mask, 
+                    layer.pitch_tangent_mm, 
+                    self.x_bins[coll_idx],
+                )
                 sub_long_center = _subcell_center(cell_y[local_mask], sub_y_mask, layer.pitch_z_mm, self.y_bins[coll_idx])
 
                 center_xy_mask = sensitive_center_xy + sub_tangent_center[:, None] * tangent[None, :]

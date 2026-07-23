@@ -68,7 +68,7 @@ def test_merge_within_regular_subcell_weighted_3x3_output_matches_reference_mult
 
     assert_summary_equals(
         outdir / "compression_summary_merge_within_regular_subcell.txt",
-        "merge_within_regular_subcell_weighted_3x3",
+        "merge_within_regular_subcell_weighted_3x3_multi",
     )
 
     assert_showers_equal(

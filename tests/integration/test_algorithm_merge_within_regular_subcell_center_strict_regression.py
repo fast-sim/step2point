@@ -68,7 +68,7 @@ def test_merge_within_regular_subcell_center_multi_collections(tmp_path):
 
     assert_summary_equals(
         outdir / "compression_summary_merge_within_regular_subcell.txt",
-        "merge_within_regular_subcell_center_3x3",
+        "merge_within_regular_subcell_center_3x3_multi",
     )
 
     assert_showers_equal(
