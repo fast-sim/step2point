@@ -74,9 +74,55 @@ It should reduce complexity while preserving the observables that matter for cal
 
 At the same time, some quantities are expected to change by construction, especially the number of points and the individual point-energy spectrum.
 
-![benchmark panel](assets/images/benchmark_panel.svg){ .benchmark-figure }
+### What changes — and what should stay stable
 
-Picture above is just a synthetic visualisation. For results on showers see **Validation**.
+<div class="benchmark-panel">
+  <section class="benchmark-card benchmark-card--change">
+    <span class="benchmark-badge">EXPECTED TO CHANGE</span>
+    <h4>Point representation</h4>
+    <figure>
+    <img src="assets/images/hdbscan_benchmark/point_energy_spectrum.png" alt="Measured point-energy spectra before and after HDBSCAN compression">
+      <figcaption>The point-energy spectrum shifts as deposits are merged into a smaller representation.</figcaption>
+    </figure>
+    <div class="benchmark-more">
+      <span class="benchmark-plus" aria-hidden="true">+</span>
+      <div>
+        <strong>Other changing observables</strong>
+        <ul>
+          <li>point count and compression ratio</li>
+          <li>individual point positions</li>
+          <li>cluster assignments and representative cell IDs</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="benchmark-card benchmark-card--stable">
+    <span class="benchmark-badge">SHOULD REMAIN STABLE</span>
+    <h4>Transverse shower structure</h4>
+    <figure>
+    <img src="assets/images/hdbscan_benchmark/radial_profile.png" alt="Measured radial energy profiles before and after HDBSCAN compression">
+      <figcaption>The energy-weighted transverse profile remains aligned with the detailed-step reference.</figcaption>
+    </figure>
+    <div class="benchmark-more">
+      <span class="benchmark-plus" aria-hidden="true">+</span>
+      <div>
+        <strong>Other stable observables</strong>
+        <ul>
+          <li>total deposited energy</li>
+          <li>longitudinal and time profiles</li>
+          <li>energy-weighted centroids and moments</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</div>
+
+<p class="benchmark-source">
+Real output from the HDBSCAN regression example in
+<a href="https://github.com/fast-sim/step2point/blob/main/tests/integration/test_algorithm_hdbscan_loose_regression.py"><code>test_algorithm_hdbscan_loose_regression.py</code></a>;
+regenerate it with the <a href="validation/#validation-plot-generation">validation plotting workflow</a>.
+</p>
 
 ## Quickstart
 

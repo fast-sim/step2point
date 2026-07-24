@@ -8,6 +8,8 @@ from pathlib import Path
 import numpy as np
 
 from step2point.io.step2point_hdf5 import Step2PointHDF5Reader
+from step2point.metrics.shower_shapes import weighted_moment
+from step2point.metrics.spatial import estimate_shower_axis, longitudinal_radial_phi
 
 DATA = Path("tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5")
 MERGE_REFERENCE = Path("tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_merge_within_cell_reference.h5")
@@ -89,6 +91,156 @@ def assert_showers_equal(left_path: Path, right_path: Path) -> None:
             assert lhs.pdg is rhs.pdg
         else:
             np.testing.assert_array_equal(lhs.pdg, rhs.pdg)
+
+
+def _reference_origin_and_axis(shower) -> tuple[np.ndarray, np.ndarray]:
+    primary = shower.primary or {}
+    vertex = np.asarray(primary.get("vertex"), dtype=np.float64)
+    momentum = np.asarray(primary.get("momentum"), dtype=np.float64)
+    momentum_norm = np.linalg.norm(momentum)
+    if vertex.shape == (3,) and momentum.shape == (3,) and np.all(np.isfinite(vertex)) and np.isfinite(momentum_norm):
+        if momentum_norm > 0.0:
+            return vertex, momentum / momentum_norm
+    return estimate_shower_axis(shower)
+
+
+def _energy_weighted_centroid(shower) -> np.ndarray:
+    coordinates = np.column_stack((shower.x, shower.y, shower.z)).astype(np.float64)
+    return np.average(coordinates, axis=0, weights=np.asarray(shower.E, dtype=np.float64))
+
+
+def _normalized_profile_l1(
+    reference_values: np.ndarray,
+    reference_weights: np.ndarray,
+    output_values: np.ndarray,
+    output_weights: np.ndarray,
+    *,
+    bins: int,
+) -> float:
+    edges = np.histogram_bin_edges(reference_values, bins=bins).astype(np.float64)
+    edges[0] = -np.inf
+    edges[-1] = np.inf
+    reference_histogram, _ = np.histogram(reference_values, bins=edges, weights=reference_weights)
+    output_histogram, _ = np.histogram(output_values, bins=edges, weights=output_weights)
+    normalization = np.sum(np.abs(reference_histogram), dtype=np.float64)
+    assert normalization > 0.0
+    return float(np.sum(np.abs(reference_histogram - output_histogram), dtype=np.float64) / normalization)
+
+
+def assert_reference_physics_observables_close(
+    reference_path: Path,
+    output_path: Path,
+    *,
+    max_total_point_fraction: float,
+    max_shower_point_fraction: float,
+    spatial_centroid_atol: float,
+    time_centroid_atol: float,
+    moment_rtol: float,
+    max_profile_l1: float,
+    profile_bins: int = 8,
+) -> None:
+    """Compare stable shower observables without requiring identical clusters."""
+    reference_showers = list(Step2PointHDF5Reader(str(reference_path)).iter_showers())
+    output_showers = list(Step2PointHDF5Reader(str(output_path)).iter_showers())
+    assert len(reference_showers) == len(output_showers)
+
+    reference_total_points = sum(shower.n_points for shower in reference_showers)
+    output_total_points = sum(shower.n_points for shower in output_showers)
+    total_point_fraction = abs(output_total_points - reference_total_points) / reference_total_points
+    assert total_point_fraction <= max_total_point_fraction, (
+        f"total point-count difference {total_point_fraction:.6g} exceeds {max_total_point_fraction:.6g}"
+    )
+
+    for reference, output in zip(reference_showers, output_showers, strict=True):
+        assert reference.shower_id == output.shower_id
+        point_fraction = abs(output.n_points - reference.n_points) / reference.n_points
+        assert point_fraction <= max_shower_point_fraction, (
+            f"shower {reference.shower_id} point-count difference {point_fraction:.6g} "
+            f"exceeds {max_shower_point_fraction:.6g}"
+        )
+
+        reference_energy = np.asarray(reference.E, dtype=np.float64)
+        output_energy = np.asarray(output.E, dtype=np.float64)
+        np.testing.assert_allclose(
+            np.sum(output_energy),
+            np.sum(reference_energy),
+            rtol=FLOAT_LOOSE_RTOL,
+            atol=FLOAT_LOOSE_ATOL,
+            err_msg=f"shower {reference.shower_id} total energy differs from reference",
+        )
+        np.testing.assert_allclose(
+            _energy_weighted_centroid(output),
+            _energy_weighted_centroid(reference),
+            rtol=0.0,
+            atol=spatial_centroid_atol,
+            err_msg=f"shower {reference.shower_id} spatial centroid differs from reference",
+        )
+
+        origin, axis = _reference_origin_and_axis(reference)
+        reference_longitudinal, reference_radial, _ = longitudinal_radial_phi(reference, centroid=origin, axis=axis)
+        output_longitudinal, output_radial, _ = longitudinal_radial_phi(output, centroid=origin, axis=axis)
+        reference_moments = {
+            "longitudinal_m1": weighted_moment(reference_longitudinal, reference_energy, 1),
+            "longitudinal_m2": weighted_moment(reference_longitudinal, reference_energy, 2),
+            "radial_m1": weighted_moment(reference_radial, reference_energy, 1),
+            "radial_m2": weighted_moment(reference_radial, reference_energy, 2),
+        }
+        output_moments = {
+            "longitudinal_m1": weighted_moment(output_longitudinal, output_energy, 1),
+            "longitudinal_m2": weighted_moment(output_longitudinal, output_energy, 2),
+            "radial_m1": weighted_moment(output_radial, output_energy, 1),
+            "radial_m2": weighted_moment(output_radial, output_energy, 2),
+        }
+        profiles = {
+            "longitudinal": (reference_longitudinal, output_longitudinal),
+            "radial": (reference_radial, output_radial),
+        }
+
+        assert (reference.t is None) == (output.t is None)
+        if reference.t is not None and output.t is not None:
+            reference_time = np.asarray(reference.t, dtype=np.float64)
+            output_time = np.asarray(output.t, dtype=np.float64)
+            np.testing.assert_allclose(
+                np.average(output_time, weights=output_energy),
+                np.average(reference_time, weights=reference_energy),
+                rtol=0.0,
+                atol=time_centroid_atol,
+                err_msg=f"shower {reference.shower_id} time centroid differs from reference",
+            )
+            reference_moments.update(
+                {
+                    "time_m1": weighted_moment(reference_time, reference_energy, 1),
+                    "time_m2": weighted_moment(reference_time, reference_energy, 2),
+                }
+            )
+            output_moments.update(
+                {
+                    "time_m1": weighted_moment(output_time, output_energy, 1),
+                    "time_m2": weighted_moment(output_time, output_energy, 2),
+                }
+            )
+            profiles["time"] = (reference_time, output_time)
+
+        for name, expected in reference_moments.items():
+            np.testing.assert_allclose(
+                output_moments[name],
+                expected,
+                rtol=moment_rtol,
+                atol=FLOAT_LOOSE_ATOL,
+                err_msg=f"shower {reference.shower_id} {name} differs from reference",
+            )
+
+        for name, (reference_values, output_values) in profiles.items():
+            distance = _normalized_profile_l1(
+                reference_values,
+                reference_energy,
+                output_values,
+                output_energy,
+                bins=profile_bins,
+            )
+            assert distance <= max_profile_l1, (
+                f"shower {reference.shower_id} {name} profile L1 distance {distance:.6g} exceeds {max_profile_l1:.6g}"
+            )
 
 
 def assert_summary_equals(summary_path: Path, case: str) -> None:
