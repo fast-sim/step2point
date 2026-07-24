@@ -112,13 +112,36 @@
   padding: 1.2rem;
   margin: 1.2rem 0 1.6rem;
 }
-.md-typeset .benchmark-figure,
 .md-typeset .picture-frame {
   border-radius: 1.1rem;
   box-shadow: var(--step2point-card-shadow);
   background: linear-gradient(135deg, rgba(247,249,252,0.94), rgba(238,243,255,0.98));
   padding: 0.35rem;
   margin: 1rem 0 1.5rem;
+}
+.md-typeset .benchmark-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1.2rem 0 1.5rem;
+}
+.md-typeset .benchmark-grid figure {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--step2point-line);
+  border-radius: 0.65rem;
+  background: white;
+}
+.md-typeset .benchmark-grid img {
+  display: block;
+  width: 100%;
+  margin: 0;
+}
+.md-typeset .benchmark-grid figcaption {
+  padding: 0.7rem 0.85rem 0.8rem;
+  color: #334155;
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 .md-typeset .picture-grid {
   display: grid;
@@ -161,6 +184,7 @@
 }
 @media screen and (max-width: 76.2344em) {
   .md-typeset .hero-grid,
+  .md-typeset .benchmark-grid,
   .md-typeset .picture-grid,
   .md-typeset .stats-strip {
     grid-template-columns: 1fr;
