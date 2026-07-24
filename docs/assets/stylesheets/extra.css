@@ -119,29 +119,99 @@
   padding: 0.35rem;
   margin: 1rem 0 1.5rem;
 }
-.md-typeset .benchmark-grid {
+.md-typeset .benchmark-panel {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
+  padding: 1rem;
   margin: 1.2rem 0 1.5rem;
+  border: 1px solid var(--step2point-line);
+  border-radius: 1rem;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.06), rgba(14, 165, 163, 0.06));
 }
-.md-typeset .benchmark-grid figure {
+.md-typeset .benchmark-card {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  border: 1px solid var(--step2point-line);
+  border-radius: 0.75rem;
+  background: var(--md-default-bg-color);
+}
+.md-typeset .benchmark-card--change {
+  border-top: 4px solid #c2410c;
+}
+.md-typeset .benchmark-card--stable {
+  border-top: 4px solid #047857;
+}
+.md-typeset .benchmark-badge {
+  align-self: flex-start;
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+}
+.md-typeset .benchmark-card--change .benchmark-badge {
+  color: #9a3412;
+  background: #ffedd5;
+}
+.md-typeset .benchmark-card--stable .benchmark-badge {
+  color: #047857;
+  background: #d1fae5;
+}
+.md-typeset .benchmark-card h4 {
+  margin: 0.75rem 0;
+}
+.md-typeset .benchmark-card figure {
   margin: 0;
   overflow: hidden;
   border: 1px solid var(--step2point-line);
-  border-radius: 0.65rem;
+  border-radius: 0.5rem;
   background: white;
 }
-.md-typeset .benchmark-grid img {
+.md-typeset .benchmark-card img {
   display: block;
   width: 100%;
   margin: 0;
 }
-.md-typeset .benchmark-grid figcaption {
+.md-typeset .benchmark-card figcaption {
   padding: 0.7rem 0.85rem 0.8rem;
-  color: #334155;
+  color: var(--md-default-fg-color--light);
   font-size: 0.82rem;
+  font-style: normal;
   line-height: 1.45;
+}
+.md-typeset .benchmark-more {
+  display: grid;
+  grid-template-columns: 2.6rem minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: start;
+  margin-top: 0.9rem;
+}
+.md-typeset .benchmark-plus {
+  font-size: 2.8rem;
+  font-weight: 300;
+  line-height: 0.8;
+}
+.md-typeset .benchmark-card--change .benchmark-plus {
+  color: #c2410c;
+}
+.md-typeset .benchmark-card--stable .benchmark-plus {
+  color: #047857;
+}
+.md-typeset .benchmark-more strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.84rem;
+}
+.md-typeset .benchmark-more ul {
+  margin: 0 0 0 1rem;
+  font-size: 0.79rem;
+}
+.md-typeset .benchmark-source {
+  margin-top: -0.4rem;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.78rem;
 }
 .md-typeset .picture-grid {
   display: grid;
@@ -184,7 +254,7 @@
 }
 @media screen and (max-width: 76.2344em) {
   .md-typeset .hero-grid,
-  .md-typeset .benchmark-grid,
+  .md-typeset .benchmark-panel,
   .md-typeset .picture-grid,
   .md-typeset .stats-strip {
     grid-template-columns: 1fr;
