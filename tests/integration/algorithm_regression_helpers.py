@@ -17,6 +17,12 @@ REGULAR_SUBCELL_WEIGHTED_REFERENCE = Path(
 REGULAR_SUBCELL_CENTER_REFERENCE = Path(
     "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_merge_within_regular_subcell_3x3_center_reference.h5"
 )
+REGULAR_SUBCELL_WEIGHTED_MULTI_REFERENCE = Path(
+    "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_merge_within_regular_subcell_3x3_weighted_multi_reference.h5"
+)
+REGULAR_SUBCELL_CENTER_MULTI_REFERENCE = Path(
+    "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_merge_within_regular_subcell_3x3_center_multi_reference.h5"
+)
 HDBSCAN_REFERENCE = Path(
     "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_hdbscan_reference.h5"
 )

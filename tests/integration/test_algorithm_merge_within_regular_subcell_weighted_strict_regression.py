@@ -4,6 +4,7 @@ import pytest
 
 from tests.integration.algorithm_regression_helpers import (
     REGULAR_SUBCELL_WEIGHTED_REFERENCE,
+    REGULAR_SUBCELL_WEIGHTED_MULTI_REFERENCE,
     assert_showers_equal,
     assert_summary_equals,
     find_odd_xml,
@@ -72,6 +73,6 @@ def test_merge_within_regular_subcell_weighted_3x3_output_matches_reference_mult
     )
 
     assert_showers_equal(
-        REGULAR_SUBCELL_WEIGHTED_REFERENCE,
+        REGULAR_SUBCELL_WEIGHTED_MULTI_REFERENCE,
         outdir / "compressed_merge_within_regular_subcell.h5",
     )

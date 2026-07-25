@@ -4,6 +4,7 @@ import pytest
 
 from tests.integration.algorithm_regression_helpers import (
     REGULAR_SUBCELL_CENTER_REFERENCE,
+    REGULAR_SUBCELL_CENTER_MULTI_REFERENCE,
     assert_showers_equal,
     assert_summary_equals,
     find_odd_xml,
@@ -72,6 +73,6 @@ def test_merge_within_regular_subcell_center_multi_collections(tmp_path):
     )
 
     assert_showers_equal(
-        REGULAR_SUBCELL_CENTER_REFERENCE,
+        REGULAR_SUBCELL_CENTER_MULTI_REFERENCE,
         outdir / "compressed_merge_within_regular_subcell.h5",
     )
