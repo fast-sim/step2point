@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from tests.integration.algorithm_regression_helpers import (
-    REGULAR_SUBCELL_WEIGHTED_REFERENCE,
     REGULAR_SUBCELL_WEIGHTED_MULTI_REFERENCE,
+    REGULAR_SUBCELL_WEIGHTED_REFERENCE,
     assert_showers_equal,
     assert_summary_equals,
     find_odd_xml,
