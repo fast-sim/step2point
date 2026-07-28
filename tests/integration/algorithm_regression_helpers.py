@@ -19,6 +19,12 @@ REGULAR_SUBCELL_WEIGHTED_REFERENCE = Path(
 REGULAR_SUBCELL_CENTER_REFERENCE = Path(
     "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_merge_within_regular_subcell_3x3_center_reference.h5"
 )
+REGULAR_SUBCELL_WEIGHTED_MULTI_REFERENCE = Path(
+    "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_merge_within_regular_subcell_3x3_weighted_multi_reference.h5"
+)
+REGULAR_SUBCELL_CENTER_MULTI_REFERENCE = Path(
+    "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_merge_within_regular_subcell_3x3_center_multi_reference.h5"
+)
 HDBSCAN_REFERENCE = Path(
     "tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV_hdbscan_reference.h5"
 )
@@ -271,22 +277,44 @@ def assert_summary_equals(summary_path: Path, case: str) -> None:
             "compression_stats=10\n"
             "validation_results=30\n"
             "mean_n_points_before=3582.000000\n"
-            "mean_n_points_after=655.000000\n"
-            "mean_compression_ratio=0.183212\n"
+            "mean_n_points_after=658.800000\n"
+            "mean_compression_ratio=0.184311\n"
             "total_n_points_before=35820\n"
-            "total_n_points_after=6550\n"
-            "total_compression_ratio=0.182859\n"
+            "total_n_points_after=6588\n"
+            "total_compression_ratio=0.183920\n"
             "output_hdf5=compressed_merge_within_regular_subcell.h5\n"
         ),
         "merge_within_regular_subcell_center_3x3": (
             "compression_stats=10\n"
             "validation_results=30\n"
             "mean_n_points_before=3582.000000\n"
-            "mean_n_points_after=655.000000\n"
-            "mean_compression_ratio=0.183212\n"
+            "mean_n_points_after=658.800000\n"
+            "mean_compression_ratio=0.184311\n"
             "total_n_points_before=35820\n"
-            "total_n_points_after=6550\n"
-            "total_compression_ratio=0.182859\n"
+            "total_n_points_after=6588\n"
+            "total_compression_ratio=0.183920\n"
+            "output_hdf5=compressed_merge_within_regular_subcell.h5\n"
+        ),
+        "merge_within_regular_subcell_weighted_3x3_multi":(
+            "compression_stats=10\n"
+            "validation_results=30\n"
+            "mean_n_points_before=3582.000000\n"
+            "mean_n_points_after=655.900000\n"
+            "mean_compression_ratio=0.183464\n"
+            "total_n_points_before=35820\n"
+            "total_n_points_after=6559\n"
+            "total_compression_ratio=0.183110\n"
+            "output_hdf5=compressed_merge_within_regular_subcell.h5\n"
+        ),
+        "merge_within_regular_subcell_center_3x3_multi":(
+            "compression_stats=10\n"
+            "validation_results=30\n"
+            "mean_n_points_before=3582.000000\n"
+            "mean_n_points_after=655.900000\n"
+            "mean_compression_ratio=0.183464\n"
+            "total_n_points_before=35820\n"
+            "total_n_points_after=6559\n"
+            "total_compression_ratio=0.183110\n"
             "output_hdf5=compressed_merge_within_regular_subcell.h5\n"
         ),
         "hdbscan": (

@@ -171,103 +171,102 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
         center_y = np.full(n_points, np.nan, dtype=np.float64)
         center_z = np.full(n_points, np.nan, dtype=np.float64)
         processed = np.zeros(n_points, dtype=bool)  # check if all points are processed
+        selected = np.zeros(n_points, dtype=bool)
 
         xy = np.stack([shower.x, shower.y], axis=1).astype(np.float64)
 
-        if len(self.layout) > 1:
-            for coll_idx, collection in enumerate(self.collection_name):
-                decoded = [
-                    decode_dd4hep_cell_id(
-                        int(cell_id),
-                        self.layout[coll_idx].cell_id_encoding,
-                    )
-                    for cell_id in shower.cell_id
-                ]
-                systems = np.asarray([item["system"] for item in decoded], dtype=np.int32)
-                modules = np.asarray([item["module"] for item in decoded], dtype=np.int32)
-                layers = np.asarray([item["layer"] for item in decoded], dtype=np.int32)
-                cell_x = np.asarray([item["x"] for item in decoded], dtype=np.int32)
-                cell_y = np.asarray([item["y"] for item in decoded], dtype=np.int32)
+        subdetector_names = shower.metadata.get("subdetector_names", [])
+        MAP = {name: isub for isub, name in enumerate(subdetector_names)}
+        subdetectors = shower.metadata.get("subdetector")
+        if subdetectors is None:
+            raise ValueError(
+                "Multiple cell_id encodings were provided, but shower.metadata['subdetector'] is absent."
+            )
+        subdetectors = np.asarray(subdetectors, dtype=np.int64)
+        for coll_idx, collection in enumerate(self.collection_name):
+            if collection not in MAP:
+                raise ValueError(
+                    f"Collection {collection} not found"
+                )
 
-                ### mask out any cellids that don't belong to the detector corresponding to this collection
-                system_mask = ~processed if coll_idx == 0 else (systems == self.layout[coll_idx].det_id) & (~processed)
+            subdet_id = MAP[collection]
 
-                if not np.any(system_mask):
-                    # skip the empty collection
-                    continue
+            # global indices of hits belonging to this collection
+            collection_mask = subdetectors == subdet_id
+            selected |= collection_mask
+            global_indices = np.where(
+                collection_mask & (~processed)
+            )[0]
 
-                unique_ml = np.unique(np.stack([systems[system_mask], modules[system_mask], layers[system_mask]], axis=1), axis=0)
-                for system_index, module_index, layer_index in unique_ml:
-                    mask = system_mask & (modules == module_index) & (layers == layer_index)
-                    layer = self.layout[coll_idx].layers[layer_index - 1]
-                    sensitive_center_xy = barrel_sensitive_plane_center_xy(
-                        self.layout[coll_idx],
-                        int(layer_index),
-                        int(module_index),
-                    )
-                    _, _, tangent = barrel_module_basis(self.layout[coll_idx], int(layer_index), int(module_index))
+            if len(global_indices) == 0:
+                continue
 
-                    tangent_local = (xy[mask] - sensitive_center_xy) @ tangent
-                    long_local = shower.z[mask].astype(np.float64)
-
-                    parent_tangent = cell_x[mask].astype(np.float64) * layer.pitch_tangent_mm
-                    parent_long = cell_y[mask].astype(np.float64) * layer.pitch_z_mm
-
-                    sub_x_mask = _subcell_indices(
-                        tangent_local - parent_tangent,
-                        layer.pitch_tangent_mm,
-                        self.x_bins[coll_idx],
-                    )
-                    sub_y_mask = _subcell_indices(
-                        long_local - parent_long,
-                        layer.pitch_z_mm,
-                        self.y_bins[coll_idx],
-                    )
-                    sub_x[mask] = sub_x_mask
-                    sub_y[mask] = sub_y_mask
-
-                    sub_tangent_center = _subcell_center(cell_x[mask], sub_x_mask, layer.pitch_tangent_mm, self.x_bins[coll_idx])
-                    sub_long_center = _subcell_center(cell_y[mask], sub_y_mask, layer.pitch_z_mm, self.y_bins[coll_idx])
-
-                    center_xy_mask = sensitive_center_xy + sub_tangent_center[:, None] * tangent[None, :]
-                    center_x[mask] = center_xy_mask[:, 0]
-                    center_y[mask] = center_xy_mask[:, 1]
-                    center_z[mask] = sub_long_center
-                    processed[mask] = True
-        else:
-            decoded = [decode_dd4hep_cell_id(int(cell_id), self.layout[0].cell_id_encoding) for cell_id in shower.cell_id]
+            decoded = [
+                decode_dd4hep_cell_id(
+                    int(shower.cell_id[index]),
+                    self.layout[coll_idx].cell_id_encoding,
+                )
+                for index in global_indices
+            ]
+            systems = np.asarray([item["system"] for item in decoded], dtype=np.int32)
             modules = np.asarray([item["module"] for item in decoded], dtype=np.int32)
             layers = np.asarray([item["layer"] for item in decoded], dtype=np.int32)
             cell_x = np.asarray([item["x"] for item in decoded], dtype=np.int32)
             cell_y = np.asarray([item["y"] for item in decoded], dtype=np.int32)
-            unique_ml = np.unique(np.stack([modules, layers], axis=1), axis=0)
-            for module_index, layer_index in unique_ml:
-                mask = (modules == module_index) & (layers == layer_index)
-                layer = self.layout[0].layers[layer_index - 1]
-                sensitive_center_xy = barrel_sensitive_plane_center_xy(self.layout[0], int(layer_index), int(module_index))
-                _, _, tangent = barrel_module_basis(self.layout[0], int(layer_index), int(module_index))
+
+            unique_ml = np.unique(
+                np.stack(
+                    [
+                        systems,
+                        modules,
+                        layers,
+                    ],
+                    axis=1,
+                ),
+                axis=0,
+            )
+            for system_index, module_index, layer_index in unique_ml:
+                local_mask = (
+                    (systems == system_index)
+                    & (modules == module_index)
+                    & (layers == layer_index)
+                )
+                mask = np.zeros(n_points, dtype=bool)
+                mask[global_indices[local_mask]] = True       
+                layer = self.layout[coll_idx].layers[layer_index - 1]
+                sensitive_center_xy = barrel_sensitive_plane_center_xy(
+                    self.layout[coll_idx],
+                    int(layer_index),
+                    int(module_index),
+                )
+                _, _, tangent = barrel_module_basis(self.layout[coll_idx], int(layer_index), int(module_index))
 
                 tangent_local = (xy[mask] - sensitive_center_xy) @ tangent
                 long_local = shower.z[mask].astype(np.float64)
 
-                parent_tangent = cell_x[mask].astype(np.float64) * layer.pitch_tangent_mm
-                parent_long = cell_y[mask].astype(np.float64) * layer.pitch_z_mm
+                parent_tangent = cell_x[local_mask].astype(np.float64) * layer.pitch_tangent_mm
+                parent_long = cell_y[local_mask].astype(np.float64) * layer.pitch_z_mm
 
                 sub_x_mask = _subcell_indices(
                     tangent_local - parent_tangent,
                     layer.pitch_tangent_mm,
-                    self.x_bins[0],
+                    self.x_bins[coll_idx],
                 )
                 sub_y_mask = _subcell_indices(
                     long_local - parent_long,
                     layer.pitch_z_mm,
-                    self.y_bins[0],
+                    self.y_bins[coll_idx],
                 )
                 sub_x[mask] = sub_x_mask
                 sub_y[mask] = sub_y_mask
 
-                sub_tangent_center = _subcell_center(cell_x[mask], sub_x_mask, layer.pitch_tangent_mm, self.x_bins[0])
-                sub_long_center = _subcell_center(cell_y[mask], sub_y_mask, layer.pitch_z_mm, self.y_bins[0])
+                sub_tangent_center = _subcell_center(
+                    cell_x[local_mask], 
+                    sub_x_mask, 
+                    layer.pitch_tangent_mm, 
+                    self.x_bins[coll_idx],
+                )
+                sub_long_center = _subcell_center(cell_y[local_mask], sub_y_mask, layer.pitch_z_mm, self.y_bins[coll_idx])
 
                 center_xy_mask = sensitive_center_xy + sub_tangent_center[:, None] * tangent[None, :]
                 center_x[mask] = center_xy_mask[:, 0]
@@ -275,19 +274,54 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
                 center_z[mask] = sub_long_center
                 processed[mask] = True
         
-        # check if all cells are processed- if not raise the error message with the number of unprocessed hits
-        if not np.all(processed):
-            unmatched = np.where(~processed)[0]
-            raise ValueError(
-                f"{len(unmatched)} hits were not processed in MergeWithinRegularSubcell."
+        # process the unselected hits (not belonging to any of the collections)
+        if np.any(~selected):
+            print(
+                f"Warning: {len(~selected)} selected hits were not geometrically processed. "
+                "Keeping their original positions."
             )
+            center_x[~selected] = shower.x[~selected]
+            center_y[~selected] = shower.y[~selected]
+            center_z[~selected] = shower.z[~selected]
 
-        key_dtype = np.dtype([("cell_id", np.uint64), ("sub_x", np.int32), ("sub_y", np.int32)])
+            processed[~selected] = True
+
+        key_dtype = np.dtype([("cell_id", np.uint64), ("sub_x", np.int32), ("sub_y", np.int32), ("unique_id", np.int64)])
         keys = np.empty(n_points, dtype=key_dtype)
         keys["cell_id"] = shower.cell_id
         keys["sub_x"] = sub_x
         keys["sub_y"] = sub_y
+        keys["unique_id"] = 0
+
+        # make unselected hits unique
+        keys["sub_x"][~selected] = -1
+        keys["sub_y"][~selected] = -1
+        keys["unique_id"][~selected] = np.arange(
+            np.sum(~selected),
+            dtype=np.int64,
+        )
         unique_keys, inverse = np.unique(keys, return_inverse=True)
+
+
+        ############################################################
+        # print out checks for merges ##############################
+        subdetector_names = shower.metadata["subdetector_names"]
+
+        for subdet_id in np.unique(subdetectors):
+            hit_mask = subdetectors == subdet_id
+            output_groups = np.unique(inverse[hit_mask])
+
+            print(
+                subdetector_names[subdet_id],
+                "before:",
+                np.sum(hit_mask),
+                "after:",
+                len(output_groups),
+            )
+        ############################################################
+        ############################################################
+            
+
         n_out = len(unique_keys)
 
         e_sum = np.bincount(inverse, weights=shower.E, minlength=n_out)
