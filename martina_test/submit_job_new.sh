@@ -17,7 +17,6 @@ source .venv-key4hep/bin/activate
 # for loop on seed
 mkdir -p outputs/pipeline2_"${algo}"
 
-
 export algo=hdbscan #[identity, merge_within_cell, merge_within_regular_subcell, hdbscan]
 ms=8
 mcs=40

@@ -145,7 +145,7 @@ class DD4hepResolver:
         self._load_recursive(self.main_xml)
         pending: dict[str, str] = {}
         ### Iteratively load constants
-        
+
         pending = {}
 
         for root in self._roots.values():
@@ -154,7 +154,6 @@ class DD4hepResolver:
                 expr = const.attrib.get("value")
                 if name and expr:
                     pending[name] = expr
-
 
         constants = {}
         pending = pending.copy()
@@ -197,11 +196,13 @@ class DD4hepResolver:
                     return XMLNodeRef(path=path, element=detector)
         raise KeyError(f"Detector using readout {readout_name!r} not found under {self.main_xml}")
 
+
 ### Subsitute expresions for variable resolution in xml
 def normalize(expr):
     expr = expr.replace("^", "**")
     expr = re.sub(r"(\d)\s+(\d)", r"\1*\2", expr)
     return expr
+
 
 def get_dd4hep_cell_id_encoding(main_xml: str | Path, collection_name: str) -> str:
     resolver = DD4hepResolver(main_xml)
@@ -267,12 +268,12 @@ def build_barrel_layout_from_collection(main_xml: str | Path, collection_name: s
 
     det_id = int(resolver.constants[det_id_str])
 
-    supported_detectors = {'ODDPolyhedraBarrelCalorimeter', 'DD4hep_PolyhedraBarrelCalorimeter2'}
+    supported_detectors = {"ODDPolyhedraBarrelCalorimeter", "DD4hep_PolyhedraBarrelCalorimeter2"}
 
     if detector.attrib.get("type") not in supported_detectors:
         raise NotImplementedError(
-            f"Only ODDPolyhedraBarrelCalorimeter or DD4hep_PolyhedraBarrelCalorimeter2" 
-            f"is implemented in this prototype, got {detector.attrib.get('type')!r}"
+            "Only ODDPolyhedraBarrelCalorimeter or DD4hep_PolyhedraBarrelCalorimeter2 is "
+            f"implemented in this prototype, got {detector.attrib.get('type')!r}"
         )
 
     seg = readout.find("segmentation")
