@@ -618,21 +618,26 @@ def plot_h5_overlay_histograms(
     # Hit energy (log scale)
     # --------------------------------------------------
     all_energy = np.concatenate([vals for vals, _, _ in energy_data] + [vals for vals, _, _ in extra_energy])
-    bins = np.logspace(np.log10(5e-14), np.log10(all_energy.max()), 40)
+    e_lo = 1e-6
+    bins = np.logspace(np.log10(e_lo), np.log10(all_energy.max()), 80)
 
     fig, ax = plt.subplots(figsize=(8, 6))
 
+    filled_labels = {"identity", "merge within cell"}
+
     for values, label, color in extra_energy:
-        ax.hist(values, bins=bins, density=True, label=label, color=color, **extra_plot_kwargs)
+        if label in filled_labels:
+            ax.hist(values, bins=bins, density=False, label=label, color=color, **extra_plot_kwargs)
+        else:
+            ax.hist(values, bins=bins, density=False, histtype="step", linewidth=2, label=label, color=color)
 
     for values, label, color in energy_data:
-        ax.hist(values, bins=bins, density=True, histtype="step", linewidth=2, label=label, color=color)
+        ax.hist(values, bins=bins, density=False, histtype="step", linewidth=2, label=label, color=color)
 
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_xlabel("Point energy")
-    ax.set_ylabel("Density")
-    ax.set_ylim([1e-2, 3e8])
+    ax.set_xlabel("Point energy [GeV]")
+    ax.set_ylabel("Counts (log)")
     ax.set_title("Point energy distribution")
     ax.legend(fontsize=8, ncol=2)
     fig.tight_layout()

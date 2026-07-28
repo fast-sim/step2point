@@ -27,11 +27,6 @@ from martina_test.metadata import Metadata  # noqa: E402
 # instructions on bash
 # python convert_to_cc3_format.py /path/to/step2point_output.h5
 
-# Point-count cut used when --6kcut is passed (replaces the absolute energy-floor
-# cut): each shower's hits are sorted by energy and truncated to at most this
-# many, keeping the highest-energy hits.
-MAX_POINTS_PER_SHOWER = 6000
-
 
 def compute_boundaries_streaming(input_path, unique_ids, chunk=10_000_000):
     """Compute searchsorted boundaries without loading all of s_evt."""
@@ -190,9 +185,8 @@ def split_to_layers(points, layer_bottom_pos, cell_thickness_global, percent_buf
 
 
 class Transform_pointcloud:
-    def __init__(self, metadata, six_k_cut=False):
+    def __init__(self, metadata):
         self.metadata = metadata
-        self.six_k_cut = six_k_cut
 
     def get_moment_angles(self, xyz_moments):
         def radians_to_degrees(radians):
@@ -458,26 +452,14 @@ class Transform_pointcloud:
             # print(event.shape)
             t = t[inbox_mask]
 
-            if self.six_k_cut:
-                # Point-count cut: sort this shower's hits by energy (descending)
-                # and keep only the MAX_POINTS_PER_SHOWER highest-energy ones,
-                # instead of dropping hits below an absolute energy floor.
-                # Showers with fewer hits than the cap are left untouched.
-                if event.shape[0] > MAX_POINTS_PER_SHOWER:
-                    top_idx = np.argsort(event[:, 3])[::-1][:MAX_POINTS_PER_SHOWER]
-                    event = event[top_idx]
-                    t = t[top_idx]
-                cut_name = "point"
-            else:
-                # energy cut disabled (was 1e-6 GeV) - keep every hit with nonzero energy
-                energy_cut = 1e-6
-                mask = event[:, 3] > energy_cut
-                event = event[mask]
-                t = t[mask]
-                cut_name = "energy"
+            # energy cut disabled (was 1e-6 GeV) - keep every hit with nonzero energy
+            energy_cut = 1e-6
+            mask = event[:, 3] > energy_cut
+            event = event[mask]
+            t = t[mask]
 
             if event.shape[0] == 0:
-                print(f"Event {event_n} has no hits after {cut_name} cut, skipping.")
+                print(f"Event {event_n} has no hits after energy cut, skipping.")
                 continue
 
             event = event[np.argsort(t)]
@@ -524,7 +506,7 @@ def _transform_wrapper(args):
         raise
 
 
-def convert(input_path: str, global_path: str = None, output_folder: str = None, six_k_cut: bool = False):
+def convert(input_path: str, global_path: str = None, output_folder: str = None):
     if global_path is None:
         # print keys and shapes of the input file
         f = h5py.File(input_path, "r")
@@ -646,7 +628,7 @@ def convert(input_path: str, global_path: str = None, output_folder: str = None,
 
     print("Creating CC3 input showers...")
     metadata = Metadata()
-    transform = Transform_pointcloud(metadata, six_k_cut=six_k_cut)
+    transform = Transform_pointcloud(metadata)
     ncpu, batchsize = 64, 512  # 64, 512
 
     iE = incident_energies
@@ -848,22 +830,14 @@ def plot_cog_x_histogram(events, n_showers=1000, out_path=None):
 
 if __name__ == "__main__":
     print(sys.argv)
-    args = sys.argv[1:]
-
-    six_k_cut = "--6kcut" in args
-    if six_k_cut:
-        args.remove("--6kcut")
-
-    output_folder = None
-    if "--pc_save_folder" in args:
-        idx = args.index("--pc_save_folder")
-        output_folder = args[idx + 1]
-        del args[idx : idx + 2]
-
-    if len(args) == 1:
-        convert(args[0], output_folder=output_folder, six_k_cut=six_k_cut)
-    elif len(args) == 2:
-        convert(args[0], global_path=args[1], output_folder=output_folder, six_k_cut=six_k_cut)
+    if len(sys.argv) == 2:
+        convert(sys.argv[1])
+    elif len(sys.argv) == 3:
+        convert(sys.argv[1], global_path=sys.argv[2])
+    elif len(sys.argv) == 5 and "--pc_save_folder" in sys.argv:
+        convert(sys.argv[1], global_path=sys.argv[2], output_folder=sys.argv[4])
+    elif len(sys.argv) < 5 and "--pc_save_folder" in sys.argv:
+        convert(sys.argv[1], output_folder=sys.argv[3])
     else:
-        print("Usage: python convert_to_cc3_format.py input.h5 [global_path] [--pc_save_folder output_folder] [--6kcut]")
+        print("Usage: python convert_to_cc3_format.py input.h5 global_path (optional) --pc_save_folder (optional)")
         sys.exit(1)
