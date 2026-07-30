@@ -51,7 +51,7 @@ for seed in {16..27}; do
     python examples/run_step2point_pipeline.py \
       --input /eos/project/f/fast/edm4hep_frombenchmark/sim-E1261AT600AP180-180_file_${seed}.edm4hep.root \
       --algorithm "$algo" \
-      --output /eos/project/f/fast/step2point_files/pipeline2_"${algo}""${name}"_9x/file_"${seed}" \
+      --output /eos/project/f/fast/step2point_files/pipeline2_"${algo}""${name}"/file_"${seed}" \
       --collections EcalBarrelCollection \
       "${extra_args[@]}"
 done
@@ -79,24 +79,22 @@ python examples/render_shower_display.py \
   --out outputs/pipeline2_"${algo}""${name}"/file_"${seed}"/shower${index}.png
 
 # ----------------------------------------------------
-# convert to cc3 format
+for seed in {1..15}; do
+    python martina_test/convert_to_cc3_format.py /eos/project/f/fast/step2point_files/pipeline2_"${algo}""${name}"/file_"${seed}"/compressed_"${algo}".h5
+done
+
+# convert to cc3 format for 6k cut --------
 for seed in {1..15}; do
     python martina_test/convert_to_cc3_format.py /eos/project/f/fast/step2point_files/pipeline2_"${algo}""${name}"/file_"${seed}"/compressed_"${algo}".h5 /eos/project/f/fast/step2point_files/pipeline2_"${algo}""${name}"/file_"${seed}"/compressed_"${algo}".input_global_cc3.h5 --pc_save_folder /eos/user/m/mamozzan/step2point/outputs/cc3input_merge_within_regular_subcell_6kcut --6kcut
 done
-export seed=0
 
-# test_small isn't seed-indexed (file_N), so convert_to_cc3_format.py's
-# default output-path logic can't parse a seed out of the parent dir name -
-# use --pc_save_folder to write into the same per-algorithm folder as the
-# seeded runs; the output filename is derived from the input's parent dir
-# name ("test_small" -> input_cc3_test_small.h5).
-python martina_test/convert_to_cc3_format.py /eos/project/f/fast/step2point_files/pipeline2_"${algo}""${name}"/test_small/compressed_"${algo}".h5 --pc_save_folder outputs/cc3input_"${algo}""${name}"
+export seed=0
 # plots as check
 python martina_test/plot_check_cc3_format.py outputs/cc3input_"${algo}""${name}"/input_cc3_test_small.h5
 python martina_test/plot_check_cc3_format.py outputs/cc3input_"${algo}""${name}"/input_cc3_file_"${seed}".h5
-
 python martina_test/plot_check_cc3_format.py /eos/user/m/mamozzan/step2point/outputs/cc3input_merge_within_regular_subcell_6kcut/input_cc3_file_0.h5
-# convert to DDML format
+
+# convert to DDML format ------------------
 export repo=merge_within_cell #option [identity, merge_within_cell, merge_within_regular_subcell, hdbscan_ms8_mcs40, hdbscan_ms3_mcs10, hdbscan_ms12_mcs12, hdbscan_ms40_mcs40]
 python martina_test/convert_to_DDML_format.py outputs/cc3input_$repo/input_cc3_test_small.h5
 cp outputs/cc3input_$repo/input_cc3_test_small_ddml_$repo.h5 /eos/user/m/mamozzan/DDML/models/
