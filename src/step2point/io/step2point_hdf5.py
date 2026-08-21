@@ -10,6 +10,19 @@ from step2point.core.reader_base import ShowerReader
 from step2point.core.shower import Shower
 
 
+def _decode_hdf5_attribute(value):
+    """Convert scalar or array-valued HDF5 attributes to Python values."""
+    if isinstance(value, np.ndarray):
+        if value.ndim == 0:
+            return _decode_hdf5_attribute(value.item())
+        return [_decode_hdf5_attribute(item) for item in value.tolist()]
+    if isinstance(value, np.generic):
+        return _decode_hdf5_attribute(value.item())
+    if isinstance(value, bytes):
+        return value.decode("utf-8")
+    return value
+
+
 @dataclass
 class Step2PointHDF5Reader(ShowerReader):
     input_path: str
@@ -45,25 +58,21 @@ class Step2PointHDF5Reader(ShowerReader):
                 subdetector = np.asarray(steps["subdetector"], dtype=np.uint8)
             else:
                 subdetector = np.zeros(len(steps["energy"]), dtype=np.uint8)
-                
+
             subdetector_names = []
             if "metadata" in h5 and "subdetector_names" in h5["metadata"]:
                 subdetector_names = [
-                    x.decode("utf-8") if isinstance(x, bytes) else str(x)
-                    for x in h5["metadata"]["subdetector_names"][:]
+                    x.decode("utf-8") if isinstance(x, bytes) else str(x) for x in h5["metadata"]["subdetector_names"][:]
                 ]
 
             file_metadata = {"source": "hdf5"}
             if "algorithm" in h5.attrs:
-                file_metadata["algorithm"] = str(h5.attrs["algorithm"])
+                file_metadata["algorithm"] = _decode_hdf5_attribute(h5.attrs["algorithm"])
             if "debug_output" in h5.attrs:
                 file_metadata["debug_output"] = bool(h5.attrs["debug_output"])
-            for key in ("position_mode", "collection_name", "backend"):
+            for key in ("position_mode", "collection_name", "backend", "x_bins", "y_bins"):
                 if key in h5.attrs:
-                    file_metadata[key] = str(h5.attrs[key])
-            for key in ("x_bins", "y_bins"):
-                if key in h5.attrs:
-                    file_metadata[key] = int(h5.attrs[key])
+                    file_metadata[key] = _decode_hdf5_attribute(h5.attrs[key])
 
             for shower_id in unique_ids:
                 mask = event_ids == shower_id
