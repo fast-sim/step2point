@@ -112,8 +112,8 @@ def main():
         help="Readout collection name(s) required by geometry-aware algorithms.",
     )
     parser.add_argument(
-        "--hdbscan-cell-id-encoding",
-        help="Cell-ID encoding string used by HDBSCAN to extract system and layer.",
+        "--cell-id-encoding",
+        help="Cell-ID encoding string used by clustering algorithms to extract fields such as system and layer.",
     )
     parser.add_argument("--grid-x", type=int, default=2, help="Number of regular subdivisions along local cell x.")
     parser.add_argument("--grid-y", type=int, default=2, help="Number of regular subdivisions along local cell y/z.")
@@ -137,6 +137,23 @@ def main():
         metavar=("X", "Y", "Z"),
         help="Override the reference point used together with the validation axis.",
     )
+    parser.add_argument(
+        "--summary-only",
+        action="store_true",
+        help="Write validation_summary.json but skip PNG plot generation.",
+    )
+    parser.add_argument(
+        "--no-ratio",
+        action="store_true",
+        help="Disable the narrow ratio panel on overlay-style validation plots.",
+    )
+    parser.add_argument(
+        "--ratio-ylim",
+        type=float,
+        nargs=2,
+        metavar=("MIN", "MAX"),
+        help="Override the y-axis range used for overlay ratio panels.",
+    )
     parser.add_argument("--outdir", default="outputs/plots")
     args = parser.parse_args()
     collections = parse_collections(args.collections)
@@ -144,14 +161,14 @@ def main():
     if args.label is not None and len(args.label) != len(args.input):
         raise ValueError("--label must provide exactly one label per --input file.")
 
-    def resolve_hdbscan_cell_id_encodings() -> tuple[str, ...]:
-        if args.hdbscan_cell_id_encoding:
-            return (args.hdbscan_cell_id_encoding,)
+    def resolve_cell_id_encodings() -> tuple[str, ...]:
+        if args.cell_id_encoding:
+            return (args.cell_id_encoding,)
         if args.compact_xml and args.collection_name:
             return tuple(get_dd4hep_cell_id_encoding(args.compact_xml, name) for name in args.collection_name)
         raise ValueError(
-            "hdbscan assumes a cell_id can be decoded to define the unmergeable points: pass either "
-            "--hdbscan-cell-id-encoding or --compact-xml together with --collection-name."
+            "This clustering mode assumes a cell_id can be decoded to define the unmergeable points: pass either "
+            "--cell-id-encoding or --compact-xml together with --collection-name."
         )
 
     if len(args.input) > 1:
@@ -179,6 +196,9 @@ def main():
             axis_override=args.axis,
             origin_override=args.origin,
             pre_label=reference_label,
+            generate_plots=not args.summary_only,
+            with_ratio=not args.no_ratio,
+            ratio_ylim=tuple(args.ratio_ylim) if args.ratio_ylim is not None else None,
         )
         return
 
@@ -198,7 +218,7 @@ def main():
             use_time=args.use_time,
             outlier_policy=args.outlier_policy,
             merge_scope=args.merge_scope,
-            cell_id_encoding=resolve_hdbscan_cell_id_encodings(),
+            cell_id_encoding=resolve_cell_id_encodings(),
             algorithm=args.hdbscan_algorithm,
             n_jobs=args.n_jobs,
         )
@@ -230,6 +250,9 @@ def main():
         Path(args.outdir),
         axis_override=args.axis,
         origin_override=args.origin,
+        generate_plots=not args.summary_only,
+        with_ratio=not args.no_ratio,
+        ratio_ylim=tuple(args.ratio_ylim) if args.ratio_ylim is not None else None,
     )
 
 

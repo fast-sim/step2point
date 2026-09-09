@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.optimize import curve_fit
 
 from step2point.metrics.energy import aggregate_cell_energy, energy_ratio
 from step2point.metrics.spatial import estimate_shower_axis, longitudinal_radial_phi
@@ -18,10 +20,14 @@ from step2point.validation.plotting import (
     plot_overlay_line_multi,
 )
 
+STABLE_RATIO_YLIM = (0.5, 1.5)
+ENERGY_RATIO_XLIM = (1.0 - 1.0e-7, 1.0 + 1.0e-7)
+
 
 @dataclass(slots=True)
 class PlotArtifacts:
     outdir: Path
+    summary_path: Path | None = None
 
 
 def _upper_percentile_limit(values: np.ndarray, percentile: float = 99.0, pad: float = 0.05) -> float:
@@ -49,6 +55,103 @@ def _moment(coord: np.ndarray, weights: np.ndarray, order: int) -> float:
     if weights.size == 0 or np.sum(weights) <= 0:
         return float("nan")
     return float(np.average(coord**order, weights=weights))
+
+
+def _gaussian(x: np.ndarray, amplitude: float, mean: float, sigma: float) -> np.ndarray:
+    return amplitude * np.exp(-0.5 * ((x - mean) / sigma) ** 2)
+
+
+def _fit_gaussian_parameters(arr: np.ndarray, mean: float, std: float) -> tuple[float, float, int]:
+    if arr.size < 5 or std <= 0.0:
+        return mean, std, int(arr.size)
+
+    lower = mean - 3.0 * std
+    upper = mean + 3.0 * std
+    fit_arr = arr[(arr >= lower) & (arr <= upper)]
+    if fit_arr.size < 5:
+        fit_arr = arr
+    fit_std = float(np.std(fit_arr))
+    fit_mean = float(np.mean(fit_arr))
+    if fit_std <= 0.0:
+        return fit_mean, fit_std, int(fit_arr.size)
+
+    bin_count = min(40, max(12, int(np.sqrt(fit_arr.size))))
+    counts, edges = np.histogram(fit_arr, bins=bin_count, range=(float(np.min(fit_arr)), float(np.max(fit_arr))))
+    centers = 0.5 * (edges[:-1] + edges[1:])
+    mask = counts > 0
+    centers = centers[mask]
+    counts = counts[mask]
+    if centers.size < 4:
+        return fit_mean, fit_std, int(fit_arr.size)
+
+    initial = (float(np.max(counts)), fit_mean, fit_std)
+    bounds = ([0.0, lower, 1e-12], [np.inf, upper, np.inf])
+    try:
+        params, _ = curve_fit(
+            _gaussian,
+            centers,
+            counts.astype(np.float64),
+            p0=initial,
+            bounds=bounds,
+            maxfev=10000,
+        )
+        _, gaussian_mean, gaussian_std = params
+        return float(gaussian_mean), float(gaussian_std), int(fit_arr.size)
+    except Exception:
+        return fit_mean, fit_std, int(fit_arr.size)
+
+
+def _distribution_summary(values) -> dict[str, float | int | None]:
+    arr = np.asarray(values, dtype=np.float64)
+    arr = arr[np.isfinite(arr)]
+    if arr.size == 0:
+        return {
+            "count": 0,
+            "mean": None,
+            "std": None,
+            "gaussian_mean": None,
+            "gaussian_std": None,
+            "gaussian_count": 0,
+            "min": None,
+            "max": None,
+        }
+    mean = float(np.mean(arr))
+    std = float(np.std(arr))
+    gaussian_mean, gaussian_std, gaussian_count = _fit_gaussian_parameters(arr, mean, std)
+    return {
+        "count": int(arr.size),
+        "mean": mean,
+        "std": std,
+        "gaussian_mean": gaussian_mean,
+        "gaussian_std": gaussian_std,
+        "gaussian_count": gaussian_count,
+        "min": float(np.min(arr)),
+        "max": float(np.max(arr)),
+    }
+
+
+def _energy_gev_from_showers(showers) -> float | None:
+    energies = []
+    for shower in showers:
+        momentum = shower.primary.get("momentum")
+        if momentum is None:
+            continue
+        momentum = np.asarray(momentum, dtype=np.float64)
+        if momentum.shape != (3,):
+            continue
+        norm = float(np.linalg.norm(momentum))
+        if np.isfinite(norm):
+            energies.append(norm)
+    if not energies:
+        return None
+    return float(np.mean(energies))
+
+
+def _primary_pdg_from_showers(showers) -> int | None:
+    pdgs = [int(shower.primary["pdg"]) for shower in showers if "pdg" in shower.primary]
+    if not pdgs:
+        return None
+    return pdgs[0] if len(set(pdgs)) == 1 else pdgs[0]
 
 
 def _longitudinal_radial_phi_with_reference(
@@ -159,6 +262,65 @@ def _compute_benchmark_data(pairs, *, axis_override=None, origin_override=None) 
     return data
 
 
+def build_validation_summary(
+    *,
+    reference_showers,
+    comparisons,
+    reference_label: str = "pre",
+) -> dict[str, object]:
+    return {
+        "reference": {
+            "label": reference_label,
+            "n_showers": len(reference_showers),
+            "input_energy_GeV": _energy_gev_from_showers(reference_showers),
+            "primary_pdg": _primary_pdg_from_showers(reference_showers),
+        },
+        "comparisons": [
+            {
+                "label": label,
+                "algorithm": pairs[0][1].metadata.get("algorithm") if pairs else None,
+                "n_showers": len(pairs),
+                "input_energy_GeV": _energy_gev_from_showers([pre for pre, _ in pairs]),
+                "primary_pdg": _primary_pdg_from_showers([pre for pre, _ in pairs]),
+                "distributions": {
+                    "energy_ratio": _distribution_summary(data["energy_ratios"]),
+                    "point_count_ratio": _distribution_summary(data["point_ratios"]),
+                    "cell_count_ratio": _distribution_summary(data["cell_ratios"]),
+                    "n_points_pre": _distribution_summary([pre.n_points for pre, _ in pairs]),
+                    "n_points_post": _distribution_summary([post.n_points for _, post in pairs]),
+                    "n_cells_pre": _distribution_summary(
+                        [
+                            len(np.unique(pre.cell_id))
+                            for pre, _ in pairs
+                            if pre.cell_id is not None
+                        ]
+                    ),
+                    "n_cells_post": _distribution_summary(
+                        [
+                            len(np.unique(post.cell_id))
+                            for _, post in pairs
+                            if post.cell_id is not None
+                        ]
+                    ),
+                },
+            }
+            for label, pairs, data in comparisons
+        ],
+    }
+
+
+def write_validation_summary(
+    summary: dict[str, object],
+    outdir: str | Path,
+    filename: str = "validation_summary.json",
+) -> Path:
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    outpath = outdir / filename
+    outpath.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    return outpath
+
+
 def generate_benchmark_plots(
     pairs,
     outdir: str | Path,
@@ -167,110 +329,164 @@ def generate_benchmark_plots(
     origin_override=None,
     pre_label: str = "pre",
     post_label: str = "post",
+    generate_plots: bool = True,
+    with_ratio: bool = True,
+    ratio_ylim: tuple[float, float] | None = None,
 ) -> PlotArtifacts:
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     data = _compute_benchmark_data(pairs, axis_override=axis_override, origin_override=origin_override)
-
-    plot_hist(data["energy_ratios"], outdir / "energy_ratio.png", "Energy ratio", "E_post / E_pre")
-    plot_hist(data["cell_ratios"], outdir / "cell_count_ratio.png", "Cell count ratio", "N_cells_post / N_cells_pre")
-    plot_hist(data["point_ratios"], outdir / "point_count_ratio.png", "Point count ratio", "N_points_post / N_points_pre")
-    plot_overlay_hist(
-        data["pre_cell_logs"],
-        data["post_cell_logs"],
-        outdir / "log_cell_energy.png",
-        "Cell energy spectrum",
-        "log10(cell energy [GeV])",
-        logy=True,
-        pre_label=pre_label,
-        post_label=post_label,
-    )
-    plot_overlay_hist(
-        data["pre_point_logs"],
-        data["post_point_logs"],
-        outdir / "log_point_energy.png",
-        "Point energy spectrum",
-        "log10(point energy [GeV])",
-        logy=True,
-        pre_label=pre_label,
-        post_label=post_label,
+    overlay_ratio_ylim = STABLE_RATIO_YLIM if ratio_ylim is None else ratio_ylim
+    reference_showers = [pre for pre, _ in pairs]
+    summary = build_validation_summary(
+        reference_showers=reference_showers,
+        comparisons=[(post_label, pairs, data)],
+        reference_label=pre_label,
     )
 
-    long_centers = 0.5 * (data["long_bins"][:-1] + data["long_bins"][1:])
-    radial_centers = 0.5 * (data["radial_bins"][:-1] + data["radial_bins"][1:])
-    phi_centers = 0.5 * (data["phi_bins"][:-1] + data["phi_bins"][1:])
-    plot_overlay_line(
-        long_centers,
-        np.mean(data["long_profiles_pre"], axis=0),
-        np.mean(data["long_profiles_post"], axis=0),
-        outdir / "longitudinal_profile_overlay.png",
-        "Longitudinal profile",
-        "longitudinal coordinate [mm]",
-        ylabel="Energy fraction",
-        pre_label=pre_label,
-        post_label=post_label,
-    )
-    plot_overlay_line(
-        radial_centers,
-        np.mean(data["radial_profiles_pre"], axis=0),
-        np.mean(data["radial_profiles_post"], axis=0),
-        outdir / "radial_profile_overlay.png",
-        "Radial profile",
-        "radial coordinate [mm]",
-        ylabel="Energy fraction",
-        pre_label=pre_label,
-        post_label=post_label,
-    )
-    plot_overlay_line(
-        phi_centers,
-        np.mean(data["phi_profiles_pre"], axis=0),
-        np.mean(data["phi_profiles_post"], axis=0),
-        outdir / "phi_profile_overlay.png",
-        "Phi profile",
-        "phi",
-        ylabel="Energy fraction",
-        pre_label=pre_label,
-        post_label=post_label,
-    )
+    if generate_plots:
+        plot_hist(
+            data["energy_ratios"],
+            outdir / "energy_ratio.png",
+            "Energy ratio",
+            "E_post / E_pre",
+            xlim=ENERGY_RATIO_XLIM,
+        )
+        plot_hist(data["cell_ratios"], outdir / "cell_count_ratio.png", "Cell count ratio", "N_cells_post / N_cells_pre")
+        plot_hist(
+            data["point_ratios"],
+            outdir / "point_count_ratio.png",
+            "Number of points reduction",
+            "N_points_post / N_points_pre",
+        )
+        plot_overlay_hist(
+            [pre.n_points for pre, _ in pairs],
+            [post.n_points for _, post in pairs],
+            outdir / "n_points.png",
+            "Number of points",
+            "Number of points",
+            pre_label=pre_label,
+            post_label=post_label,
+            with_ratio=False,
+        )
+        plot_overlay_hist(
+            data["pre_cell_logs"],
+            data["post_cell_logs"],
+            outdir / "log_cell_energy.png",
+            "Cell energy spectrum",
+            "log10(cell energy [GeV])",
+            logy=True,
+            pre_label=pre_label,
+            post_label=post_label,
+            with_ratio=with_ratio,
+        )
+        plot_overlay_hist(
+            data["pre_point_logs"],
+            data["post_point_logs"],
+            outdir / "log_point_energy.png",
+            "Point energy spectrum",
+            "log10(point energy [GeV])",
+            logy=True,
+            pre_label=pre_label,
+            post_label=post_label,
+            with_ratio=with_ratio,
+        )
 
-    plot_overlay_hist(
-        data["long_m1_pre"],
-        data["long_m1_post"],
-        outdir / "longitudinal_moment_1.png",
-        "Longitudinal first moment",
-        "m1",
-        pre_label=pre_label,
-        post_label=post_label,
-    )
-    plot_overlay_hist(
-        data["long_m2_pre"],
-        data["long_m2_post"],
-        outdir / "longitudinal_moment_2.png",
-        "Longitudinal second moment",
-        "m2",
-        pre_label=pre_label,
-        post_label=post_label,
-    )
-    plot_overlay_hist(
-        data["rad_m1_pre"],
-        data["rad_m1_post"],
-        outdir / "radial_moment_1.png",
-        "Radial first moment",
-        "m1",
-        pre_label=pre_label,
-        post_label=post_label,
-    )
-    plot_overlay_hist(
-        data["rad_m2_pre"],
-        data["rad_m2_post"],
-        outdir / "radial_moment_2.png",
-        "Radial second moment",
-        "m2",
-        pre_label=pre_label,
-        post_label=post_label,
-    )
+        long_centers = 0.5 * (data["long_bins"][:-1] + data["long_bins"][1:])
+        radial_centers = 0.5 * (data["radial_bins"][:-1] + data["radial_bins"][1:])
+        phi_centers = 0.5 * (data["phi_bins"][:-1] + data["phi_bins"][1:])
+        plot_overlay_line(
+            long_centers,
+            np.mean(data["long_profiles_pre"], axis=0),
+            np.mean(data["long_profiles_post"], axis=0),
+            outdir / "longitudinal_profile_overlay.png",
+            "Longitudinal profile",
+            "longitudinal coordinate [mm]",
+            ylabel="Energy fraction",
+            pre_label=pre_label,
+            post_label=post_label,
+            xlim=(0.0, float(long_centers[-1])),
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+        )
+        plot_overlay_line(
+            radial_centers,
+            np.mean(data["radial_profiles_pre"], axis=0),
+            np.mean(data["radial_profiles_post"], axis=0),
+            outdir / "radial_profile_overlay.png",
+            "Radial profile",
+            "radial coordinate [mm]",
+            ylabel="Energy fraction",
+            pre_label=pre_label,
+            post_label=post_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+        )
+        plot_overlay_line(
+            phi_centers,
+            np.mean(data["phi_profiles_pre"], axis=0),
+            np.mean(data["phi_profiles_post"], axis=0),
+            outdir / "phi_profile_overlay.png",
+            "Phi profile",
+            "phi",
+            ylabel="Energy fraction",
+            pre_label=pre_label,
+            post_label=post_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+        )
 
-    return PlotArtifacts(outdir=outdir)
+        plot_overlay_hist(
+            data["long_m1_pre"],
+            data["long_m1_post"],
+            outdir / "longitudinal_moment_1.png",
+            "Longitudinal first moment",
+            "m1",
+            pre_label=pre_label,
+            post_label=post_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+            ratio_band=False,
+        )
+        plot_overlay_hist(
+            data["long_m2_pre"],
+            data["long_m2_post"],
+            outdir / "longitudinal_moment_2.png",
+            "Longitudinal second moment",
+            "m2",
+            pre_label=pre_label,
+            post_label=post_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+            ratio_band=False,
+        )
+        plot_overlay_hist(
+            data["rad_m1_pre"],
+            data["rad_m1_post"],
+            outdir / "radial_moment_1.png",
+            "Radial first moment",
+            "m1",
+            pre_label=pre_label,
+            post_label=post_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+            ratio_band=False,
+        )
+        plot_overlay_hist(
+            data["rad_m2_pre"],
+            data["rad_m2_post"],
+            outdir / "radial_moment_2.png",
+            "Radial second moment",
+            "m2",
+            pre_label=pre_label,
+            post_label=post_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+            ratio_band=False,
+        )
+
+    summary_path = write_validation_summary(summary, outdir)
+    return PlotArtifacts(outdir=outdir, summary_path=summary_path)
 
 
 def generate_benchmark_comparison_plots(
@@ -280,13 +496,18 @@ def generate_benchmark_comparison_plots(
     axis_override=None,
     origin_override=None,
     pre_label: str = "pre",
+    generate_plots: bool = True,
+    with_ratio: bool = True,
+    ratio_ylim: tuple[float, float] | None = None,
 ) -> PlotArtifacts:
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
+    overlay_ratio_ylim = STABLE_RATIO_YLIM if ratio_ylim is None else ratio_ylim
 
     series = [
         (
             compared_label,
+            pairs,
             _compute_benchmark_data(
                 pairs,
                 axis_override=axis_override,
@@ -295,112 +516,151 @@ def generate_benchmark_comparison_plots(
         )
         for compared_label, pairs in comparisons
     ]
-    reference_data = series[0][1]
-
-    plot_hist_series(
-        [(label, data["energy_ratios"]) for label, data in series],
-        outdir / "energy_ratio.png",
-        "Energy ratio",
-        "E_post / E_pre",
-    )
-    plot_hist_series(
-        [(label, data["cell_ratios"]) for label, data in series],
-        outdir / "cell_count_ratio.png",
-        "Cell count ratio",
-        "N_cells_post / N_cells_pre",
-    )
-    plot_hist_series(
-        [(label, data["point_ratios"]) for label, data in series],
-        outdir / "point_count_ratio.png",
-        "Point count ratio",
-        "N_points_post / N_points_pre",
-    )
-    plot_overlay_hist_multi(
-        reference_data["pre_cell_logs"],
-        [(label, data["post_cell_logs"]) for label, data in series],
-        outdir / "log_cell_energy.png",
-        "Cell energy spectrum",
-        "log10(cell energy [GeV])",
-        logy=True,
-        pre_label=pre_label,
-    )
-    plot_overlay_hist_multi(
-        reference_data["pre_point_logs"],
-        [(label, data["post_point_logs"]) for label, data in series],
-        outdir / "log_point_energy.png",
-        "Point energy spectrum",
-        "log10(point energy [GeV])",
-        logy=True,
-        pre_label=pre_label,
+    reference_data = series[0][2]
+    reference_showers = [pre for pre, _ in comparisons[0][1]]
+    summary = build_validation_summary(
+        reference_showers=reference_showers,
+        comparisons=series,
+        reference_label=pre_label,
     )
 
-    long_centers = 0.5 * (reference_data["long_bins"][:-1] + reference_data["long_bins"][1:])
-    radial_centers = 0.5 * (reference_data["radial_bins"][:-1] + reference_data["radial_bins"][1:])
-    phi_centers = 0.5 * (reference_data["phi_bins"][:-1] + reference_data["phi_bins"][1:])
-    plot_overlay_line_multi(
-        long_centers,
-        np.mean(reference_data["long_profiles_pre"], axis=0),
-        [(label, np.mean(data["long_profiles_post"], axis=0)) for label, data in series],
-        outdir / "longitudinal_profile_overlay.png",
-        "Longitudinal profile",
-        "longitudinal coordinate [mm]",
-        ylabel="Energy fraction",
-        pre_label=pre_label,
-    )
-    plot_overlay_line_multi(
-        radial_centers,
-        np.mean(reference_data["radial_profiles_pre"], axis=0),
-        [(label, np.mean(data["radial_profiles_post"], axis=0)) for label, data in series],
-        outdir / "radial_profile_overlay.png",
-        "Radial profile",
-        "radial coordinate [mm]",
-        ylabel="Energy fraction",
-        pre_label=pre_label,
-    )
-    plot_overlay_line_multi(
-        phi_centers,
-        np.mean(reference_data["phi_profiles_pre"], axis=0),
-        [(label, np.mean(data["phi_profiles_post"], axis=0)) for label, data in series],
-        outdir / "phi_profile_overlay.png",
-        "Phi profile",
-        "phi",
-        ylabel="Energy fraction",
-        pre_label=pre_label,
-    )
-    plot_overlay_hist_multi(
-        reference_data["long_m1_pre"],
-        [(label, data["long_m1_post"]) for label, data in series],
-        outdir / "longitudinal_moment_1.png",
-        "Longitudinal first moment",
-        "m1",
-        pre_label=pre_label,
-    )
-    plot_overlay_hist_multi(
-        reference_data["long_m2_pre"],
-        [(label, data["long_m2_post"]) for label, data in series],
-        outdir / "longitudinal_moment_2.png",
-        "Longitudinal second moment",
-        "m2",
-        pre_label=pre_label,
-    )
-    plot_overlay_hist_multi(
-        reference_data["rad_m1_pre"],
-        [(label, data["rad_m1_post"]) for label, data in series],
-        outdir / "radial_moment_1.png",
-        "Radial first moment",
-        "m1",
-        pre_label=pre_label,
-    )
-    plot_overlay_hist_multi(
-        reference_data["rad_m2_pre"],
-        [(label, data["rad_m2_post"]) for label, data in series],
-        outdir / "radial_moment_2.png",
-        "Radial second moment",
-        "m2",
-        pre_label=pre_label,
-    )
+    if generate_plots:
+        plot_hist_series(
+            [(label, data["energy_ratios"]) for label, _, data in series],
+            outdir / "energy_ratio.png",
+            "Energy ratio",
+            "E_post / E_pre",
+            xlim=ENERGY_RATIO_XLIM,
+        )
+        plot_hist_series(
+            [(label, data["cell_ratios"]) for label, _, data in series],
+            outdir / "cell_count_ratio.png",
+            "Cell count ratio",
+            "N_cells_post / N_cells_pre",
+        )
+        plot_hist_series(
+            [(label, data["point_ratios"]) for label, _, data in series],
+            outdir / "point_count_ratio.png",
+            "Number of points reduction",
+            "N_points_post / N_points_pre",
+        )
+        plot_overlay_hist_multi(
+            [pre.n_points for pre, _ in comparisons[0][1]],
+            [(label, [post.n_points for _, post in pairs]) for label, pairs, _ in series],
+            outdir / "n_points.png",
+            "Number of points",
+            "Number of points",
+            pre_label=pre_label,
+            with_ratio=False,
+        )
+        plot_overlay_hist_multi(
+            reference_data["pre_cell_logs"],
+            [(label, data["post_cell_logs"]) for label, _, data in series],
+            outdir / "log_cell_energy.png",
+            "Cell energy spectrum",
+            "log10(cell energy [GeV])",
+            logy=True,
+            pre_label=pre_label,
+            with_ratio=with_ratio,
+        )
+        plot_overlay_hist_multi(
+            reference_data["pre_point_logs"],
+            [(label, data["post_point_logs"]) for label, _, data in series],
+            outdir / "log_point_energy.png",
+            "Point energy spectrum",
+            "log10(point energy [GeV])",
+            logy=True,
+            pre_label=pre_label,
+            with_ratio=with_ratio,
+        )
 
-    return PlotArtifacts(outdir=outdir)
+        long_centers = 0.5 * (reference_data["long_bins"][:-1] + reference_data["long_bins"][1:])
+        radial_centers = 0.5 * (reference_data["radial_bins"][:-1] + reference_data["radial_bins"][1:])
+        phi_centers = 0.5 * (reference_data["phi_bins"][:-1] + reference_data["phi_bins"][1:])
+        plot_overlay_line_multi(
+            long_centers,
+            np.mean(reference_data["long_profiles_pre"], axis=0),
+            [(label, np.mean(data["long_profiles_post"], axis=0)) for label, _, data in series],
+            outdir / "longitudinal_profile_overlay.png",
+            "Longitudinal profile",
+            "longitudinal coordinate [mm]",
+            ylabel="Energy fraction",
+            pre_label=pre_label,
+            xlim=(0.0, float(long_centers[-1])),
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+        )
+        plot_overlay_line_multi(
+            radial_centers,
+            np.mean(reference_data["radial_profiles_pre"], axis=0),
+            [(label, np.mean(data["radial_profiles_post"], axis=0)) for label, _, data in series],
+            outdir / "radial_profile_overlay.png",
+            "Radial profile",
+            "radial coordinate [mm]",
+            ylabel="Energy fraction",
+            pre_label=pre_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+        )
+        plot_overlay_line_multi(
+            phi_centers,
+            np.mean(reference_data["phi_profiles_pre"], axis=0),
+            [(label, np.mean(data["phi_profiles_post"], axis=0)) for label, _, data in series],
+            outdir / "phi_profile_overlay.png",
+            "Phi profile",
+            "phi",
+            ylabel="Energy fraction",
+            pre_label=pre_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+        )
+        plot_overlay_hist_multi(
+            reference_data["long_m1_pre"],
+            [(label, data["long_m1_post"]) for label, _, data in series],
+            outdir / "longitudinal_moment_1.png",
+            "Longitudinal first moment",
+            "m1",
+            pre_label=pre_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+            ratio_band=False,
+        )
+        plot_overlay_hist_multi(
+            reference_data["long_m2_pre"],
+            [(label, data["long_m2_post"]) for label, _, data in series],
+            outdir / "longitudinal_moment_2.png",
+            "Longitudinal second moment",
+            "m2",
+            pre_label=pre_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+            ratio_band=False,
+        )
+        plot_overlay_hist_multi(
+            reference_data["rad_m1_pre"],
+            [(label, data["rad_m1_post"]) for label, _, data in series],
+            outdir / "radial_moment_1.png",
+            "Radial first moment",
+            "m1",
+            pre_label=pre_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+            ratio_band=False,
+        )
+        plot_overlay_hist_multi(
+            reference_data["rad_m2_pre"],
+            [(label, data["rad_m2_post"]) for label, _, data in series],
+            outdir / "radial_moment_2.png",
+            "Radial second moment",
+            "m2",
+            pre_label=pre_label,
+            with_ratio=with_ratio,
+            ratio_ylim=overlay_ratio_ylim,
+            ratio_band=False,
+        )
+
+    summary_path = write_validation_summary(summary, outdir)
+    return PlotArtifacts(outdir=outdir, summary_path=summary_path)
 
 
 def generate_observables_matrix(showers, outpath: str | Path, *, selected_index: int | None = None, axis_override=None):
