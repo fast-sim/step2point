@@ -106,7 +106,7 @@ def run_pipeline(mcs: int, ms: int, epsilon: float) -> Path:
     if COLLECTIONS:
         cmd += ["--collections", *COLLECTIONS]
     if CELL_ID_ENCODING:
-        cmd += ["--hdbscan-cell-id-encoding", CELL_ID_ENCODING]
+        cmd += ["--cell-id-encoding", CELL_ID_ENCODING]
     if COMPACT_XML:
         cmd += ["--compact-xml", COMPACT_XML, "--collection-name", *COLLECTION_NAMES]
     if MERGE_SCOPE:
@@ -1172,7 +1172,7 @@ def parse_args():
     p.add_argument("--preset", choices=sorted(PRESETS), help="detector preset (only 'ild', the tested one)")
     p.add_argument("--input", help="input file for run_step2point_pipeline.py")
     p.add_argument("--collections", nargs="+", help="readout collection(s) to read (EDM4hep input)")
-    p.add_argument("--cell-id-encoding", help="DD4hep cell-ID encoding string, passed as --hdbscan-cell-id-encoding")
+    p.add_argument("--cell-id-encoding", help="DD4hep cell-ID encoding string, passed to the pipeline as --cell-id-encoding")
     p.add_argument("--compact-xml", help="DD4hep compact XML to read the encoding from (with --collection-name)")
     p.add_argument("--collection-name", nargs="+", help="readout name(s) in --compact-xml")
     p.add_argument("--merge-scope", help="HDBSCAN merge scope (pipeline default if not given)")
