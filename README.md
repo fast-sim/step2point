@@ -426,12 +426,7 @@ python hdbscan_sweep/sweep_hdbscan.py --preset ild
 - makes the plots that read the 30-layer CC3 files (clusters per cell, per-layer distributions, radial and longitudinal profiles),
 - writes to `$CC3_DIR/outputs/hdbscan_sweep` unless `--output-dir` or `$SWEEP_DIR` is set.
 
-The two sweep figures of the paper are made from those ILD outputs (read from `$SWEEP_DIR`, default `$CC3_DIR/outputs/hdbscan_sweep`) by [plot_mean_compression.py](hdbscan_sweep/plot_mean_compression.py) and [plot_sweep_profiles.py](hdbscan_sweep/plot_sweep_profiles.py), with the style in [sweep_style.py](hdbscan_sweep/sweep_style.py):
-
-```bash
-python hdbscan_sweep/plot_mean_compression.py <out_dir>/hdbscan_sweep_mean_compression_ratio.pdf
-python hdbscan_sweep/plot_sweep_profiles.py <out_dir>   # writes sweep_profiles.pdf and .png
-```
+The two sweep figures of the step2point/CaloClouds-3 paper are made from these ILD outputs in CaloClouds-3: `paper_figures/run_hdbscan_sweep_ild.sh` runs this sweep on the paper grid and then makes both figures.
 
 ## [WIP] C++ backend
 
