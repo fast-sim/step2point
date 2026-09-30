@@ -104,6 +104,7 @@ step2point/
 │   └── bindings/
 ├── tests/
 ├── examples/
+├── hdbscan_sweep/
 └── .github/workflows/
 ```
 
@@ -367,6 +368,51 @@ Typical outputs are:
 - `shower_<id>_overview.png`
 
 For detector-aware geometry inspection and shower overlays on module/layer/cell views, use [examples/plot_detector_cells.py](examples/plot_detector_cells.py:1). It writes `XY`, `XZ`, and `ZY` detector projections. The detailed workflow and example screenshots are documented in [docs/validation.md](docs/validation.md:1).
+
+## HDBSCAN parameter sweep
+
+[hdbscan_sweep/](hdbscan_sweep/) runs HDBSCAN over a grid of `min_cluster_size` (m_cs) and `min_samples` (m_s) and plots how the compression depends on them. It was used to choose the HDBSCAN settings for the ILD photon study.
+
+- [sweep_hdbscan.py](hdbscan_sweep/sweep_hdbscan.py): for each grid point, runs `examples/run_step2point_pipeline.py` with `--algorithm hdbscan`, converts the output to CaloClouds-3 input format with CaloClouds-3's `preprocessing/convert_to_cc3_format.py`, then makes summary plots.
+- [plot_mean_compression.py](hdbscan_sweep/plot_mean_compression.py), [plot_sweep_profiles.py](hdbscan_sweep/plot_sweep_profiles.py): the two sweep figures of the paper (mean compression ratio vs m_cs; points per layer and point-energy distribution at m_cs = 20).
+- [sweep_style.py](hdbscan_sweep/sweep_style.py): shared colours and style.
+
+The sweep reads EDM4hep input, so it needs a Key4hep environment:
+
+```bash
+source /cvmfs/sw.hsf.org/key4hep/setup.sh
+source .venv-key4hep/bin/activate
+```
+
+Configure the sweep in the `CONFIG` block at the top of `sweep_hdbscan.py`:
+
+- `INPUT`: EDM4hep file (default: the 100-shower ILD `test_small.edm4hep.root`)
+- `COLLECTION`, `MERGE_SCOPE`
+- `MIN_CLUSTER_SIZES`, `MIN_SAMPLES_LIST`, `EPSILON`: the grid; combinations with m_s > m_cs are skipped
+
+The cell-ID encoding passed to the pipeline is the ILD one, set in `run_pipeline()`.
+
+Two environment variables set the locations:
+
+- `CC3_DIR`: CaloClouds-3 checkout (default `/eos/user/m/mamozzan/CaloClouds-3`)
+- `SWEEP_DIR`: where the runs and plots go (default `$CC3_DIR/outputs/hdbscan_sweep`)
+
+Run it (from anywhere):
+
+```bash
+python hdbscan_sweep/sweep_hdbscan.py
+```
+
+Each grid point gets its own folder `$SWEEP_DIR/hdbscan_mcs<N>_ms<M>/` with `compressed_hdbscan.h5`, `compression_summary_hdbscan.txt`, `input_cc3.h5` and the logs `run.log` / `run_cc3.log`. A grid point whose `compressed_hdbscan.h5` already exists is not rerun, so rerunning after extending the grid only computes the new points. The summary plots go to `$SWEEP_DIR/plots/`. `summary.csv` currently lists only m_cs and m_s; the compression numbers are in each `compression_summary_hdbscan.txt`.
+
+The paper figures are made from the same `$SWEEP_DIR`:
+
+```bash
+python hdbscan_sweep/plot_mean_compression.py <out_dir>/hdbscan_sweep_mean_compression_ratio.pdf
+python hdbscan_sweep/plot_sweep_profiles.py <out_dir>   # writes sweep_profiles.pdf and .png
+```
+
+Both compare against merge within cell and merge within regular subcell (and `plot_sweep_profiles.py` also against identity) run on the same `test_small` input, read from `/eos/project/f/fast/step2point_files/pipeline2_<algorithm>/test_small/`.
 
 ## [WIP] C++ backend
 
