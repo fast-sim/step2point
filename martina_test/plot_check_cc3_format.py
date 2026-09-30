@@ -137,17 +137,14 @@ ax.set_title(f"Hit z distribution (first {cap} events)")
 
 # 9. Hit energy distribution (log-log scale)
 e_hits = hit_energies[:cap][mask].ravel()
-e_pos = e_hits[e_hits > 0]
-POINT_ENERGY_CUT_GEV = 1e-15
-e_plot = e_pos[e_pos >= POINT_ENERGY_CUT_GEV]
+e_plot = e_hits[e_hits > 0]
 ax = fig.add_subplot(gs[2, 2])
-bins_log = np.logspace(np.log10(POINT_ENERGY_CUT_GEV + 1e-15), np.log10(e_plot.max()), 100)
+bins_log = np.logspace(np.log10(e_plot.min()), np.log10(e_plot.max()), 100)
 ax.hist(e_plot, bins=bins_log, color="coral", edgecolor="none", log=True)
 ax.set_xscale("log")
-ax.set_xlim(left=POINT_ENERGY_CUT_GEV)
 ax.set_xlabel("Point energy [GeV]")
 ax.set_ylabel("Counts (log)")
-ax.set_title(f"Point energy distribution (cut at {POINT_ENERGY_CUT_GEV:g} GeV)")
+ax.set_title("Point energy distribution")
 
 out_path = path.replace(".h5", ".diagnostic.png")
 plt.savefig(out_path, dpi=150, bbox_inches="tight")

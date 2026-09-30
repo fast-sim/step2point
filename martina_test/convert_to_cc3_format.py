@@ -32,6 +32,12 @@ from martina_test.metadata import Metadata  # noqa: E402
 # many, keeping the highest-energy hits.
 MAX_POINTS_PER_SHOWER = 6000
 
+# Where the cc3-format inputs live when no --pc_save_folder is given. Absolute
+# on purpose: this used to be the relative "outputs/cc3input_<algo>", which only
+# resolved correctly when the script was run from the step2point repo root, and
+# wrote into the (now full) EOS home quota.
+CC3_INPUT_BASE = "/eos/project/f/fast/input_cc3"
+
 
 def compute_boundaries_streaming(input_path, unique_ids, chunk=10_000_000):
     """Compute searchsorted boundaries without loading all of s_evt."""
@@ -739,8 +745,9 @@ def convert(input_path: str, global_path: str = None, output_folder: str = None,
             algo = dir_name.split("pipeline2_")[-1]
         else:
             algo = input_path.split("/")[-1].split(".")[0].split("compressed_")[-1]
-        out_file = f"outputs/cc3input_{algo}/input_cc3_file_{seed}.h5"
-        os.makedirs(f"outputs/cc3input_{algo}", exist_ok=True)
+        out_dir = f"{CC3_INPUT_BASE}/cc3input_{algo}"
+        out_file = f"{out_dir}/input_cc3_file_{seed}.h5"
+        os.makedirs(out_dir, exist_ok=True)
 
     with h5py.File(out_file, "w") as hf:
         hf.create_dataset("energy", data=energies)
