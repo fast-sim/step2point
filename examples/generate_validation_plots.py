@@ -55,8 +55,7 @@ def pair_showers(reference_showers, compared_showers, *, reference_label: str, c
     for pre, post in zip(reference_showers, compared_showers, strict=True):
         if pre.shower_id != post.shower_id:
             raise ValueError(
-                f"Cannot compare {reference_label} to {compared_label}: shower_id mismatch "
-                f"{pre.shower_id} vs {post.shower_id}."
+                f"Cannot compare {reference_label} to {compared_label}: shower_id mismatch {pre.shower_id} vs {post.shower_id}."
             )
         pairs.append((pre, post))
     return pairs
@@ -88,7 +87,7 @@ def main():
         "--hdbscan-algorithm",
         choices=["auto", "brute", "kd_tree", "ball_tree"],
         default="brute",
-        help="HDBSCAN tree-building algorithm."
+        help="HDBSCAN tree-building algorithm.",
     )
     parser.add_argument("--use-time", action="store_true", help="Include time as a clustering feature in HDBSCAN.")
     parser.add_argument(
@@ -177,9 +176,7 @@ def main():
             raise ValueError("Comparison mode with three or more --input files requires --label for each input.")
         reference_label = "pre" if args.label is None else args.label[0]
         reference_showers = load_showers(reference_path, collections)
-        compared_labels = (
-            ["post"] if len(args.input) == 2 and args.label is None else args.label[1:]
-        )
+        compared_labels = ["post"] if len(args.input) == 2 and args.label is None else args.label[1:]
         comparisons = []
         for compared_path, compared_label in zip(args.input[1:], compared_labels, strict=True):
             compared_showers = load_showers(compared_path, collections)
@@ -242,9 +239,15 @@ def main():
             collection_name=args.collection_name[0],
         )
     pairs = []
+    n_empty = 0
     for shower in reader.iter_showers():
+        if shower.n_points == 0:
+            n_empty += 1
+            continue
         result = algorithm.compress(shower)
         pairs.append((shower, result.shower))
+    if n_empty:
+        print(f"Skipped {n_empty} empty showers")
     generate_benchmark_plots(
         pairs,
         Path(args.outdir),
