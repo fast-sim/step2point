@@ -239,19 +239,28 @@ def main():
         local = transform.global_to_local_points(raw.T).T
         x_local, y_local = local[:, 0], local[:, 1]
 
-        # Box selection in local x/y, now on shifted (per-shower-axis-centered)
-        # coordinates like apply_transformations()'s own box_selection() call -
-        # the one other cut kept, since without it rare far-outlier steps
-        # (backscatter, stray secondaries) blow out the spatial range and
-        # degrade binning/resolution for everything. Edge set to
-        # 249.32670000000002 mm (matching apply_transformations()'s cell_edge)
-        # instead of metadata's default 250mm, so the cut lands exactly on a
-        # readout cell boundary instead of mid-cell.
+        # Box selection via the real pipeline's own box_selection() call - same
+        # call, same edges, restrict flags as apply_transformations() uses on
+        # the shifted GLOBAL (X, Y, Z) array before its own rotation to local
+        # frame (restrict_y=False: only the transverse extent is cut, not the
+        # depth axis). The one other cut kept, since without it rare
+        # far-outlier steps (backscatter, stray secondaries) blow out the
+        # spatial range and degrade binning/resolution for everything. Edge
+        # set to 249.32670000000002 mm (matching apply_transformations()'s
+        # cell_edge) instead of metadata's default 250mm, so the cut lands
+        # exactly on a readout cell boundary instead of mid-cell.
         if args.no_shift_and_cut:
             in_box = np.ones(x_local.shape[0], dtype=bool)
         else:
             cell_edge = 249.32670000000002
-            in_box = (x_local > -cell_edge) & (x_local < cell_edge) & (y_local > -cell_edge) & (y_local < cell_edge)
+            event_shifted = np.stack([x_shifted, shower.y, z_shifted, shower.E], axis=1)
+            in_box = transform.box_selection(
+                event_shifted,
+                restrict_x=True,
+                restrict_y=False,
+                restrict_z=True,
+                box_cut=[-cell_edge, cell_edge, cell_edge, -cell_edge],
+            )
         if not np.any(in_box):
             n_empty += 1
             continue
