@@ -109,6 +109,18 @@ def parse_args():
         help="Optional HDF5 or EDM4hep ROOT shower source to overlay as xyzE points. Debug HDF5 files with "
         "steps/cluster_label are colored by cluster label automatically.",
     )
+    parser.add_argument(
+        "--overlay-render",
+        choices=("points", "geometry"),
+        default="points",
+        help="Render overlay as point markers or geometry-backed cell/subcell shapes when supported.",
+    )
+    parser.add_argument(
+        "--overlay-size-scale",
+        type=float,
+        default=1.0,
+        help="Scale factor for overlay point-marker size. Useful when plotting the full detector.",
+    )
     parser.add_argument("--overlay-shower-index", type=int, default=0, help="Shower index used with --overlay-input.")
     parser.add_argument(
         "--overlay-collections",
@@ -120,6 +132,11 @@ def parse_args():
         "--debug",
         action="store_true",
         help="Enable debugging additions such as decoded cell-id labels on overlay hits.",
+    )
+    parser.add_argument(
+        "--presentation-single-layer",
+        action="store_true",
+        help="Presentation mode: draw only one representative detector layer while keeping the full hit overlay.",
     )
     parser.add_argument("--verbose", action="store_true", help="Print detailed resolved geometry/debug information.")
     return parser.parse_args()
@@ -148,6 +165,8 @@ def main():
     mode = "modules" if draw_modules else ("cells" if draw_cells else "layers")
     if draw_cells and args.sensitive_only:
         mode = f"{mode}_sensitive"
+    if args.presentation_single_layer:
+        mode = f"{mode}_presentation_single_layer"
     selected_module = args.module if (args.zoom or draw_cells) else None
     scope = f"module_{args.module}" if selected_module is not None else "detector"
     label = "module_envelopes" if draw_modules else (f"layer_{args.layer}" if args.layer is not None else "all_layers")
@@ -161,7 +180,10 @@ def main():
         module_index=selected_module,
         modules_only=draw_modules,
         overlay_shower=overlay_shower,
+        overlay_render=args.overlay_render,
+        overlay_size_scale=args.overlay_size_scale,
         annotate_cell_id=args.debug,
+        presentation_single_layer=args.presentation_single_layer,
         xlim=tuple(args.xlim) if args.xlim else None,
         ylim=tuple(args.ylim) if args.ylim else None,
         zlim=tuple(args.zlim) if args.zlim else None,

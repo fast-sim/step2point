@@ -23,7 +23,7 @@ def test_hdbscan_output_matches_reference_with_time(tmp_path):
     outdir = run_pipeline(
         tmp_path,
         "hdbscan",
-        extra_args=["--use-time", "--hdbscan-cell-id-encoding", ODD_BARREL_ENCODING],
+        extra_args=["--use-time", "--cell-id-encoding", ODD_BARREL_ENCODING],
     )
     assert_summary_equals(outdir / "compression_summary_hdbscan.txt", "hdbscan")
     assert_showers_equal(HDBSCAN_REFERENCE, outdir / "compressed_hdbscan.h5")

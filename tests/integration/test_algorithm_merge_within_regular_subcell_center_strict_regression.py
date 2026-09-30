@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from tests.integration.algorithm_regression_helpers import (
+    REGULAR_SUBCELL_CENTER_MULTI_REFERENCE,
     REGULAR_SUBCELL_CENTER_REFERENCE,
     assert_showers_equal,
     assert_summary_equals,
@@ -68,10 +69,10 @@ def test_merge_within_regular_subcell_center_multi_collections(tmp_path):
 
     assert_summary_equals(
         outdir / "compression_summary_merge_within_regular_subcell.txt",
-        "merge_within_regular_subcell_center_3x3",
+        "merge_within_regular_subcell_center_3x3_multi",
     )
 
     assert_showers_equal(
-        REGULAR_SUBCELL_CENTER_REFERENCE,
+        REGULAR_SUBCELL_CENTER_MULTI_REFERENCE,
         outdir / "compressed_merge_within_regular_subcell.h5",
     )

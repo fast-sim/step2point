@@ -35,3 +35,49 @@ def test_hdf5_reader_preserves_cluster_labels(tmp_path: Path):
     assert showers[0].metadata["debug_output"] is True
     np.testing.assert_array_equal(showers[0].metadata["cluster_label"], np.array([4, 4], dtype=np.int64))
     np.testing.assert_array_equal(showers[1].metadata["cluster_label"], np.array([9], dtype=np.int64))
+
+
+def test_hdf5_reader_preserves_overlay_geometry_metadata(tmp_path: Path):
+    path = tmp_path / "compressed_regular_subcell.h5"
+    with h5py.File(path, "w") as h5:
+        h5.attrs["algorithm"] = "merge_within_regular_subcell"
+        h5.attrs["x_bins"] = 5
+        h5.attrs["y_bins"] = 5
+        h5.attrs["position_mode"] = "weighted"
+        h5.attrs["collection_name"] = "ECalBarrelCollection"
+        steps = h5.create_group("steps")
+        steps.create_dataset("event_id", data=np.array([0], dtype=np.int32))
+        steps.create_dataset("energy", data=np.array([1.0], dtype=np.float32))
+        steps.create_dataset("position", data=np.array([[0.0, 1308.0, 0.0]], dtype=np.float32))
+        steps.create_dataset("cell_id", data=np.array([1], dtype=np.uint64))
+
+    shower = next(Step2PointHDF5Reader(str(path)).iter_showers())
+    assert shower.metadata["algorithm"] == "merge_within_regular_subcell"
+    assert shower.metadata["x_bins"] == 5
+    assert shower.metadata["y_bins"] == 5
+    assert shower.metadata["position_mode"] == "weighted"
+    assert shower.metadata["collection_name"] == "ECalBarrelCollection"
+
+
+def test_hdf5_reader_preserves_multi_collection_geometry_metadata(tmp_path: Path):
+    path = tmp_path / "compressed_regular_subcell_multi.h5"
+    with h5py.File(path, "w") as h5:
+        h5.attrs["algorithm"] = "merge_within_regular_subcell"
+        h5.attrs["x_bins"] = np.array([3, 5], dtype=np.int64)
+        h5.attrs["y_bins"] = np.array([3, 5], dtype=np.int64)
+        h5.attrs["position_mode"] = np.array(["weighted", "weighted"], dtype="S")
+        h5.attrs["collection_name"] = np.array(
+            ["ECalBarrelCollection", "HCalBarrelCollection"],
+            dtype="S",
+        )
+        steps = h5.create_group("steps")
+        steps.create_dataset("event_id", data=np.array([0], dtype=np.int32))
+        steps.create_dataset("energy", data=np.array([1.0], dtype=np.float32))
+        steps.create_dataset("position", data=np.array([[0.0, 1308.0, 0.0]], dtype=np.float32))
+        steps.create_dataset("cell_id", data=np.array([1], dtype=np.uint64))
+
+    shower = next(Step2PointHDF5Reader(str(path)).iter_showers())
+    assert shower.metadata["x_bins"] == [3, 5]
+    assert shower.metadata["y_bins"] == [3, 5]
+    assert shower.metadata["position_mode"] == ["weighted", "weighted"]
+    assert shower.metadata["collection_name"] == ["ECalBarrelCollection", "HCalBarrelCollection"]
