@@ -108,6 +108,11 @@ def run_pipeline(mcs: int, ms: int, epsilon: float) -> Path:
                 stdout=log,
                 stderr=subprocess.STDOUT,
             )
+        # convert_to_cc3_format.py names its output input_cc3_<run dir>.h5 when given
+        # --pc_save_folder; the plots (and older sweep runs) use input_cc3.h5
+        produced = out_dir / f"input_cc3_{out_dir.name}.h5"
+        if produced.exists():
+            produced.rename(pc_file)
 
         status = "OK" if (result is not None and result.returncode == 0) else f"FAILED (rc={result.returncode})"
         print(status)
