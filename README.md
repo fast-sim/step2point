@@ -104,6 +104,7 @@ step2point/
 │   └── bindings/
 ├── tests/
 ├── examples/
+├── hdbscan_sweep/
 └── .github/workflows/
 ```
 
@@ -372,6 +373,61 @@ Typical outputs are:
 - `shower_<id>_overview.png`
 
 For detector-aware geometry inspection and shower overlays on module/layer/cell views, use [examples/plot_detector_cells.py](examples/plot_detector_cells.py:1). It writes `XY`, `XZ`, and `ZY` detector projections. The detailed workflow and example screenshots are documented in [docs/validation.md](docs/validation.md:1).
+
+## HDBSCAN parameter sweep
+
+[hdbscan_sweep/sweep_hdbscan.py](hdbscan_sweep/sweep_hdbscan.py) runs `examples/run_step2point_pipeline.py --algorithm hdbscan` over a grid of `min_cluster_size` (m_cs) and `min_samples` (m_s) and plots how the compression depends on them.
+
+> **Only tested on ILD.** The sweep was written for, and only tested with, photon showers in the ILD ECal barrel prepared as CaloClouds-3 input (`--preset ild`). The generic mode runs on any input step2point can read (checked only on the ODD test file in `tests/data/`); detector-specific extras, such as reference curves or conversion to a downstream format, can be added as a new preset in `PRESETS` at the top of the script.
+
+Run it in the environment step2point runs in; the pipeline is started with the same Python. For EDM4hep input that means Key4hep:
+
+```bash
+source /cvmfs/sw.hsf.org/key4hep/setup.sh
+source .venv-key4hep/bin/activate
+```
+
+### Generic sweep
+
+Give the input and a way to decode cell IDs (HDBSCAN needs it), either the encoding string or a DD4hep compact XML with the readout name(s):
+
+```bash
+python hdbscan_sweep/sweep_hdbscan.py \
+  --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+  --cell-id-encoding "system:8,barrel:3,module:4,stave:1,layer:6,slice:5,x:32:-16,y:-16" \
+  --use-time \
+  --min-cluster-sizes 5 10 20 \
+  --min-samples 3 5 8 \
+  --output-dir outputs/hdbscan_sweep_odd
+```
+
+| option | meaning |
+|---|---|
+| `--input` | input file (EDM4hep `.root` or step2point `.h5`) |
+| `--collections` | readout collection(s), for EDM4hep input |
+| `--cell-id-encoding` | cell-ID encoding string, or instead: |
+| `--compact-xml` + `--collection-name` | DD4hep compact XML and readout name(s) to read the encoding from |
+| `--merge-scope`, `--use-time` | passed to the pipeline (default: pipeline default, no time) |
+| `--min-cluster-sizes`, `--min-samples`, `--epsilon` | the grid; combinations with m_s > m_cs are skipped |
+| `--output-dir` | where runs and plots go (default `$SWEEP_DIR`, else `outputs/hdbscan_sweep`) |
+
+Each grid point gets a folder `<output-dir>/hdbscan_mcs<N>_ms<M>/` with `compressed_hdbscan.h5`, `compression_summary_hdbscan.txt` and `run.log`. A grid point whose `compressed_hdbscan.h5` already exists is not rerun, so extending the grid only computes the new points. The plots in `<output-dir>/plots/` are the compression ratio vs m_cs and m_s (`compression_ratios.png`) and the points-per-shower and point-energy distributions (`points_per_event_overlay.png`, `hit_energy_overlay.png`). `summary.csv` currently lists only m_cs and m_s; the compression numbers are in each `compression_summary_hdbscan.txt`.
+
+### ILD preset (CaloClouds-3)
+
+```bash
+export CC3_DIR=/path/to/CaloClouds-3
+python hdbscan_sweep/sweep_hdbscan.py --preset ild
+```
+
+`--preset ild` sets the ILD input (the 100-shower `test_small.edm4hep.root`), `EcalBarrelCollection`, the ILD cell-ID encoding, `--merge-scope cell_id` and `--use-time`; any option given on the command line overrides it. On top of the generic sweep it
+
+- converts every run to CaloClouds-3 input (`input_cc3.h5`) with `preprocessing/convert_to_cc3_format.py` of the CaloClouds-3 version used for the step2point study; point `$CC3_DIR` to that checkout (required for this preset),
+- adds reference curves from identity, merge within cell and merge within regular subcell run on the same input (`/eos/project/f/fast/step2point_files/pipeline2_<algorithm>/test_small/`),
+- makes the plots that read the 30-layer CC3 files (clusters per cell, per-layer distributions, radial and longitudinal profiles),
+- writes to `$CC3_DIR/outputs/hdbscan_sweep` unless `--output-dir` or `$SWEEP_DIR` is set.
+
+The two sweep figures of the step2point/CaloClouds-3 paper are made from these ILD outputs in CaloClouds-3: `paper_figures/run_hdbscan_sweep_ild.sh` runs this sweep on the paper grid and then makes both figures.
 
 ## [WIP] C++ backend
 
