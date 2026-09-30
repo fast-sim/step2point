@@ -3,17 +3,22 @@ HDBSCAN parameter sweep for photon showers in EDM4HEP calorimeter data.
 Runs the pipeline over a grid of (min_cluster_size, min_samples) and
 produces summary plots.
 
-Usage:
-    PYTHONPATH=src python sweep_hdbscan.py
+Usage (from anywhere):
+    python hdbscan_sweep/sweep_hdbscan.py
 
-Outputs:
-    outputs/sweep/hdbscan_mcs{N}_ms{M}/   — one folder per run
-    outputs/sweep/summary.csv             — collected metrics
-    outputs/sweep/plots/                  — all figures
+The CC3 conversion of each run uses CaloClouds-3's
+preprocessing/convert_to_cc3_format.py, found via $CC3_DIR
+(default /eos/user/m/mamozzan/CaloClouds-3).
+
+Outputs (under the step2point repo root):
+    outputs/hdbscan_sweep/hdbscan_mcs{N}_ms{M}/   — one folder per run
+    outputs/hdbscan_sweep/summary.csv             — collected metrics
+    outputs/hdbscan_sweep/plots/                  — all figures
 """
 
 import itertools
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -29,7 +34,9 @@ import pandas as pd
 INPUT = "/eos/project/f/fast/edm4hep_frombenchmark/test_small.edm4hep.root"
 COLLECTION = "EcalBarrelCollection"
 MERGE_SCOPE = "cell_id"
-BASE_OUTPUT = Path("outputs/hdbscan_sweep")
+REPO_ROOT = Path(__file__).resolve().parents[1]  # step2point repo root
+CC3_DIR = Path(os.environ.get("CC3_DIR", "/eos/user/m/mamozzan/CaloClouds-3"))
+BASE_OUTPUT = REPO_ROOT / "outputs/hdbscan_sweep"
 
 MIN_CLUSTER_SIZES = [5, 10, 15, 25, 40, 60, 80]
 MIN_SAMPLES_LIST = [3, 5, 8, 12, 20, 40, 60]
@@ -59,14 +66,14 @@ def run_pipeline(mcs: int, ms: int, epsilon: float) -> Path:
     )
 
     cmd = f"""
-        cd /eos/user/m/mamozzan/step2point/ && \
+        cd {REPO_ROOT} && \
         source .venv-key4hep/bin/activate && \
         python examples/run_step2point_pipeline.py {args}
     """
     cmd_cc3 = f"""
-        cd /eos/user/m/mamozzan/step2point/ && \
+        cd {REPO_ROOT} && \
         source .venv-key4hep/bin/activate && \
-        python martina_test/convert_to_cc3_format.py {out_dir / "compressed_hdbscan.h5"} --pc_save_folder {out_dir}
+        python {CC3_DIR / "preprocessing/convert_to_cc3_format.py"} {out_dir / "compressed_hdbscan.h5"} --pc_save_folder {out_dir}
     """
     log_path = out_dir / "run.log"
     print(f"  → mcs={mcs:2d}, ms={ms} epsilon={epsilon} ...", end=" ", flush=True)
