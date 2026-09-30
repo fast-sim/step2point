@@ -164,6 +164,26 @@ These limits are used consistently to:
 - select which overlay points are kept
 - set the axis zoom
 
+For presentation plots, `--presentation-single-layer` draws one representative
+detector layer as the backdrop while retaining hits from every layer. Only
+limits explicitly provided by the user filter the hit overlay. For example,
+this produces an `XZ` projection with a single-layer detector backdrop, all
+projected hits, and only an `x` restriction:
+
+```bash
+PYTHONPATH=src python examples/plot_detector_cells.py \
+  --compact-xml OpenDataDetector/xml/OpenDataDetector.xml \
+  --collection ECalBarrelCollection \
+  --draw-cells \
+  --module 10 \
+  --presentation-single-layer \
+  --overlay-input outputs/pipeline_hdbscan/compressed_hdbscan.h5 \
+  --overlay-shower-index 0 \
+  --overlay-render points \
+  --xlim -250 250 \
+  --outdir outputs/detector_presentation
+```
+
 Example with a manual detector/debug window:
 
 ```bash
@@ -369,6 +389,21 @@ python examples/generate_validation_plots.py \
     outputs/pipeline_merge_within_cell/compressed_merge_within_cell.h5 \
   --outdir outputs/plots_compare_merge_within_cell
 ```
+
+Overlay-style validation plots include a compact ratio panel by default.
+Control its vertical range with `--ratio-ylim MIN MAX`, or remove it with
+`--no-ratio`:
+
+```bash
+python examples/generate_validation_plots.py \
+  --input original.h5 compressed.h5 \
+  --ratio-ylim 0.9 1.1 \
+  --outdir outputs/plots_compare
+```
+
+When comparing three or more files, provide one `--label` per input. All
+comparisons are overlaid in the same output plots and use the first input as
+the reference.
 
 ## Units used in the plots
 

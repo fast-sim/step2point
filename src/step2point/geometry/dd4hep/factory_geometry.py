@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import math
 import operator
 import os
 import re
@@ -33,11 +34,21 @@ _UNITS = {
     "tesla": 1.0,
     "deg": np.pi / 180.0,
     "rad": 1.0,
+    "mrad": 1e-3,
+}
+
+_FUNCTIONS = {
+    "sin": math.sin,
+    "cos": math.cos,
+    "tan": math.tan,
+    "sqrt": math.sqrt,
+    "floor": math.floor,
+    "ceil": math.ceil,
 }
 
 
 def _eval_expr(expr: str, names: dict[str, float]) -> float:
-    expr = expr.strip()  # remove leading/trailing whitespace
+    expr = expr.strip()
     node = ast.parse(expr, mode="eval")
 
     def _visit(current: ast.AST) -> float:
@@ -51,6 +62,10 @@ def _eval_expr(expr: str, names: dict[str, float]) -> float:
             if current.id in _UNITS:
                 return _UNITS[current.id]
             raise KeyError(current.id)
+        if isinstance(current, ast.Call):
+            if isinstance(current.func, ast.Name) and current.func.id in _FUNCTIONS and len(current.args) == 1:
+                return _FUNCTIONS[current.func.id](_visit(current.args[0]))
+            raise ValueError(f"Unsupported function: {ast.dump(current)}")
         if isinstance(current, ast.BinOp) and type(current.op) in _BIN_OPS:
             return _BIN_OPS[type(current.op)](_visit(current.left), _visit(current.right))
         if isinstance(current, ast.UnaryOp) and type(current.op) in _UNARY_OPS:
@@ -147,15 +162,20 @@ class DD4hepResolver:
         ### Iteratively load constants
 
         pending = {}
+        constants = {}
 
         for root in self._roots.values():
             for const in root.iter("constant"):
                 name = const.attrib.get("name")
                 expr = const.attrib.get("value")
                 if name and expr:
+                    expr = expr.strip()
+                    # DD4hep ID encoding string
+                    if ":" in expr and "," in expr:
+                        constants[name] = expr
+                        continue
                     pending[name] = expr
 
-        constants = {}
         pending = pending.copy()
 
         while pending:
@@ -199,6 +219,8 @@ class DD4hepResolver:
 
 ### Subsitute expresions for variable resolution in xml
 def normalize(expr):
+    expr = expr.strip()
+    expr = re.sub(r"\(int\)\s*", "", expr)
     expr = expr.replace("^", "**")
     expr = re.sub(r"(\d)\s+(\d)", r"\1*\2", expr)
     return expr
@@ -265,15 +287,18 @@ def build_barrel_layout_from_collection(main_xml: str | Path, collection_name: s
     readout = readout_ref.element
     detector = detector_ref.element
     det_id_str = detector.get("id")
-
     det_id = int(resolver.constants[det_id_str])
 
-    supported_detectors = {"ODDPolyhedraBarrelCalorimeter", "DD4hep_PolyhedraBarrelCalorimeter2"}
+    supported_detectors = {
+        "ODDPolyhedraBarrelCalorimeter",
+        "DD4hep_PolyhedraBarrelCalorimeter2",
+        "GenericCalBarrel_o1_v01",
+    }
 
     if detector.attrib.get("type") not in supported_detectors:
         raise NotImplementedError(
-            "Only ODDPolyhedraBarrelCalorimeter or DD4hep_PolyhedraBarrelCalorimeter2 is "
-            f"implemented in this prototype, got {detector.attrib.get('type')!r}"
+            f"Only ODDPolyhedraBarrelCalorimeter or DD4hep_PolyhedraBarrelCalorimeter2 or GenericCalBarrel_o1_v01"
+            f"is implemented in this prototype, got {detector.attrib.get('type')!r}"
         )
 
     seg = readout.find("segmentation")
@@ -349,7 +374,7 @@ def build_barrel_layout_from_collection(main_xml: str | Path, collection_name: s
     return BarrelLayout(
         collection_name=collection_name,
         detector_name=detector.attrib["name"],
-        det_id = det_id,
+        det_id=det_id,
         readout_xml_path=str(readout_ref.path),
         detector_xml_path=str(detector_ref.path),
         segmentation_type=seg.attrib["type"],
@@ -410,6 +435,158 @@ def barrel_cell_center(
     xy = sensitive_center_xy + float(cell_x) * layer.pitch_tangent_mm * tangent
     z = float(cell_y) * layer.pitch_z_mm
     return np.array([xy[0], xy[1], z], dtype=np.float64)
+
+
+def barrel_cell_polygon_xy(
+    layout: BarrelLayout,
+    layer_index: int,
+    module_index: int,
+    cell_x: int,
+    *,
+    sensitive_only: bool = False,
+) -> np.ndarray:
+    layer = layout.layers[layer_index - 1]
+    center_xy, radial, tangent = barrel_module_basis(layout, layer_index, module_index)
+    radial_center_xy = (
+        center_xy + (layer.sensitive_radius_mm - layout.sect_center_radius_mm) * radial
+        if sensitive_only
+        else center_xy + (layer.layer_center_radius_mm - layout.sect_center_radius_mm) * radial
+    )
+    radial_half_extent = layer.sensitive_half_thickness_mm if sensitive_only else layer.half_thickness_mm
+    x0 = float(cell_x) * layer.pitch_tangent_mm - 0.5 * layer.pitch_tangent_mm
+    x1 = float(cell_x) * layer.pitch_tangent_mm + 0.5 * layer.pitch_tangent_mm
+    return np.array(
+        [
+            radial_center_xy + x0 * tangent - radial_half_extent * radial,
+            radial_center_xy + x1 * tangent - radial_half_extent * radial,
+            radial_center_xy + x1 * tangent + radial_half_extent * radial,
+            radial_center_xy + x0 * tangent + radial_half_extent * radial,
+        ],
+        dtype=np.float64,
+    )
+
+
+def barrel_cell_polygon_xz(
+    layout: BarrelLayout,
+    layer_index: int,
+    module_index: int,
+    cell_x: int,
+    cell_y: int,
+    *,
+    sensitive_only: bool = False,
+) -> np.ndarray:
+    layer = layout.layers[layer_index - 1]
+    xy_polygon = barrel_cell_polygon_xy(
+        layout,
+        layer_index,
+        module_index,
+        cell_x,
+        sensitive_only=sensitive_only,
+    )
+    z0 = float(cell_y) * layer.pitch_z_mm - 0.5 * layer.pitch_z_mm
+    z1 = float(cell_y) * layer.pitch_z_mm + 0.5 * layer.pitch_z_mm
+    return np.array(
+        [
+            [xy_polygon[0, 0], z0],
+            [xy_polygon[1, 0], z0],
+            [xy_polygon[2, 0], z1],
+            [xy_polygon[3, 0], z1],
+        ],
+        dtype=np.float64,
+    )
+
+
+def barrel_cell_polygon_zy(
+    layout: BarrelLayout,
+    layer_index: int,
+    module_index: int,
+    cell_x: int,
+    cell_y: int,
+    *,
+    sensitive_only: bool = False,
+) -> np.ndarray:
+    xy_polygon = barrel_cell_polygon_xy(
+        layout,
+        layer_index,
+        module_index,
+        cell_x,
+        sensitive_only=sensitive_only,
+    )
+    z0 = float(cell_y) * layout.layers[layer_index - 1].pitch_z_mm - 0.5 * layout.layers[layer_index - 1].pitch_z_mm
+    z1 = float(cell_y) * layout.layers[layer_index - 1].pitch_z_mm + 0.5 * layout.layers[layer_index - 1].pitch_z_mm
+    ymin = float(np.min(xy_polygon[:, 1]))
+    ymax = float(np.max(xy_polygon[:, 1]))
+    return np.array(
+        [
+            [z0, ymin],
+            [z1, ymin],
+            [z1, ymax],
+            [z0, ymax],
+        ],
+        dtype=np.float64,
+    )
+
+
+def barrel_subcell_polygons_xy_xz_zy(
+    layout: BarrelLayout,
+    layer_index: int,
+    module_index: int,
+    cell_x: int,
+    cell_y: int,
+    sub_x: int,
+    sub_y: int,
+    *,
+    x_bins: int,
+    y_bins: int,
+    sensitive_only: bool = False,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    layer = layout.layers[layer_index - 1]
+    center_xy, radial, tangent = barrel_module_basis(layout, layer_index, module_index)
+    radial_center_xy = (
+        center_xy + (layer.sensitive_radius_mm - layout.sect_center_radius_mm) * radial
+        if sensitive_only
+        else center_xy + (layer.layer_center_radius_mm - layout.sect_center_radius_mm) * radial
+    )
+    radial_half_extent = layer.sensitive_half_thickness_mm if sensitive_only else layer.half_thickness_mm
+
+    x_sub_pitch = layer.pitch_tangent_mm / float(x_bins)
+    z_sub_pitch = layer.pitch_z_mm / float(y_bins)
+
+    x0 = float(cell_x) * layer.pitch_tangent_mm - 0.5 * layer.pitch_tangent_mm + sub_x * x_sub_pitch
+    x1 = x0 + x_sub_pitch
+    z0 = float(cell_y) * layer.pitch_z_mm - 0.5 * layer.pitch_z_mm + sub_y * z_sub_pitch
+    z1 = z0 + z_sub_pitch
+
+    xy = np.array(
+        [
+            radial_center_xy + x0 * tangent - radial_half_extent * radial,
+            radial_center_xy + x1 * tangent - radial_half_extent * radial,
+            radial_center_xy + x1 * tangent + radial_half_extent * radial,
+            radial_center_xy + x0 * tangent + radial_half_extent * radial,
+        ],
+        dtype=np.float64,
+    )
+    xz = np.array(
+        [
+            [xy[0, 0], z0],
+            [xy[1, 0], z0],
+            [xy[2, 0], z1],
+            [xy[3, 0], z1],
+        ],
+        dtype=np.float64,
+    )
+    ymin = float(np.min(xy[:, 1]))
+    ymax = float(np.max(xy[:, 1]))
+    zy = np.array(
+        [
+            [z0, ymin],
+            [z1, ymin],
+            [z1, ymax],
+            [z0, ymax],
+        ],
+        dtype=np.float64,
+    )
+    return xy, xz, zy
 
 
 def module_grid_lines_xy_zy(

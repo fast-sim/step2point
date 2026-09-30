@@ -8,6 +8,7 @@ from step2point.vis.detector_layout_utils import (
     WorldBounds,
     filter_geometry_to_bounds,
     overlay_color_spec,
+    resolve_overlay_bounds,
 )
 
 
@@ -64,6 +65,28 @@ def test_world_bounds_resolved_uses_user_limits_or_fallbacks():
     assert bounds.zlim == (4.0, 5.0)
 
 
+def test_presentation_overlay_bounds_do_not_inherit_detector_fallbacks():
+    bounds = resolve_overlay_bounds(
+        WorldBounds(xlim=(-250.0, 250.0)),
+        fallback_x=(-10.0, 10.0),
+        fallback_y=(1307.0, 1309.0),
+        fallback_z=(-5.0, 5.0),
+        presentation_single_layer=True,
+    )
+    assert bounds == WorldBounds(xlim=(-250.0, 250.0))
+
+
+def test_debug_overlay_bounds_inherit_detector_fallbacks():
+    bounds = resolve_overlay_bounds(
+        WorldBounds(xlim=(-2.0, 2.0)),
+        fallback_x=(-10.0, 10.0),
+        fallback_y=(1307.0, 1309.0),
+        fallback_z=(-5.0, 5.0),
+        presentation_single_layer=False,
+    )
+    assert bounds == WorldBounds(xlim=(-2.0, 2.0), ylim=(1307.0, 1309.0), zlim=(-5.0, 5.0))
+
+
 def test_overlay_color_spec_uses_cluster_labels_when_available():
     shower = Shower(
         shower_id=0,
@@ -74,8 +97,10 @@ def test_overlay_color_spec_uses_cluster_labels_when_available():
         metadata={"cluster_label": np.array([10, 20, 10], dtype=np.int64)},
     )
     values, cmap = overlay_color_spec(shower, np.array([True, True, True]))
-    np.testing.assert_array_equal(values, np.array([0.0, 1.0, 0.0]))
-    assert cmap is not None
+    assert values.shape == (3, 4)
+    np.testing.assert_allclose(values[0], values[2])
+    assert not np.allclose(values[0], values[1])
+    assert cmap is None
 
 
 def test_overlay_color_spec_falls_back_to_log_energy():
