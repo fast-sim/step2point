@@ -3,6 +3,7 @@
 filters, as plot_compression_ratios() in
 hdbscan_sweep/sweep_hdbscan.py."""
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -14,7 +15,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from sweep_style import EXCLUDE_MS, MS_COLORS, REF_COLORS, apply_style
 
-SWEEP = Path(__file__).resolve().parents[1] / "outputs/hdbscan_sweep"  # step2point/outputs
+CC3_DIR = os.environ.get("CC3_DIR", "/eos/user/m/mamozzan/CaloClouds-3")
+# sweep outputs written by sweep_hdbscan.py
+SWEEP = Path(os.environ.get("SWEEP_DIR", f"{CC3_DIR}/outputs/hdbscan_sweep"))
 REFS = [
     (
         "/eos/project/f/fast/step2point_files/pipeline2_merge_within_cell/test_small/compression_summary_merge_within_cell.txt",
