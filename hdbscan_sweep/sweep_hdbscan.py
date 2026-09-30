@@ -1,27 +1,34 @@
 """
-HDBSCAN parameter sweep for photon showers in EDM4HEP calorimeter data.
-Runs the pipeline over a grid of (min_cluster_size, min_samples) and
-produces summary plots.
+HDBSCAN parameter sweep with step2point: runs examples/run_step2point_pipeline.py
+with --algorithm hdbscan over a grid of (min_cluster_size, min_samples) and
+makes summary plots.
 
-Usage (from anywhere):
-    python hdbscan_sweep/sweep_hdbscan.py
+Only tested with --preset ild (photon showers in the ILD ECal barrel, prepared
+as CaloClouds-3 input). Without a preset it only runs the grid and makes the
+generic plots; pass the input, collections and a way to decode cell IDs:
 
-The CC3 conversion of each run uses CaloClouds-3's
-preprocessing/convert_to_cc3_format.py, found via $CC3_DIR
-(default /eos/user/m/mamozzan/CaloClouds-3).
+    python hdbscan_sweep/sweep_hdbscan.py --preset ild
+    python hdbscan_sweep/sweep_hdbscan.py --input showers.edm4hep.root \
+        --collections ECalBarrelCollection --cell-id-encoding <encoding> \
+        --min-cluster-sizes 5 10 20 --min-samples 3 8
 
-Outputs go to $SWEEP_DIR (default $CC3_DIR/outputs/hdbscan_sweep, git-ignored
-there), which plot_mean_compression.py and plot_sweep_profiles.py read:
+Run it in the environment step2point runs in (for EDM4hep input: Key4hep +
+.venv-key4hep); the pipeline is started with the same Python.
+
+Outputs go to --output-dir (default $SWEEP_DIR, else the preset's folder, else
+<repo>/outputs/hdbscan_sweep):
     hdbscan_mcs{N}_ms{M}/   — one folder per run
     summary.csv             — collected metrics
     plots/                  — all figures
 """
 
+import argparse
 import itertools
 import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import h5py
@@ -29,20 +36,49 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-# ─────────────────────────────────────────────
-# CONFIG — edit these
-# ─────────────────────────────────────────────
-INPUT = "/eos/project/f/fast/edm4hep_frombenchmark/test_small.edm4hep.root"
-COLLECTION = "EcalBarrelCollection"
-MERGE_SCOPE = "cell_id"
 REPO_ROOT = Path(__file__).resolve().parents[1]  # step2point repo root
 CC3_DIR = Path(os.environ.get("CC3_DIR", "/eos/user/m/mamozzan/CaloClouds-3"))
-BASE_OUTPUT = Path(os.environ.get("SWEEP_DIR", CC3_DIR / "outputs/hdbscan_sweep"))
 
-MIN_CLUSTER_SIZES = [5, 10, 15, 25, 40, 60, 80]
-MIN_SAMPLES_LIST = [3, 5, 8, 12, 20, 40, 60]
-EPSILON = [0.0]  # , 0.5, 1.0, 2.0, 5.0]
 # ─────────────────────────────────────────────
+# DETECTOR PRESETS
+# ─────────────────────────────────────────────
+# Only "ild" exists and has been tested. Command-line options override preset
+# values. To add a detector, add an entry with the same keys:
+#   reference_dir: folder holding pipeline2_<algorithm>/test_small/ outputs of
+#       identity / merge_within_cell / merge_within_regular_subcell on the same
+#       input, drawn as reference curves (None: no references)
+#   cc3: also convert each run to CaloClouds-3 input (needs $CC3_DIR) and make
+#       the plots that read it; they assume the 30-layer ILD CC3 format
+PRESETS = {
+    "ild": {
+        "input": "/eos/project/f/fast/edm4hep_frombenchmark/test_small.edm4hep.root",
+        "collections": ["EcalBarrelCollection"],
+        "cell_id_encoding": "system:5,module:3,stave:4,tower:4,layer:6,wafer:6,slice:4,cellX:32:-16,cellY:-16",
+        "merge_scope": "cell_id",
+        "use_time": True,
+        "output_dir": CC3_DIR / "outputs/hdbscan_sweep",
+        "reference_dir": "/eos/project/f/fast/step2point_files",
+        "cc3": True,
+    },
+}
+
+DEFAULT_MIN_CLUSTER_SIZES = [5, 10, 15, 25, 40, 60, 80]
+DEFAULT_MIN_SAMPLES = [3, 5, 8, 12, 20, 40, 60]
+DEFAULT_EPSILON = [0.0]
+
+# Set by configure() from the command line and the preset
+PRESET = None
+INPUT = None
+COLLECTIONS = []
+CELL_ID_ENCODING = None
+COMPACT_XML = None
+COLLECTION_NAMES = []
+MERGE_SCOPE = None
+USE_TIME = False
+REFERENCE_DIR = None
+CC3 = False
+BASE_OUTPUT = REPO_ROOT / "outputs/hdbscan_sweep"
+PLOT_DIR = BASE_OUTPUT / "plots"
 
 
 def run_pipeline(mcs: int, ms: int, epsilon: float) -> Path:
@@ -51,31 +87,33 @@ def run_pipeline(mcs: int, ms: int, epsilon: float) -> Path:
         out_dir = Path(str(out_dir) + f"_eps{epsilon}")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    args = " ".join(
-        [
-            f"--input {INPUT}",
-            "--algorithm hdbscan",
-            "--hdbscan-cell-id-encoding system:5,module:3,stave:4,tower:4,layer:6,wafer:6,slice:4,cellX:32:-16,cellY:-16",
-            f"--collections {COLLECTION}",
-            f"--min-cluster-size {mcs}",
-            f"--min-samples {ms}",
-            f"--epsilon {epsilon}",
-            f"--merge-scope {MERGE_SCOPE}",
-            "--use-time",
-            f"--output {out_dir}",
-        ]
-    )
+    cmd = [
+        sys.executable,
+        str(REPO_ROOT / "examples/run_step2point_pipeline.py"),
+        "--input",
+        INPUT,
+        "--algorithm",
+        "hdbscan",
+        "--min-cluster-size",
+        str(mcs),
+        "--min-samples",
+        str(ms),
+        "--epsilon",
+        str(epsilon),
+        "--output",
+        str(out_dir),
+    ]
+    if COLLECTIONS:
+        cmd += ["--collections", *COLLECTIONS]
+    if CELL_ID_ENCODING:
+        cmd += ["--hdbscan-cell-id-encoding", CELL_ID_ENCODING]
+    if COMPACT_XML:
+        cmd += ["--compact-xml", COMPACT_XML, "--collection-name", *COLLECTION_NAMES]
+    if MERGE_SCOPE:
+        cmd += ["--merge-scope", MERGE_SCOPE]
+    if USE_TIME:
+        cmd.append("--use-time")
 
-    cmd = f"""
-        cd {REPO_ROOT} && \
-        source .venv-key4hep/bin/activate && \
-        python examples/run_step2point_pipeline.py {args}
-    """
-    cmd_cc3 = f"""
-        cd {REPO_ROOT} && \
-        source .venv-key4hep/bin/activate && \
-        python {CC3_DIR / "preprocessing/convert_to_cc3_format.py"} {out_dir / "compressed_hdbscan.h5"} --pc_save_folder {out_dir}
-    """
     log_path = out_dir / "run.log"
     print(f"  → mcs={mcs:2d}, ms={ms} epsilon={epsilon} ...", end=" ", flush=True)
 
@@ -84,37 +122,35 @@ def run_pipeline(mcs: int, ms: int, epsilon: float) -> Path:
         print(f"  [skip] output exists at {out_dir}")
     else:
         with open(log_path, "w") as log:
-            print(f"Running command:\n{cmd}\nLogging to {log_path}")
-            result = subprocess.run(
-                cmd,
-                shell=True,
-                executable="/bin/bash",  # needed for `source`
-                stdout=log,
-                stderr=subprocess.STDOUT,
-            )
-            status = "OK" if (result is not None and result.returncode == 0) else f"FAILED (rc={result.returncode})"
+            print(f"Running command:\n{' '.join(cmd)}\nLogging to {log_path}")
+            result = subprocess.run(cmd, cwd=REPO_ROOT, stdout=log, stderr=subprocess.STDOUT)
+            status = "OK" if result.returncode == 0 else f"FAILED (rc={result.returncode})"
             print(status)
+
+    if not CC3:
+        return out_dir
 
     log_path = out_dir / "run_cc3.log"
     pc_file = out_dir / "input_cc3.h5"
     if pc_file.exists():
         print("  [check] cc3_input.h5 exists")
     else:
+        cmd_cc3 = [
+            sys.executable,
+            str(CC3_DIR / "preprocessing/convert_to_cc3_format.py"),
+            str(out_dir / "compressed_hdbscan.h5"),
+            "--pc_save_folder",
+            str(out_dir),
+        ]
         with open(log_path, "w") as log:
-            result = subprocess.run(
-                cmd_cc3,
-                shell=True,
-                executable="/bin/bash",  # needed for `source`
-                stdout=log,
-                stderr=subprocess.STDOUT,
-            )
+            result = subprocess.run(cmd_cc3, cwd=REPO_ROOT, stdout=log, stderr=subprocess.STDOUT)
         # convert_to_cc3_format.py names its output input_cc3_<run dir>.h5 when given
         # --pc_save_folder; the plots (and older sweep runs) use input_cc3.h5
         produced = out_dir / f"input_cc3_{out_dir.name}.h5"
         if produced.exists():
             produced.rename(pc_file)
 
-        status = "OK" if (result is not None and result.returncode == 0) else f"FAILED (rc={result.returncode})"
+        status = "OK" if result.returncode == 0 else f"FAILED (rc={result.returncode})"
         print(status)
     return out_dir
 
@@ -168,7 +204,6 @@ def parse_metrics(out_dir: Path, mcs: int, ms: int, epsilon: float) -> dict:
 # PLOTTING
 # ─────────────────────────────────────────────
 
-PLOT_DIR = BASE_OUTPUT / "plots"
 CMAP = "viridis"
 
 
@@ -191,20 +226,24 @@ def plot_per_layer_histograms(
 
     sampled_layers = np.linspace(0, n_layers - 1, n_layers_to_plot, dtype=int)
 
-    extra_datasets = [
-        (
-            "/eos/project/f/fast/step2point_files/pipeline2_identity/test_small/input_cc3.h5",
-            "identity",
-        ),
-        (
-            "/eos/project/f/fast/step2point_files/pipeline2_merge_within_cell/test_small/input_cc3.h5",
-            "merge within cell",
-        ),
-        (
-            "/eos/project/f/fast/step2point_files/pipeline2_merge_within_regular_subcell/test_small/input_cc3.h5",
-            "merge within regular subcell",
-        ),
-    ]
+    extra_datasets = (
+        []
+        if REFERENCE_DIR is None
+        else [
+            (
+                f"{REFERENCE_DIR}/pipeline2_identity/test_small/input_cc3.h5",
+                "identity",
+            ),
+            (
+                f"{REFERENCE_DIR}/pipeline2_merge_within_cell/test_small/input_cc3.h5",
+                "merge within cell",
+            ),
+            (
+                f"{REFERENCE_DIR}/pipeline2_merge_within_regular_subcell/test_small/input_cc3.h5",
+                "merge within regular subcell",
+            ),
+        ]
+    )
 
     # --------------------------------------------------
     # Loader
@@ -525,20 +564,24 @@ def plot_h5_overlay_histograms(
     # --------------------------------------------------
     # Load the two reference datasets
     # --------------------------------------------------
-    extra_datasets = [
-        (
-            "/eos/project/f/fast/step2point_files/pipeline2_merge_within_cell/test_small/compressed_merge_within_cell.h5",
-            "merge within cell",
-        ),
-        (
-            "/eos/project/f/fast/step2point_files/pipeline2_identity/test_small/compressed_identity.h5",
-            "identity",
-        ),
-        (
-            "/eos/project/f/fast/step2point_files/pipeline2_merge_within_regular_subcell/test_small/compressed_merge_within_regular_subcell.h5",
-            "merge within regular subcell",
-        ),
-    ]
+    extra_datasets = (
+        []
+        if REFERENCE_DIR is None
+        else [
+            (
+                f"{REFERENCE_DIR}/pipeline2_merge_within_cell/test_small/compressed_merge_within_cell.h5",
+                "merge within cell",
+            ),
+            (
+                f"{REFERENCE_DIR}/pipeline2_identity/test_small/compressed_identity.h5",
+                "identity",
+            ),
+            (
+                f"{REFERENCE_DIR}/pipeline2_merge_within_regular_subcell/test_small/compressed_merge_within_regular_subcell.h5",
+                "merge within regular subcell",
+            ),
+        ]
+    )
 
     extra_plot_kwargs = {"histtype": "stepfilled", "alpha": 0.3, "linewidth": 1}
 
@@ -560,8 +603,9 @@ def plot_h5_overlay_histograms(
     # --------------------------------------------------
     # Read hdbscan configurations
     # --------------------------------------------------
-    ms_toskip = [2, 3, 4, 5, 8, 12, 20, 40, 60]
-    mcs_toskip = [3, 5, 8, 10, 12, 15, 20, 25, 40, 60]
+    # runs left out of the overlay, chosen for the ILD sweep grid
+    ms_toskip = [2, 3, 4, 5, 8, 12, 20, 40, 60] if PRESET == "ild" else []
+    mcs_toskip = [3, 5, 8, 10, 12, 15, 20, 25, 40, 60] if PRESET == "ild" else []
 
     for folder in sorted(root_dir.glob("hdbscan_mcs*_ms*")):
         match = re.search(r"mcs(\d+)_ms(\d+)(?:_eps([\d.]+))?", folder.name)
@@ -598,6 +642,9 @@ def plot_h5_overlay_histograms(
     colors_extra = ["dimgrey", "silver", "saddlebrown"]
     extra_hits = [(vals, label, color) for (vals, label), color in zip(extra_hits, colors_extra)]
     extra_energy = [(vals, label, color) for (vals, label), color in zip(extra_energy, colors_extra)]
+    if not energy_data and not extra_energy:
+        print("No runs or references to overlay; skipping overlay histograms.")
+        return
 
     # --------------------------------------------------
     # Hits per event
@@ -741,18 +788,22 @@ def plot_compression_ratios(
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
     # ── top row: line plots ──────────────────────────────────────────────
-    ref_summaries = [
-        (
-            "/eos/project/f/fast/step2point_files/pipeline2_merge_within_cell/test_small/compression_summary_merge_within_cell.txt",
-            "merge within cell",
-            "k",
-        ),
-        (
-            "/eos/project/f/fast/step2point_files/pipeline2_merge_within_regular_subcell/test_small/compression_summary_merge_within_regular_subcell.txt",
-            "merge within regular subcell",
-            "saddlebrown",
-        ),
-    ]
+    ref_summaries = (
+        []
+        if REFERENCE_DIR is None
+        else [
+            (
+                f"{REFERENCE_DIR}/pipeline2_merge_within_cell/test_small/compression_summary_merge_within_cell.txt",
+                "merge within cell",
+                "k",
+            ),
+            (
+                f"{REFERENCE_DIR}/pipeline2_merge_within_regular_subcell/test_small/compression_summary_merge_within_regular_subcell.txt",
+                "merge within regular subcell",
+                "saddlebrown",
+            ),
+        ]
+    )
     for txt_path, ref_label, ref_color in ref_summaries:
         if not Path(txt_path).exists():
             continue
@@ -1014,16 +1065,20 @@ def plot_clusters_per_cell(
             return np.nan, np.nan
         return float(counts.max()), float((counts > 5).mean())
 
-    ref_datasets = [
-        (
-            "/eos/project/f/fast/step2point_files/pipeline2_merge_within_cell/test_small/input_cc3.h5",
-            "merge within cell",
-        ),
-        (
-            "/eos/project/f/fast/step2point_files/pipeline2_merge_within_regular_subcell/test_small/input_cc3.h5",
-            "merge within regular subcell",
-        ),
-    ]
+    ref_datasets = (
+        []
+        if REFERENCE_DIR is None
+        else [
+            (
+                f"{REFERENCE_DIR}/pipeline2_merge_within_cell/test_small/input_cc3.h5",
+                "merge within cell",
+            ),
+            (
+                f"{REFERENCE_DIR}/pipeline2_merge_within_regular_subcell/test_small/input_cc3.h5",
+                "merge within regular subcell",
+            ),
+        ]
+    )
 
     rows = []
     for folder in sorted(root_dir.glob("hdbscan_mcs*_ms*")):
@@ -1097,10 +1152,11 @@ def make_all_plots():
 
     # line plots
     plot_compression_ratios(BASE_OUTPUT, txt_name="compression_summary_hdbscan.txt")
-    plot_clusters_per_cell(BASE_OUTPUT, h5_name="input_cc3.h5", n_layers=30)
     plot_h5_overlay_histograms(BASE_OUTPUT, h5_name="compressed_hdbscan.h5")
-    plot_per_layer_histograms(BASE_OUTPUT, h5_name="input_cc3.h5", n_layers=30, n_layers_to_plot=10)
-    plot_clusters_per_cell_histogram(BASE_OUTPUT, h5_name="input_cc3.h5")
+    if CC3:  # these read the CaloClouds-3 input written by the conversion step
+        plot_clusters_per_cell(BASE_OUTPUT, h5_name="input_cc3.h5", n_layers=30)
+        plot_per_layer_histograms(BASE_OUTPUT, h5_name="input_cc3.h5", n_layers=30, n_layers_to_plot=10)
+        plot_clusters_per_cell_histogram(BASE_OUTPUT, h5_name="input_cc3.h5")
     print(f"\nDone. Plots saved in: {PLOT_DIR.resolve()}")
 
 
@@ -1109,12 +1165,66 @@ def make_all_plots():
 # ─────────────────────────────────────────────
 
 
+def parse_args():
+    p = argparse.ArgumentParser(
+        description="HDBSCAN (min_cluster_size, min_samples) sweep with step2point. Only tested with --preset ild."
+    )
+    p.add_argument("--preset", choices=sorted(PRESETS), help="detector preset (only 'ild', the tested one)")
+    p.add_argument("--input", help="input file for run_step2point_pipeline.py")
+    p.add_argument("--collections", nargs="+", help="readout collection(s) to read (EDM4hep input)")
+    p.add_argument("--cell-id-encoding", help="DD4hep cell-ID encoding string, passed as --hdbscan-cell-id-encoding")
+    p.add_argument("--compact-xml", help="DD4hep compact XML to read the encoding from (with --collection-name)")
+    p.add_argument("--collection-name", nargs="+", help="readout name(s) in --compact-xml")
+    p.add_argument("--merge-scope", help="HDBSCAN merge scope (pipeline default if not given)")
+    p.add_argument("--use-time", action="store_true", help="include time as a clustering feature")
+    p.add_argument("--min-cluster-sizes", type=int, nargs="+", default=DEFAULT_MIN_CLUSTER_SIZES)
+    p.add_argument("--min-samples", type=int, nargs="+", default=DEFAULT_MIN_SAMPLES)
+    p.add_argument("--epsilon", type=float, nargs="+", default=DEFAULT_EPSILON)
+    p.add_argument("--output-dir", type=Path, help="default: $SWEEP_DIR, else the preset's, else <repo>/outputs/hdbscan_sweep")
+    p.add_argument("--reference-dir", help="folder with pipeline2_<algorithm>/test_small/ reference runs")
+    return p.parse_args()
+
+
+def configure(args):
+    """Fill the module-level settings from the preset, overridden by the command line."""
+    global INPUT, COLLECTIONS, CELL_ID_ENCODING, COMPACT_XML, COLLECTION_NAMES, MERGE_SCOPE
+    global USE_TIME, REFERENCE_DIR, CC3, BASE_OUTPUT, PLOT_DIR, PRESET
+    PRESET = args.preset
+    cfg = dict(PRESETS[args.preset]) if args.preset else {}
+    for key in ("input", "collections", "cell_id_encoding", "merge_scope", "reference_dir"):
+        if getattr(args, key) is not None:
+            cfg[key] = getattr(args, key)
+    if not cfg.get("input"):
+        sys.exit("Pass --input (and --collections for EDM4hep input), or use --preset ild.")
+    if not cfg.get("cell_id_encoding") and not (args.compact_xml and args.collection_name):
+        sys.exit("HDBSCAN needs --cell-id-encoding, or --compact-xml together with --collection-name.")
+
+    INPUT = cfg["input"]
+    COLLECTIONS = cfg.get("collections") or []
+    CELL_ID_ENCODING = cfg.get("cell_id_encoding")
+    COMPACT_XML = args.compact_xml
+    COLLECTION_NAMES = args.collection_name or []
+    MERGE_SCOPE = cfg.get("merge_scope")
+    USE_TIME = args.use_time or cfg.get("use_time", False)
+    REFERENCE_DIR = cfg.get("reference_dir")
+    CC3 = cfg.get("cc3", False)
+    if args.output_dir:
+        BASE_OUTPUT = args.output_dir
+    elif os.environ.get("SWEEP_DIR"):
+        BASE_OUTPUT = Path(os.environ["SWEEP_DIR"])
+    else:
+        BASE_OUTPUT = Path(cfg.get("output_dir", REPO_ROOT / "outputs/hdbscan_sweep"))
+    PLOT_DIR = BASE_OUTPUT / "plots"
+
+
 def main():
+    args = parse_args()
+    configure(args)
     BASE_OUTPUT.mkdir(parents=True, exist_ok=True)
 
     combos = [
         (mcs, ms, epsilon)
-        for mcs, ms, epsilon in itertools.product(MIN_CLUSTER_SIZES, MIN_SAMPLES_LIST, EPSILON)
+        for mcs, ms, epsilon in itertools.product(args.min_cluster_sizes, args.min_samples, args.epsilon)
         if ms <= mcs  # skip invalid HDBSCAN combos
     ]
 
