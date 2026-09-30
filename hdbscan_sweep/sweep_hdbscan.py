@@ -10,10 +10,11 @@ The CC3 conversion of each run uses CaloClouds-3's
 preprocessing/convert_to_cc3_format.py, found via $CC3_DIR
 (default /eos/user/m/mamozzan/CaloClouds-3).
 
-Outputs (under the step2point repo root):
-    outputs/hdbscan_sweep/hdbscan_mcs{N}_ms{M}/   — one folder per run
-    outputs/hdbscan_sweep/summary.csv             — collected metrics
-    outputs/hdbscan_sweep/plots/                  — all figures
+Outputs go to $SWEEP_DIR (default $CC3_DIR/outputs/hdbscan_sweep, git-ignored
+there), which plot_mean_compression.py and plot_sweep_profiles.py read:
+    hdbscan_mcs{N}_ms{M}/   — one folder per run
+    summary.csv             — collected metrics
+    plots/                  — all figures
 """
 
 import itertools
@@ -36,7 +37,7 @@ COLLECTION = "EcalBarrelCollection"
 MERGE_SCOPE = "cell_id"
 REPO_ROOT = Path(__file__).resolve().parents[1]  # step2point repo root
 CC3_DIR = Path(os.environ.get("CC3_DIR", "/eos/user/m/mamozzan/CaloClouds-3"))
-BASE_OUTPUT = REPO_ROOT / "outputs/hdbscan_sweep"
+BASE_OUTPUT = Path(os.environ.get("SWEEP_DIR", CC3_DIR / "outputs/hdbscan_sweep"))
 
 MIN_CLUSTER_SIZES = [5, 10, 15, 25, 40, 60, 80]
 MIN_SAMPLES_LIST = [3, 5, 8, 12, 20, 40, 60]

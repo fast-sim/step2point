@@ -23,12 +23,14 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Metadata (ILD layer positions) comes from CaloClouds-3 preprocessing/, found via $CC3_DIR
-sys.path.insert(0, os.environ.get("CC3_DIR", "/eos/user/m/mamozzan/CaloClouds-3"))
+CC3_DIR = os.environ.get("CC3_DIR", "/eos/user/m/mamozzan/CaloClouds-3")
+# Metadata (ILD layer positions) comes from CaloClouds-3 preprocessing/
+sys.path.insert(0, CC3_DIR)
 from preprocessing.metadata import Metadata  # noqa: E402
 from sweep_style import EXCLUDE_MS, MS_COLORS, REF_COLORS, apply_style  # noqa: E402
 
-SWEEP = Path(__file__).resolve().parents[1] / "outputs/hdbscan_sweep"  # step2point/outputs
+# sweep outputs written by sweep_hdbscan.py
+SWEEP = Path(os.environ.get("SWEEP_DIR", f"{CC3_DIR}/outputs/hdbscan_sweep"))
 S2P = "/eos/project/f/fast/step2point_files/pipeline2_{0}/test_small/compressed_{0}.h5"
 MCS = 20
 LAYER_Y = np.asarray(Metadata().layer_bottom_pos_global)
