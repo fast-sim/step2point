@@ -176,6 +176,14 @@ Each run writes:
 - `compressed_<algorithm>.h5`
 - `compression_summary_<algorithm>.txt`
 
+Showers with no points are skipped (the number skipped is printed). Add `--timing` to print how long compression, validation and writing take, every 100 showers and in total.
+
+On filesystems without working HDF5 file locking, such as EOS, reading or writing the HDF5 files can fail with a locking error; disable HDF5 file locking before running:
+
+```bash
+export HDF5_USE_FILE_LOCKING=FALSE
+```
+
 Minimal usage in application:
 
 ```python
