@@ -425,7 +425,7 @@ python hdbscan_sweep/sweep_hdbscan.py --preset ild
 `--preset ild` sets the ILD input (the 10-shower `tests/data/ILD/test_sweep_hdbscan_ild.edm4hep.root`), `EcalBarrelCollection`, the ILD cell-ID encoding, `--merge-scope cell_id` and `--use-time`; any option given on the command line overrides it. On top of the generic sweep it
 
 - converts every run to CaloClouds-3 input (`input_cc3.h5`) with `preprocessing/convert_to_cc3_format.py` of the CaloClouds-3 version used for the step2point study; point `$CC3_DIR` to that checkout (required for this preset),
-- adds reference curves from identity, merge within cell and merge within regular subcell run on the same input (`/eos/project/f/fast/step2point_files/pipeline2_<algorithm>/test_small/`),
+- runs identity, merge within cell and merge within regular subcell on the same input (into `<output dir>/references/<algorithm>/`, or `--reference-dir`) and draws them as reference curves; merge within regular subcell needs the regular-ECal ILD geometry, which is only on EOS for now, and is skipped when it is not reachable,
 - makes the plots that read the 30-layer CC3 files (clusters per cell, per-layer distributions, radial and longitudinal profiles),
 - writes to `$CC3_DIR/outputs/hdbscan_sweep` unless `--output-dir` or `$SWEEP_DIR` is set.
 
