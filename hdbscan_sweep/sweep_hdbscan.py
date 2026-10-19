@@ -53,7 +53,7 @@ CC3_DIR = Path(os.environ["CC3_DIR"]) if os.environ.get("CC3_DIR") else None
 #       the plots that read it; they assume the 30-layer ILD CC3 format
 PRESETS = {
     "ild": {
-        "input": "/eos/project/f/fast/edm4hep_frombenchmark/test_small.edm4hep.root",
+        "input": str(REPO_ROOT / "tests/data/ILD/test_sweep_hdbscan_ild.edm4hep.root"),
         "collections": ["EcalBarrelCollection"],
         "cell_id_encoding": "system:5,module:3,stave:4,tower:4,layer:6,wafer:6,slice:4,cellX:32:-16,cellY:-16",
         "merge_scope": "cell_id",
