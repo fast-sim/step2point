@@ -380,6 +380,8 @@ For detector-aware geometry inspection and shower overlays on module/layer/cell 
 
 > **Only tested on ILD.** The sweep was written for, and only tested with, photon showers in the ILD ECal barrel prepared as CaloClouds-3 input (`--preset ild`). The generic mode runs on any input step2point can read (checked only on the ODD test file in `tests/data/`); detector-specific extras, such as reference curves or conversion to a downstream format, can be added as a new preset in `PRESETS` at the top of the script.
 
+It needs pandas, an optional dependency: `pip install -e .[sweep]`.
+
 Run it in the environment step2point runs in; the pipeline is started with the same Python. For EDM4hep input that means Key4hep:
 
 ```bash
