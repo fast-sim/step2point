@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -12,7 +13,12 @@ GENERIC_PLOTS = {"compression_ratios.png", "mean_compression_ratio.png", "points
 
 
 def _run_sweep(out, *args):
-    subprocess.run([sys.executable, "hdbscan_sweep/sweep_hdbscan.py", "--output-dir", str(out), *args], check=True, cwd=ROOT)
+    # src/ on PYTHONPATH like pytest's own pythonpath setting: sys.executable may be a Python
+    # without step2point installed (e.g. Key4hep's when `pytest` is not the venv's)
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(ROOT / "src"), os.environ.get("PYTHONPATH")]))}
+    subprocess.run(
+        [sys.executable, "hdbscan_sweep/sweep_hdbscan.py", "--output-dir", str(out), *args], check=True, cwd=ROOT, env=env
+    )
 
 
 def _check_run(out, mcs, ms):
