@@ -161,8 +161,10 @@ def run_step2point(out_dir: Path, algorithm: str, algo_args: list) -> Path:
         with open(log_path, "w") as log:
             print(f"Running command:\n{' '.join(cmd)}\nLogging to {log_path}")
             result = subprocess.run(cmd, cwd=REPO_ROOT, stdout=log, stderr=subprocess.STDOUT)
-            status = "OK" if result.returncode == 0 else f"FAILED (rc={result.returncode})"
-            print(status)
+        if result.returncode != 0:
+            print("\n".join(log_path.read_text().splitlines()[-30:]))
+            sys.exit(f"FAILED (rc={result.returncode}): {algorithm} in {out_dir}, see {log_path}")
+        print("OK")
     return out_dir
 
 
