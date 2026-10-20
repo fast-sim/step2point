@@ -32,7 +32,7 @@ REFERENCE_DIR = None
 
 # Shared color map: same ms value → same color in every plot
 def _ms_color(ms: int, all_ms: list) -> tuple:
-    cmap = plt.cm.get_cmap("tab10" if len(all_ms) <= 10 else "tab20")
+    cmap = plt.get_cmap("tab10" if len(all_ms) <= 10 else "tab20")
     idx = sorted(all_ms).index(ms)
     return cmap(idx / max(len(all_ms) - 1, 1))
 
