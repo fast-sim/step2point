@@ -406,7 +406,7 @@ python hdbscan_sweep/sweep_hdbscan.py \
 | `--profile-mcs` | m_cs of the per-run distribution plots (default 20) |
 | `--layer-positions` | bottom of each layer along global y [mm], for the longitudinal profile |
 
-Each grid point is written to `<output-dir>/hdbscan_mcs<N>_ms<M>/`; existing points are not rerun. Plots go to `<output-dir>/plots/`:
+Each grid point is written to `<output-dir>/hdbscan_mcs<N>_ms<M>/`; existing points are not rerun. `summary.csv` collects their compression numbers (from each `compression_summary_hdbscan.txt`). Plots go to `<output-dir>/plots/`:
 
 | plot | content |
 |---|---|

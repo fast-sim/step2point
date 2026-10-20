@@ -1,36 +1,20 @@
 """
-HDBSCAN parameter sweep with step2point: runs examples/run_step2point_pipeline.py
-with --algorithm hdbscan over a grid of (min_cluster_size, min_samples) and
-makes summary plots.
-
-Only tested with --preset ild (photon showers in the ILD ECal barrel). Without a preset it only runs the grid and makes the
-generic plots; pass the input, collections and a way to decode cell IDs:
+HDBSCAN (min_cluster_size, min_samples) sweep with step2point. Only tested with --preset ild.
 
     python hdbscan_sweep/sweep_hdbscan.py --preset ild
-    python hdbscan_sweep/sweep_hdbscan.py --input showers.edm4hep.root \
-        --collections ECalBarrelCollection --cell-id-encoding <encoding> \
-        --min-cluster-sizes 5 10 20 --min-samples 3 8
 
-Run it in the environment step2point runs in (for EDM4hep input: Key4hep +
-.venv-key4hep); the pipeline is started with the same Python.
-
-Outputs go to --output-dir (default $SWEEP_DIR, else <repo>/outputs/hdbscan_sweep):
-    hdbscan_mcs{N}_ms{M}/   — one folder per run
-    summary.csv             — collected metrics
-    plots/                  — all figures
+Writes one folder per run, summary.csv and plots/ to --output-dir. See the README.
 """
 
 import argparse
 import itertools
-import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
 
 import pandas as pd
-from plot_sweep_hdbscan import make_all_plots
+from plot_sweep_hdbscan import _read_summary, make_all_plots
 
 REPO_ROOT = Path(__file__).resolve().parents[1]  # step2point repo root
 
@@ -182,51 +166,6 @@ def run_step2point(out_dir: Path, algorithm: str, algo_args: list) -> Path:
     return out_dir
 
 
-def parse_metrics(out_dir: Path, mcs: int, ms: int, epsilon: float) -> dict:
-    """
-    Extract metrics from the pipeline output directory.
-
-    Priority:
-      1. metrics.json  (if your pipeline writes one)
-      2. run.log       (regex fallback — adjust patterns to your log format)
-    """
-    row = {"mcs": mcs, "ms": ms}
-
-    # ── 1. Try metrics.json ──────────────────────────────────────────────
-    json_path = out_dir / "metrics.json"
-    if json_path.exists():
-        with open(json_path) as f:
-            row.update(json.load(f))
-        return row
-
-    # ── 2. Fallback: scrape run.log ──────────────────────────────────────
-    log_path = out_dir / "run.log"
-    if not log_path.exists():
-        return row
-
-    text = log_path.read_text()
-
-    patterns = {
-        # adjust these regexes to match your actual log lines
-        "n_clusters": r"(?:n_clusters|clusters)\s*[=:]\s*(\d+)",
-        "n_noise": r"(?:noise|noise points)\s*[=:]\s*(\d+)",
-        "n_points": r"(?:total points|n_points|nhits)\s*[=:]\s*(\d+)",
-        "noise_fraction": r"noise fraction\s*[=:]\s*([0-9.]+)",
-        "mean_cluster_size": r"mean cluster size\s*[=:]\s*([0-9.]+)",
-    }
-
-    for key, pat in patterns.items():
-        m = re.search(pat, text, re.IGNORECASE)
-        if m:
-            row[key] = float(m.group(1))
-
-    # Derived metrics
-    if "n_noise" in row and "n_points" in row and row["n_points"] > 0:
-        row.setdefault("noise_fraction", row["n_noise"] / row["n_points"])
-
-    return row
-
-
 # ─────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────
@@ -316,8 +255,9 @@ def main():
     rows = []
     for mcs, ms, epsilon in combos:
         out_dir = run_pipeline(mcs, ms, epsilon)
-        row = parse_metrics(out_dir, mcs, ms, epsilon)
-        rows.append(row)
+        # the pipeline's own key=value summary (compression numbers)
+        summary = out_dir / "compression_summary_hdbscan.txt"
+        rows.append({"mcs": mcs, "ms": ms, "epsilon": epsilon, **(_read_summary(summary) if summary.exists() else {})})
 
     df = pd.DataFrame(rows)
     csv_path = BASE_OUTPUT / "summary.csv"
