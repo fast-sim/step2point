@@ -61,7 +61,7 @@ jobs:
     env:
       STEP2POINT_ENABLE_STRICT_HDBSCAN: "1"
       # HDBSCAN output depends on the order of tied MST edges, which numpy's argsort leaves to the
-      # CPU-dispatched sort; force the AVX2 path the reference was produced with.
+      # CPU-dispatched sort; disables AVX-512 dispatch so numpy falls back to the AVX2 path the reference was produced with.
       NPY_DISABLE_CPU_FEATURES: "X86_V4 AVX512_ICL"
       OMP_NUM_THREADS: "1"
       OPENBLAS_NUM_THREADS: "1"
@@ -76,7 +76,7 @@ jobs:
       - name: Install package
         run: |
           python -m pip install --upgrade pip
-          pip install -e .[dev,test] -c ci/constraints-strict-hdbscan.txt
+          pip install -e .[dev,test] -c tests/ci/constraints-strict-hdbscan.txt
       - name: Print CPU and numerical environment
         run: |
           lscpu | grep -E 'Model name|Architecture'
