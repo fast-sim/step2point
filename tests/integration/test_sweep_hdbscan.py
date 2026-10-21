@@ -55,5 +55,5 @@ def test_sweep_ild_preset(tmp_path):
     _run_sweep(tmp_path, "--preset", "ild", "--min-cluster-sizes", "20", "--min-samples", "5")
     plots = _check_run(tmp_path, 20, 5)
     assert GENERIC_PLOTS | {"longitudinal_profile.png"} <= plots
-    for algo in ("identity", "merge_within_cell"):  # merge_within_regular_subcell needs the EOS geometry
+    for algo in ("identity", "merge_within_cell"):  # merge_within_regular_subcell is skipped without --regular-compact-xml
         assert (tmp_path / "references" / algo / f"compressed_{algo}.h5").exists()

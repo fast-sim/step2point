@@ -150,8 +150,6 @@ def plot_compression_ratios(
         epsilon = float(match.group(3)) if match.group(3) is not None else 0.0
         if epsilon != 0:
             continue
-        if ms == 4:
-            continue
         txt_file = folder / txt_name
         if not txt_file.exists():
             continue

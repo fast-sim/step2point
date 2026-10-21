@@ -25,7 +25,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]  # step2point repo root
 # values. To add a detector, add an entry with the same keys:
 #   references: {algorithm: extra pipeline arguments} run once on the same input
 #       into <output dir>/references/<algorithm>/ and drawn as reference curves;
-#       one whose --compact-xml is not reachable is skipped
+#       a --compact-xml of None is filled from --regular-compact-xml, and a
+#       reference whose geometry is not given or not reachable is skipped
 PRESETS = {
     "ild": {
         "input": str(REPO_ROOT / "tests/data/ILD/test_sweep_hdbscan_ild.edm4hep.root"),
@@ -70,10 +71,10 @@ PRESETS = {
         "references": {
             "identity": [],
             "merge_within_cell": [],
-            # needs the regular-ECal ILD geometry, only on EOS for now
+            # needs the regular-ECal ILD geometry (--regular-compact-xml), skipped without it
             "merge_within_regular_subcell": [
                 "--compact-xml",
-                "/eos/user/p/pmckeown/Step2Point_Clustering/ILD_Regular_Detector/ILD/compact/ILD_l5_o1_v02/ILD_l5_o1_v02.xml",
+                None,
                 "--collection-name",
                 "EcalBarrelCollection",
                 "--grid-x",
@@ -128,8 +129,11 @@ def make_references():
     """Run the reference algorithms on INPUT into REFERENCE_DIR/<algorithm>/ (existing outputs are kept)."""
     for algorithm, algo_args in REFERENCES.items():
         if "--compact-xml" in algo_args:
-            xml = Path(algo_args[algo_args.index("--compact-xml") + 1])
-            if not xml.exists():
+            xml = algo_args[algo_args.index("--compact-xml") + 1]
+            if xml is None:
+                print(f"  [skip] reference {algorithm}: no geometry given (--regular-compact-xml)")
+                continue
+            if not Path(xml).exists():
                 print(f"  [skip] reference {algorithm}: geometry {xml} not reachable")
                 continue
         print(f"  → reference {algorithm} ...", end=" ", flush=True)
@@ -201,6 +205,12 @@ def parse_args():
         help="default: $SWEEP_DIR, else <repo>/outputs/hdbscan_sweep",
     )
     p.add_argument(
+        "--regular-compact-xml",
+        default=os.environ.get("STEP2POINT_REGULAR_COMPACT_XML"),
+        help="compact XML of the regular-cell geometry for the merge_within_regular_subcell reference "
+        "(default: $STEP2POINT_REGULAR_COMPACT_XML; the reference is skipped if not given)",
+    )
+    p.add_argument(
         "--reference-dir",
         type=Path,
         help="folder for the reference runs, <dir>/<algorithm>/ (default: <output dir>/references with a preset)",
@@ -228,7 +238,10 @@ def configure(args):
     COLLECTION_NAMES = args.collection_name or []
     MERGE_SCOPE = cfg.get("merge_scope")
     USE_TIME = args.use_time or cfg.get("use_time", False)
-    REFERENCES = cfg.get("references", {})
+    REFERENCES = {
+        algorithm: [args.regular_compact_xml if a is None else a for a in algo_args]
+        for algorithm, algo_args in cfg.get("references", {}).items()
+    }
     LAYER_POSITIONS = args.layer_positions or cfg.get("layer_positions")
     if args.output_dir:
         BASE_OUTPUT = args.output_dir

@@ -394,7 +394,7 @@ source .venv-key4hep/bin/activate
 python hdbscan_sweep/sweep_hdbscan.py --preset ild
 ```
 
-The ILD preset sets the 10-shower sample in `tests/data/ILD/`, `EcalBarrelCollection`, the cell-ID encoding, `--merge-scope cell_id`, `--use-time` and the 30 ECal barrel layer positions. It also runs identity, merge within cell and merge within regular subcell as references (the last needs the regular-ECal geometry on EOS and is skipped if unreachable). Command-line options override the preset. Without a preset, give the input and the cell-ID decoding:
+The ILD preset sets the 10-shower sample in `tests/data/ILD/`, `EcalBarrelCollection`, the cell-ID encoding, `--merge-scope cell_id`, `--use-time` and the 30 ECal barrel layer positions. It also runs identity, merge within cell and merge within regular subcell as references (the last needs the regular-ECal ILD compact XML, given with `--regular-compact-xml` or `$STEP2POINT_REGULAR_COMPACT_XML`, and is skipped without it). Command-line options override the preset. Without a preset, give the input and the cell-ID decoding:
 
 ```bash
 python hdbscan_sweep/sweep_hdbscan.py \
@@ -411,6 +411,7 @@ python hdbscan_sweep/sweep_hdbscan.py \
 | `--merge-scope`, `--use-time` | passed to the pipeline |
 | `--min-cluster-sizes`, `--min-samples`, `--epsilon` | the grid (m_s > m_cs is skipped) |
 | `--output-dir` | default `$SWEEP_DIR`, else `outputs/hdbscan_sweep` |
+| `--regular-compact-xml` | regular-cell geometry for the `merge_within_regular_subcell` reference (default `$STEP2POINT_REGULAR_COMPACT_XML`); optional, the reference is skipped without it |
 | `--profile-mcs` | m_cs of the per-run distribution plots (default 20) |
 | `--layer-positions` | bottom of each layer along global y [mm], for the longitudinal profile |
 
