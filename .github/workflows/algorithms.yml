@@ -60,6 +60,9 @@ jobs:
     name: strict/${{ matrix.algorithm }} (diagnostic)
     env:
       STEP2POINT_ENABLE_STRICT_HDBSCAN: "1"
+      # HDBSCAN output depends on the order of tied MST edges, which numpy's argsort leaves to the
+      # CPU-dispatched sort; force the AVX2 path the reference was produced with.
+      NPY_DISABLE_CPU_FEATURES: "X86_V4 AVX512_ICL"
       OMP_NUM_THREADS: "1"
       OPENBLAS_NUM_THREADS: "1"
       MKL_NUM_THREADS: "1"
