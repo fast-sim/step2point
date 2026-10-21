@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import time
 from pathlib import Path
 
 import numpy as np
@@ -44,7 +45,7 @@ def parse_args():
         "--hdbscan-algorithm",
         choices=["auto", "brute", "kd_tree", "ball_tree"],
         default="brute",
-        help="HDBSCAN tree-building algorithm."
+        help="HDBSCAN tree-building algorithm.",
     )
     parser.add_argument("--use-time", action="store_true", help="Include time as a clustering feature in HDBSCAN.")
     parser.add_argument(
@@ -91,6 +92,11 @@ def parse_args():
         help="Optional output path for the debug HDF5. Defaults to debug_<algorithm>.h5 in --output.",
     )
     parser.add_argument("--output", required=True)
+    parser.add_argument(
+        "--timing",
+        action="store_true",
+        help="Print the time spent compressing, validating and writing (every 100 showers and in total).",
+    )
     parser.add_argument(
         "--axis",
         type=float,
@@ -184,8 +190,16 @@ def main():
     compressed_showers = []
     debug_showers = []
     debug_labels = []
+    n_empty = 0
+    t_start = time.perf_counter()
+    t_compress = t_validate = 0.0
     for shower_index, shower in enumerate(reader.iter_showers()):
+        if shower.n_points == 0:
+            n_empty += 1
+            continue
+        t0 = time.perf_counter()
         result = algorithm.compress(shower)
+        t_compress += time.perf_counter() - t0
         compressed_showers.append(result.shower)
         compression_stats.append(result.stats)
         if shower_index in debug_event_indices:
@@ -200,18 +214,36 @@ def main():
                 )
             debug_showers.append(shower.copy())
             debug_labels.append(cluster_label.copy())
+        t0 = time.perf_counter()
         for validator in validators:
             vr = validator.run(shower, result.shower)
             validation_results.append({"validator": vr.name, "shower_id": shower.shower_id, **vr.metrics})
+        t_validate += time.perf_counter() - t0
+        if args.timing and (shower_index + 1) % 100 == 0:
+            elapsed = time.perf_counter() - t_start
+            print(
+                f"[timing] shower {shower_index + 1}: elapsed {elapsed:.1f}s, compress {t_compress:.2f}s, "
+                f"validate {t_validate:.2f}s, other (incl. reading) {elapsed - t_compress - t_validate:.2f}s"
+            )
+    if n_empty:
+        print(f"Skipped {n_empty} empty showers")
 
     outdir = Path(args.output)
     outdir.mkdir(parents=True, exist_ok=True)
+    t0 = time.perf_counter()
     output_h5 = write_step2point_hdf5(
         compressed_showers,
         outdir / f"compressed_{args.algorithm}.h5",
         algorithm=args.algorithm,
         source_input=args.input,
     )
+    if args.timing:
+        t_loop = t0 - t_start
+        print(
+            f"[timing] {len(compressed_showers)} showers in {t_loop:.2f}s: compress {t_compress:.2f}s, "
+            f"validate {t_validate:.2f}s, other (incl. reading) {t_loop - t_compress - t_validate:.2f}s; "
+            f"write {time.perf_counter() - t0:.2f}s"
+        )
     n_showers = len(compression_stats)
     mean_points_before = sum(float(stats["n_points_before"]) for stats in compression_stats) / n_showers if n_showers else 0.0
     mean_points_after = sum(float(stats["n_points_after"]) for stats in compression_stats) / n_showers if n_showers else 0.0
