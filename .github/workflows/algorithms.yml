@@ -77,6 +77,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev,test] -c ci/constraints-strict-hdbscan.txt
+      - name: Print CPU and numerical environment
+        run: |
+          lscpu | grep -E 'Model name|Architecture'
+          echo "--- AVX flags the hardware supports:"
+          lscpu | grep -o 'avx[^ ]*' | sort -u || echo "no avx flags"
+          echo "--- numpy runtime (after NPY_DISABLE_CPU_FEATURES):"
+          python -c "import numpy; numpy.show_runtime()"
+          echo "--- versions:"
+          python -c "import sklearn; sklearn.show_versions()"
       - name: Run strict algorithm diagnostic
         run: pytest -q ${{ matrix.test_file }}
       - name: Upload strict diagnostic outputs
