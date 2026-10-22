@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import colors as mcolors
 from matplotlib.colors import ListedColormap
 
 from step2point.core.shower import Shower
@@ -65,6 +66,27 @@ class WorldBounds:
             ylim=ylim if ylim is not None else fallback_y,
             zlim=zlim if zlim is not None else fallback_z,
         )
+
+
+def resolve_overlay_bounds(
+    user_bounds: WorldBounds,
+    *,
+    fallback_x: tuple[float, float],
+    fallback_y: tuple[float, float],
+    fallback_z: tuple[float, float],
+    presentation_single_layer: bool,
+) -> WorldBounds:
+    """Resolve hit bounds without inheriting a reduced presentation backdrop."""
+    if presentation_single_layer:
+        return user_bounds
+    return WorldBounds.resolved(
+        xlim=user_bounds.xlim,
+        ylim=user_bounds.ylim,
+        zlim=user_bounds.zlim,
+        fallback_x=fallback_x,
+        fallback_y=fallback_y,
+        fallback_z=fallback_z,
+    )
 
 
 def segment_bounds(segments: list[np.ndarray]) -> tuple[float, float, float, float]:
@@ -227,18 +249,32 @@ def layer_intersects_ylim(
     return not (ymax < ylim[0] or ymin > ylim[1])
 
 
-def cluster_label_cmap() -> ListedColormap:
-    colors = list(plt.get_cmap("tab20").colors)
-    colors.extend(plt.get_cmap("Dark2").colors)
-    return ListedColormap(colors[:28], name="step2point_cluster_labels")
+def _cluster_label_rgba(cluster_labels: np.ndarray) -> np.ndarray:
+    unique_labels, inverse = np.unique(cluster_labels, return_inverse=True)
+    n = unique_labels.size
+    if n == 0:
+        return np.empty((0, 4), dtype=np.float64)
+
+    # Golden-angle hue progression with alternating saturation/value bands so
+    # neighbouring clusters stay distinguishable even when many labels exist.
+    golden_ratio_conjugate = 0.6180339887498949
+    hue = (np.arange(n, dtype=np.float64) * golden_ratio_conjugate) % 1.0
+    saturation_cycle = np.array([0.78, 0.92, 0.66], dtype=np.float64)
+    value_cycle = np.array([0.92, 0.78, 0.62, 0.86], dtype=np.float64)
+    saturation = saturation_cycle[np.arange(n) % saturation_cycle.size]
+    value = value_cycle[np.arange(n) % value_cycle.size]
+    hsv = np.stack([hue, saturation, value], axis=1)
+    rgba_lookup = mcolors.hsv_to_rgb(hsv)
+    alpha = np.ones((n, 1), dtype=np.float64)
+    rgba_lookup = np.hstack([rgba_lookup, alpha])
+    return rgba_lookup[inverse]
 
 
 def overlay_color_spec(shower: Shower, point_mask: np.ndarray) -> tuple[np.ndarray, ListedColormap | str | None]:
     cluster_label = shower.metadata.get("cluster_label")
     if cluster_label is not None:
         labels = np.asarray(cluster_label, dtype=np.int64)
-        unique_labels, inverse = np.unique(labels[point_mask], return_inverse=True)
-        if unique_labels.size:
-            return inverse.astype(np.float64), cluster_label_cmap()
+        if np.any(point_mask):
+            return _cluster_label_rgba(labels[point_mask]), None
     energy = np.asarray(shower.E, dtype=np.float64)
     return np.log10(np.clip(energy[point_mask], 1e-12, None)), "inferno"

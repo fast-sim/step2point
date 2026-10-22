@@ -76,3 +76,16 @@ def test_first_deposit_origin_ignores_large_radius_tail():
     )
     long, _, _ = longitudinal_radial_phi(s, axis_override=[1.0, 0.0, 0.0], longitudinal_origin="first_deposit")
     np.testing.assert_allclose(long, np.array([0.0, 1.0, 2.0]))
+
+
+def test_axis_estimation_with_zero_energy_uses_unit_weights():
+    s = Shower(
+        4,
+        np.array([0.0, 0.0, 0.0]),
+        np.array([0.0, 1.0, 2.0]),
+        np.array([0.0, 0.0, 0.0]),
+        np.array([0.0, 0.0, 0.0]),
+    )
+    centroid, axis = estimate_shower_axis(s)
+    np.testing.assert_allclose(centroid, np.array([0.0, 1.0, 0.0]))
+    assert np.isclose(np.linalg.norm(axis), 1.0)

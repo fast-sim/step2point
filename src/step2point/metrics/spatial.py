@@ -55,6 +55,9 @@ def estimate_shower_axis(
     """
     coords = np.stack([shower.x, shower.y, shower.z], axis=1)
     weights = np.asarray(shower.E, dtype=np.float64)
+    if weights.sum() <= 0.0:
+        # no positive energy (e.g. only zero deposits): np.average would fail, use unit weights
+        weights = np.ones(coords.shape[0], dtype=np.float64)
     centroid = np.average(coords, axis=0, weights=weights)
     if axis_override is not None:
         return centroid, _normalized_axis(axis_override)

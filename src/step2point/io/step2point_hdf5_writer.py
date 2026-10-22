@@ -8,6 +8,14 @@ import numpy as np
 
 from step2point.core.shower import Shower
 
+PERSISTED_METADATA_ATTRS = (
+    "position_mode",
+    "x_bins",
+    "y_bins",
+    "collection_name",
+    "backend",
+)
+
 
 def write_step2point_hdf5(
     showers: Iterable[Shower],
@@ -36,6 +44,8 @@ def write_step2point_hdf5(
     have_cell_id = False
     have_pdg = False
     have_track_id = False
+    persisted_metadata: dict[str, object] = {}
+    metadata_initialized = False
 
     for shower in showers:
         n = shower.n_points
@@ -62,11 +72,19 @@ def write_step2point_hdf5(
             primary_vertex.append(tuple(map(float, shower.primary.get("vertex", (0.0, 0.0, 0.0)))))
             primary_momentum.append(tuple(map(float, shower.primary.get("momentum", (0.0, 0.0, 0.0)))))
 
+        if not metadata_initialized:
+            for key in PERSISTED_METADATA_ATTRS:
+                if key in shower.metadata:
+                    persisted_metadata[key] = shower.metadata[key]
+            metadata_initialized = True
+
     with h5py.File(output, "w") as h5:
         if algorithm is not None:
             h5.attrs["algorithm"] = algorithm
         if source_input is not None:
             h5.attrs["source_input"] = source_input
+        for key, value in persisted_metadata.items():
+            h5.attrs[key] = value
 
         steps = h5.create_group("steps")
         steps.create_dataset("event_id", data=np.concatenate(event_id) if event_id else np.empty(0, dtype=np.int32))
