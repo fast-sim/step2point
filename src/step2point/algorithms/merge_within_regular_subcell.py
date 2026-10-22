@@ -287,18 +287,18 @@ class MergeWithinRegularSubcell(CompressionAlgorithm):
             processed[~selected] = True
 
         key_dtype = np.dtype([
-            ("subdetector", np.int32),
             ("cell_id", np.uint64),
             ("sub_x", np.int32),
             ("sub_y", np.int32),
             ("unique_id", np.int64),
+            ("subdetector", np.int32),
         ])
         keys = np.empty(n_points, dtype=key_dtype)
-        keys["subdetector"] = subdetectors
         keys["cell_id"] = shower.cell_id
         keys["sub_x"] = sub_x
         keys["sub_y"] = sub_y
         keys["unique_id"] = 0
+        keys["subdetector"] = subdetectors
 
         # make unselected hits unique
         keys["sub_x"][~selected] = -1
