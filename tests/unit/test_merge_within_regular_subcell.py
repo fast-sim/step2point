@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from step2point.algorithms.merge_within_regular_subcell import MergeWithinRegularSubcell
 from step2point.core.shower import Shower
@@ -73,9 +74,9 @@ def test_regular_grid_weighted_splits_one_cell_into_four_subcells():
     }
 
     result = MergeWithinRegularSubcell(
-        layout=[_simple_layout()], 
-        collection_name=["TestCollection"], 
-        x_bins=[2], 
+        layout=[_simple_layout()],
+        collection_name=["TestCollection"],
+        x_bins=[2],
         y_bins=[2]
     ).compress(shower)
 
@@ -266,3 +267,80 @@ def test_regular_grid_requires_cell_id_multi_collections():
         assert "cell_id" in str(exc)
     else:
         raise AssertionError("Expected MergeWithinRegularSubcell to require cell_id.")
+
+
+
+''' Additional Multi-collection tests '''
+CORNERS_X = [0.9, 0.9, -0.9, -0.9]
+CORNERS_Z = [-0.9, 0.9, -0.9, 0.9]
+
+def _algo(position_mode="weighted"):
+    """Build a MergeWithinRegularSubcell Object for two collections (Ecal, Hcal) with a 2x2 sub-grid"""
+    return MergeWithinRegularSubcell(
+        layout=[_simple_layout("EcalCollection", det_id=1), _simple_layout("HcalCollection", det_id=2)],
+        collection_name=["EcalCollection", "HcalCollection"],
+        x_bins=[2, 2],
+        y_bins=[2, 2],
+        position_mode=[position_mode, position_mode],
+    )
+
+def _shower(x, z, E, cell_ids, subdetector, names=("EcalCollection", "HcalCollection")):
+    """Build a Shower on the y=10 sensitive plane, with per-hit subdetector ids and names in metadata"""
+    n = len(E)
+    s = Shower(
+        1,
+        x=np.asarray(x, dtype=np.float32),
+        y=np.full(n, 10.0, dtype=np.float32),
+        z=np.asarray(z, dtype=np.float32),
+        E=np.asarray(E, dtype=np.float32),
+        cell_id=np.asarray(cell_ids, dtype=np.uint64),
+    )
+    s.metadata = {"subdetector": np.asarray(subdetector, dtype=np.int64), "subdetector_names": list(names)}
+    return s
+
+@pytest.mark.parametrize("position_mode", ["weighted", "center"])
+def test_same_cell_id_in_different_subdetectors_is_not_merged(position_mode):
+    """Check to ensure hits with identical cell_id and sub-cell position stay separate if they belong to different
+    subdetectors"""
+    same = _cell_id(1, 1, 0, 0, system=1)  # identical value in both collections
+    shower = _shower(
+        CORNERS_X * 2, CORNERS_Z * 2, [1, 2, 3, 4, 10, 20, 30, 40],
+        [same] * 8, [0] * 4 + [1] * 4,
+    )
+    result = _algo(position_mode).compress(shower)
+    assert result.shower.n_points == 8
+    np.testing.assert_allclose(np.sort(result.shower.E), [1, 2, 3, 4, 10, 20, 30, 40])
+    np.testing.assert_allclose(result.shower.total_energy, shower.total_energy)
+
+def test_hits_in_same_subdetector_and_subcell_still_merge():
+    """Ensure Hits in the same subdetector and sub-cell are merged"""
+    same = _cell_id(1, 1, 0, 0, system=1)
+    shower = _shower([0.9] * 4, [-0.9] * 4, [1, 2, 10, 20], [same] * 4, [0, 0, 1, 1])
+    result = _algo().compress(shower)
+    assert result.shower.n_points == 2
+    np.testing.assert_allclose(np.sort(result.shower.E), [3, 30])
+
+
+def test_hits_outside_configured_collections_are_never_merged():
+    """Check to ensure that hits from a subdetector not configured for clustering pass through unmerged,
+    even when they share a cell_id and position, while configured collections still merge"""
+    same = _cell_id(1, 1, 0, 0, system=1)
+    shower = _shower(
+        [0.9] * 4, [-0.9] * 4, [1, 2, 5, 6], [same] * 4, [0, 0, 2, 2],
+        names=("EcalCollection", "HcalCollection", "Other"),
+    )
+    result = _algo().compress(shower)
+    assert result.shower.n_points == 3  # 1 merged pair + 2 untouched
+    np.testing.assert_allclose(np.sort(result.shower.E), [3, 5, 6])
+
+def test_output_is_ordered_by_cell_id_when_cell_ids_do_not_collide():
+    """Without collisions, output stays sorted by cell_id regardless of subdetector order.
+    The strict regression references compare points in order, so the key must not reorder them"""
+    # Ordering contract: the strict regression references compare points in order.
+    shower = _shower(
+        [10.0, 2.0], [0.0, 0.0], [1.0, 2.0],
+        [_cell_id(1, 1, 5, 0, system=1), _cell_id(1, 1, 1, 0, system=2)],
+        [0, 1],
+    )
+    out = _algo().compress(shower).shower
+    assert np.all(np.diff(out.cell_id.astype(np.int64)) >= 0)
