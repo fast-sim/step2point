@@ -104,6 +104,7 @@ step2point/
 │   └── bindings/
 ├── tests/
 ├── examples/
+├── hdbscan_sweep/
 └── .github/workflows/
 ```
 
@@ -380,6 +381,50 @@ Typical outputs are:
 - `shower_<id>_overview.png`
 
 For detector-aware geometry inspection and shower overlays on module/layer/cell views, use [examples/plot_detector_cells.py](examples/plot_detector_cells.py:1). It writes `XY`, `XZ`, and `ZY` detector projections. The detailed workflow and example screenshots are documented in [docs/validation.md](docs/validation.md:1).
+
+## HDBSCAN parameter sweep
+
+[hdbscan_sweep/sweep_hdbscan.py](hdbscan_sweep/sweep_hdbscan.py) runs `examples/run_step2point_pipeline.py --algorithm hdbscan` over a grid of `min_cluster_size` (m_cs) and `min_samples` (m_s); [hdbscan_sweep/plot_sweep_hdbscan.py](hdbscan_sweep/plot_sweep_hdbscan.py) plots the results. Only tested on ILD (`--preset ild`).
+
+Needs `pip install -e .[sweep]` (pandas) and, for EDM4hep input, Key4hep:
+
+```bash
+source /cvmfs/sw.hsf.org/key4hep/setup.sh
+source .venv-key4hep/bin/activate
+python hdbscan_sweep/sweep_hdbscan.py --preset ild
+```
+
+The ILD preset sets the 10-shower sample in `tests/data/ILD/`, `EcalBarrelCollection`, the cell-ID encoding, `--merge-scope cell_id`, `--use-time` and the 30 ECal barrel layer positions. It also runs identity, merge within cell and merge within regular subcell as references (the last needs the regular-ECal ILD compact XML, given with `--regular-compact-xml` or `$STEP2POINT_REGULAR_COMPACT_XML`, and is skipped without it). Command-line options override the preset. Without a preset, give the input and the cell-ID decoding:
+
+```bash
+python hdbscan_sweep/sweep_hdbscan.py \
+  --input tests/data/ODD_gamma_10ev_theta90deg_phi0deg_posX0mmY1250mmZ0mm_10GeV.h5 \
+  --cell-id-encoding "system:8,barrel:3,module:4,stave:1,layer:6,slice:5,x:32:-16,y:-16" \
+  --use-time --min-cluster-sizes 5 10 20 --min-samples 3 5 8 \
+  --output-dir outputs/hdbscan_sweep_odd
+```
+
+| option | meaning |
+|---|---|
+| `--input`, `--collections` | input file (EDM4hep `.root` or step2point `.h5`) and readout collection(s) |
+| `--cell-id-encoding` or `--compact-xml` + `--collection-name` | how to decode cell IDs |
+| `--merge-scope`, `--use-time` | passed to the pipeline |
+| `--min-cluster-sizes`, `--min-samples`, `--epsilon` | the grid (m_s > m_cs is skipped) |
+| `--output-dir` | default `$SWEEP_DIR`, else `outputs/hdbscan_sweep` |
+| `--regular-compact-xml` | regular-cell geometry for the `merge_within_regular_subcell` reference (default `$STEP2POINT_REGULAR_COMPACT_XML`); optional, the reference is skipped without it |
+| `--profile-mcs` | m_cs of the per-run distribution plots (default 20) |
+| `--layer-positions` | bottom of each layer along global y [mm], for the longitudinal profile |
+
+Each grid point is written to `<output-dir>/hdbscan_mcs<N>_ms<M>/`; existing points are not rerun. `summary.csv` collects their compression numbers (from each `compression_summary_hdbscan.txt`). Plots go to `<output-dir>/plots/`:
+
+| plot | content |
+|---|---|
+| `compression_ratios.png` | compression ratio vs m_cs and m_s |
+| `mean_compression_ratio.png` | mean compression ratio vs m_cs |
+| `points_per_event_overlay.png`, `point_energy.png` | points per shower and point energy at `--profile-mcs` |
+| `longitudinal_profile.png` | mean points per layer at `--profile-mcs` (needs layer positions) |
+
+To remake the plots without rerunning: `python hdbscan_sweep/plot_sweep_hdbscan.py <output-dir> [--preset ild]`. The sweep figures of the step2point/CaloClouds-3 paper are `mean_compression_ratio.png`, `point_energy.png` and `longitudinal_profile.png` of the ILD preset on the paper's 100-shower input.
 
 ## [WIP] C++ backend
 

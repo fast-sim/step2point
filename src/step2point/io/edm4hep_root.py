@@ -109,5 +109,6 @@ class EDM4hepRootReader:
                     "source": "edm4hep.root",
                     "collections": list(collections),
                     "subdetector": np.asarray(subdetector, dtype=np.uint8),
+                    "subdetector_names": list(collections),  # subdetector indexes this list
                 },
             )
